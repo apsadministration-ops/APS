@@ -81,24 +81,33 @@ export default function VehicleDetailScreen() {
             </View>
           </View>
 
-          {vehicle.isCurrentUserOwner && (
-            <View style={styles.actions}>
-              <Pressable
-                style={[styles.actionBtn, { backgroundColor: colors.primary }]}
-                onPress={() => router.push("/request-service")}
-              >
-                <Feather name="tool" size={18} color="white" />
-                <Text style={styles.actionText}>Request Service</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.actionBtn, { backgroundColor: colors.secondary }]}
-                onPress={() => router.push(`/transfer/${vehicle.id}`)}
-              >
-                <Feather name="send" size={18} color={colors.secondaryForeground} />
-                <Text style={[styles.actionText, { color: colors.secondaryForeground }]}>Transfer</Text>
-              </Pressable>
-            </View>
-          )}
+          <View style={styles.actions}>
+            {vehicle.isCurrentUserOwner && (
+              <>
+                <Pressable
+                  style={[styles.actionBtn, { backgroundColor: colors.primary }]}
+                  onPress={() => router.push("/request-service")}
+                >
+                  <Feather name="tool" size={18} color="white" />
+                  <Text style={styles.actionText}>Request Service</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.actionBtn, { backgroundColor: colors.secondary }]}
+                  onPress={() => router.push(`/transfer/${vehicle.id}`)}
+                >
+                  <Feather name="send" size={18} color={colors.secondaryForeground} />
+                  <Text style={[styles.actionText, { color: colors.secondaryForeground }]}>Transfer</Text>
+                </Pressable>
+              </>
+            )}
+            <Pressable
+              style={[styles.actionBtn, { backgroundColor: colors.secondary, borderWidth: 1, borderColor: colors.border }]}
+              onPress={() => router.push(`/parts/${vehicle.id}`)}
+            >
+              <Feather name="settings" size={18} color={colors.secondaryForeground} />
+              <Text style={[styles.actionText, { color: colors.secondaryForeground }]}>Parts</Text>
+            </Pressable>
+          </View>
 
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Service History</Text>
           <Text style={[styles.sectionSubtitle, { color: colors.mutedForeground }]}>
@@ -156,7 +165,7 @@ const styles = StyleSheet.create({
   metaRow: { flexDirection: "row", gap: 20, marginTop: 4 },
   metaItem: { flexDirection: "row", alignItems: "center", gap: 6 },
   metaText: { fontSize: 13, fontWeight: "500" },
-  actions: { flexDirection: "row", gap: 12, marginBottom: 24 },
+  actions: { flexDirection: "row", gap: 10, marginBottom: 24, flexWrap: "wrap" },
   actionBtn: {
     flex: 1,
     height: 48,

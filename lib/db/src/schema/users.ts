@@ -11,6 +11,7 @@ export const usersTable = pgTable("users", {
   role: text("role", { enum: ["customer", "mechanic", "admin"] }).notNull().default("customer"),
   status: text("status", { enum: ["active", "suspended", "pending"] }).notNull().default("active"),
   avatarUrl: text("avatar_url"),
+  pushToken: text("push_token"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

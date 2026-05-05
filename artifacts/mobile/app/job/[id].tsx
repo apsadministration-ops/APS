@@ -217,6 +217,18 @@ export default function JobDetailScreen() {
             </View>
           )}
 
+          {/* Parts Catalog — visible to mechanics only */}
+          {isMechanic && job.vehicleId && (
+            <Pressable
+              style={[styles.partsBtn, { backgroundColor: colors.secondary, borderColor: colors.border }]}
+              onPress={() => router.push(`/parts/${job.vehicleId}`)}
+            >
+              <Feather name="settings" size={18} color={colors.foreground} />
+              <Text style={[styles.partsBtnText, { color: colors.foreground }]}>Parts Catalog</Text>
+              <Feather name="external-link" size={14} color={colors.mutedForeground} />
+            </Pressable>
+          )}
+
           {/* Actions */}
           {canSubmitWorklog && (
             <Pressable
@@ -282,4 +294,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   primaryBtnText: { color: "white", fontWeight: "700", fontSize: 16 },
+  partsBtn: {
+    height: 48,
+    borderRadius: 14,
+    borderWidth: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    marginTop: 4,
+  },
+  partsBtnText: { fontSize: 15, fontWeight: "600", flex: 1, textAlign: "center" },
 });

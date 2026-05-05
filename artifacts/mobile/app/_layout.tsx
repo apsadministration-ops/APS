@@ -15,6 +15,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { setBaseUrl } from "@workspace/api-client-react";
 import { View } from "react-native";
 
@@ -29,6 +30,9 @@ function RootLayoutNav() {
   const { user, isLoading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+
+  // Register push notification token and handle taps
+  usePushNotifications();
 
   useEffect(() => {
     if (isLoading) return;
@@ -61,6 +65,7 @@ function RootLayoutNav() {
       <Stack.Screen name="transfer/[vehicleId]" options={{ presentation: "modal" }} />
       <Stack.Screen name="history/[vehicleId]" options={{ presentation: "card" }} />
       <Stack.Screen name="worklog/[jobId]" options={{ presentation: "modal" }} />
+      <Stack.Screen name="parts/[vehicleId]" options={{ presentation: "card" }} />
     </Stack>
   );
 }

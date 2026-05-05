@@ -1,7 +1,8 @@
 import { Router, type IRouter } from "express";
-import { eq, and, isNull, or } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db, jobsTable, vehiclesTable, usersTable } from "@workspace/db";
 import { authenticate, type AuthRequest } from "../middlewares/authenticate";
+import { notifyMechanics, notifyCustomerJobAccepted } from "../lib/notifications";
 
 const router: IRouter = Router();
 
@@ -11,7 +12,6 @@ async function formatJob(job: typeof jobsTable.$inferSelect) {
     ? (await db.select().from(usersTable).where(eq(usersTable.id, job.mechanicId)))[0] ?? null
     : null;
   const [vehicle] = await db.select().from(vehiclesTable).where(eq(vehiclesTable.id, job.vehicleId));
-
   return {
     id: job.id,
     vehicleId: job.vehicleId,
@@ -30,18 +30,10 @@ async function formatJob(job: typeof jobsTable.$inferSelect) {
     finalPrice: job.finalPrice ?? null,
     rating: job.rating ?? null,
     ratingNote: job.ratingNote ?? null,
-    vehicle: vehicle
-      ? {
-          id: vehicle.id,
-          vin: vehicle.vin,
-          make: vehicle.make,
-          model: vehicle.model,
-          year: vehicle.year,
-          trim: vehicle.trim ?? null,
-          color: vehicle.color ?? null,
-          createdAt: vehicle.createdAt,
-        }
-      : null,
+    vehicle: vehicle ? {
+      id: vehicle.id, vin: vehicle.vin, make: vehicle.make, model: vehicle.model,
+      year: vehicle.year, trim: vehicle.trim ?? null, color: vehicle.color ?? null, createdAt: vehicle.createdAt,
+    } : null,
     createdAt: job.createdAt,
     acceptedAt: job.acceptedAt ?? null,
     completedAt: job.completedAt ?? null,
@@ -49,226 +41,129 @@ async function formatJob(job: typeof jobsTable.$inferSelect) {
 }
 
 router.get("/jobs", authenticate, async (req: AuthRequest, res): Promise<void> => {
-  const { status, vehicleId, mechanicId } = req.query as {
-    status?: string;
-    vehicleId?: string;
-    mechanicId?: string;
-  };
-
+  const { status, vehicleId, mechanicId } = req.query as { status?: string; vehicleId?: string; mechanicId?: string };
   let allJobs = await db.select().from(jobsTable).orderBy(jobsTable.createdAt);
-
-  // Role-based filtering
-  if (req.userRole === "customer") {
-    allJobs = allJobs.filter((j) => j.customerId === req.userId);
-  } else if (req.userRole === "mechanic") {
-    allJobs = allJobs.filter((j) => j.mechanicId === req.userId || j.status === "REQUESTED");
-  }
-
+  if (req.userRole === "customer") allJobs = allJobs.filter((j) => j.customerId === req.userId);
+  else if (req.userRole === "mechanic") allJobs = allJobs.filter((j) => j.mechanicId === req.userId || j.status === "REQUESTED");
   if (status) allJobs = allJobs.filter((j) => j.status === status);
   if (vehicleId) allJobs = allJobs.filter((j) => j.vehicleId === parseInt(vehicleId, 10));
   if (mechanicId) allJobs = allJobs.filter((j) => j.mechanicId === parseInt(mechanicId, 10));
-
-  const result = await Promise.all(allJobs.map(formatJob));
-  res.json(result);
+  res.json(await Promise.all(allJobs.map(formatJob)));
 });
 
-router.get("/jobs/available", authenticate, async (req: AuthRequest, res): Promise<void> => {
-  const jobs = await db
-    .select()
-    .from(jobsTable)
-    .where(eq(jobsTable.status, "REQUESTED"))
-    .orderBy(jobsTable.createdAt);
-
-  const result = await Promise.all(jobs.map(formatJob));
-  res.json(result);
+router.get("/jobs/available", authenticate, async (_req: AuthRequest, res): Promise<void> => {
+  const jobs = await db.select().from(jobsTable).where(eq(jobsTable.status, "REQUESTED")).orderBy(jobsTable.createdAt);
+  res.json(await Promise.all(jobs.map(formatJob)));
 });
 
 router.post("/jobs", authenticate, async (req: AuthRequest, res): Promise<void> => {
   if (req.userRole !== "customer" && req.userRole !== "admin") {
-    res.status(403).json({ error: "Only customers can create jobs" });
-    return;
+    res.status(403).json({ error: "Only customers can create jobs" }); return;
   }
-
   const { vehicleId, jobType, description, locationLat, locationLng, locationAddress, estimatedPrice } = req.body as {
-    vehicleId: number;
-    jobType: string;
-    description: string;
-    locationLat?: number;
-    locationLng?: number;
-    locationAddress?: string;
-    estimatedPrice?: number;
+    vehicleId: number; jobType: string; description: string;
+    locationLat?: number; locationLng?: number; locationAddress?: string; estimatedPrice?: number;
   };
-
   if (!vehicleId || !jobType || !description) {
-    res.status(400).json({ error: "vehicleId, jobType, and description are required" });
-    return;
+    res.status(400).json({ error: "vehicleId, jobType, and description are required" }); return;
   }
-
   const [vehicle] = await db.select().from(vehiclesTable).where(eq(vehiclesTable.id, vehicleId));
-  if (!vehicle) {
-    res.status(404).json({ error: "Vehicle not found" });
-    return;
-  }
+  if (!vehicle) { res.status(404).json({ error: "Vehicle not found" }); return; }
 
   const [job] = await db.insert(jobsTable).values({
-    vehicleId,
-    vin: vehicle.vin,
-    customerId: req.userId!,
+    vehicleId, vin: vehicle.vin, customerId: req.userId!,
     jobType: jobType as "repair" | "diagnostic" | "maintenance" | "detailing",
-    description,
-    locationLat: locationLat ?? null,
-    locationLng: locationLng ?? null,
-    locationAddress: locationAddress ?? null,
-    estimatedPrice: estimatedPrice ?? null,
-    status: "REQUESTED",
+    description, locationLat: locationLat ?? null, locationLng: locationLng ?? null,
+    locationAddress: locationAddress ?? null, estimatedPrice: estimatedPrice ?? null, status: "REQUESTED",
   }).returning();
+
+  // Notify all active mechanics with push tokens (fire-and-forget)
+  db.select({ pushToken: usersTable.pushToken })
+    .from(usersTable)
+    .where(eq(usersTable.role, "mechanic"))
+    .then((mechanics) => {
+      const tokens = mechanics.map((m) => m.pushToken).filter(Boolean) as string[];
+      notifyMechanics(tokens, jobType, description, job.id).catch(() => {});
+    })
+    .catch(() => {});
 
   res.status(201).json(await formatJob(job));
 });
 
 router.get("/jobs/:jobId", authenticate, async (req: AuthRequest, res): Promise<void> => {
-  const rawId = Array.isArray(req.params.jobId) ? req.params.jobId[0] : req.params.jobId;
-  const jobId = parseInt(rawId, 10);
-
-  if (isNaN(jobId)) {
-    res.status(400).json({ error: "Invalid job ID" });
-    return;
-  }
-
+  const jobId = parseInt(String(req.params.jobId), 10);
+  if (isNaN(jobId)) { res.status(400).json({ error: "Invalid job ID" }); return; }
   const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, jobId));
-  if (!job) {
-    res.status(404).json({ error: "Job not found" });
-    return;
-  }
-
+  if (!job) { res.status(404).json({ error: "Job not found" }); return; }
   res.json(await formatJob(job));
 });
 
 router.patch("/jobs/:jobId/status", authenticate, async (req: AuthRequest, res): Promise<void> => {
-  const rawId = Array.isArray(req.params.jobId) ? req.params.jobId[0] : req.params.jobId;
-  const jobId = parseInt(rawId, 10);
-
-  if (isNaN(jobId)) {
-    res.status(400).json({ error: "Invalid job ID" });
-    return;
-  }
-
+  const jobId = parseInt(String(req.params.jobId), 10);
+  if (isNaN(jobId)) { res.status(400).json({ error: "Invalid job ID" }); return; }
   const { status, estimatedPrice } = req.body as { status: string; estimatedPrice?: number };
-
   const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, jobId));
-  if (!job) {
-    res.status(404).json({ error: "Job not found" });
-    return;
-  }
-
-  const updates: Partial<typeof jobsTable.$inferInsert> = {
-    status: status as typeof job.status,
-  };
-
+  if (!job) { res.status(404).json({ error: "Job not found" }); return; }
+  const updates: Partial<typeof jobsTable.$inferInsert> = { status: status as typeof job.status };
   if (estimatedPrice !== undefined) updates.estimatedPrice = estimatedPrice;
   if (status === "COMPLETED") updates.completedAt = new Date();
   if (status === "ACCEPTED") updates.acceptedAt = new Date();
-
   const [updated] = await db.update(jobsTable).set(updates).where(eq(jobsTable.id, jobId)).returning();
   res.json(await formatJob(updated));
 });
 
 router.post("/jobs/:jobId/accept", authenticate, async (req: AuthRequest, res): Promise<void> => {
-  if (req.userRole !== "mechanic") {
-    res.status(403).json({ error: "Only mechanics can accept jobs" });
-    return;
-  }
-
-  const rawId = Array.isArray(req.params.jobId) ? req.params.jobId[0] : req.params.jobId;
-  const jobId = parseInt(rawId, 10);
-
+  if (req.userRole !== "mechanic") { res.status(403).json({ error: "Only mechanics can accept jobs" }); return; }
+  const jobId = parseInt(String(req.params.jobId), 10);
   const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, jobId));
-  if (!job) {
-    res.status(404).json({ error: "Job not found" });
-    return;
-  }
-
+  if (!job) { res.status(404).json({ error: "Job not found" }); return; }
   if (job.status !== "REQUESTED" && job.status !== "OFFERED") {
-    res.status(400).json({ error: "Job cannot be accepted in its current state" });
-    return;
+    res.status(400).json({ error: "Job cannot be accepted in its current state" }); return;
   }
-
-  const [updated] = await db
-    .update(jobsTable)
+  const [updated] = await db.update(jobsTable)
     .set({ status: "ACCEPTED", mechanicId: req.userId!, acceptedAt: new Date() })
-    .where(eq(jobsTable.id, jobId))
-    .returning();
+    .where(eq(jobsTable.id, jobId)).returning();
+
+  // Notify customer their job was accepted (fire-and-forget)
+  const [mechanic] = await db.select().from(usersTable).where(eq(usersTable.id, req.userId!));
+  const [customer] = await db.select().from(usersTable).where(eq(usersTable.id, job.customerId));
+  const [vehicle] = await db.select().from(vehiclesTable).where(eq(vehiclesTable.id, job.vehicleId));
+  if (customer?.pushToken && mechanic && vehicle) {
+    notifyCustomerJobAccepted(
+      customer.pushToken,
+      mechanic.name,
+      `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
+      jobId,
+    ).catch(() => {});
+  }
 
   res.json(await formatJob(updated));
 });
 
 router.post("/jobs/:jobId/cancel", authenticate, async (req: AuthRequest, res): Promise<void> => {
-  const rawId = Array.isArray(req.params.jobId) ? req.params.jobId[0] : req.params.jobId;
-  const jobId = parseInt(rawId, 10);
-
+  const jobId = parseInt(String(req.params.jobId), 10);
   const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, jobId));
-  if (!job) {
-    res.status(404).json({ error: "Job not found" });
-    return;
+  if (!job) { res.status(404).json({ error: "Job not found" }); return; }
+  if (req.userRole === "customer" && job.customerId !== req.userId) { res.status(403).json({ error: "Forbidden" }); return; }
+  if (!["REQUESTED", "OFFERED"].includes(job.status) && req.userRole !== "admin") {
+    res.status(400).json({ error: "Job cannot be cancelled after it has been accepted" }); return;
   }
-
-  if (req.userRole === "customer" && job.customerId !== req.userId) {
-    res.status(403).json({ error: "Forbidden" });
-    return;
-  }
-
-  const cancellableStatuses = ["REQUESTED", "OFFERED"];
-  if (!cancellableStatuses.includes(job.status) && req.userRole !== "admin") {
-    res.status(400).json({ error: "Job cannot be cancelled after it has been accepted" });
-    return;
-  }
-
-  const [updated] = await db
-    .update(jobsTable)
-    .set({ status: "CANCELLED" })
-    .where(eq(jobsTable.id, jobId))
-    .returning();
-
+  const [updated] = await db.update(jobsTable).set({ status: "CANCELLED" }).where(eq(jobsTable.id, jobId)).returning();
   res.json(await formatJob(updated));
 });
 
 router.post("/jobs/:jobId/rate", authenticate, async (req: AuthRequest, res): Promise<void> => {
-  if (req.userRole !== "customer") {
-    res.status(403).json({ error: "Only customers can rate jobs" });
-    return;
-  }
-
-  const rawId = Array.isArray(req.params.jobId) ? req.params.jobId[0] : req.params.jobId;
-  const jobId = parseInt(rawId, 10);
-
+  if (req.userRole !== "customer") { res.status(403).json({ error: "Only customers can rate jobs" }); return; }
+  const jobId = parseInt(String(req.params.jobId), 10);
   const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, jobId));
-  if (!job) {
-    res.status(404).json({ error: "Job not found" });
-    return;
-  }
-
-  if (job.customerId !== req.userId) {
-    res.status(403).json({ error: "Forbidden" });
-    return;
-  }
-
+  if (!job) { res.status(404).json({ error: "Job not found" }); return; }
+  if (job.customerId !== req.userId) { res.status(403).json({ error: "Forbidden" }); return; }
   if (job.status !== "COMPLETED" && job.status !== "PAID") {
-    res.status(400).json({ error: "Job must be completed before rating" });
-    return;
+    res.status(400).json({ error: "Job must be completed before rating" }); return;
   }
-
   const { rating, note } = req.body as { rating: number; note?: string };
-  if (!rating || rating < 1 || rating > 5) {
-    res.status(400).json({ error: "Rating must be between 1 and 5" });
-    return;
-  }
-
-  const [updated] = await db
-    .update(jobsTable)
-    .set({ rating, ratingNote: note ?? null })
-    .where(eq(jobsTable.id, jobId))
-    .returning();
-
+  if (!rating || rating < 1 || rating > 5) { res.status(400).json({ error: "Rating must be between 1 and 5" }); return; }
+  const [updated] = await db.update(jobsTable).set({ rating, ratingNote: note ?? null }).where(eq(jobsTable.id, jobId)).returning();
   res.json(await formatJob(updated));
 });
 
