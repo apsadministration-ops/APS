@@ -8,6 +8,7 @@ import jobsRouter from "./jobs";
 import worklogsRouter from "./worklogs";
 import paymentsRouter from "./payments";
 import dashboardRouter from "./dashboard";
+import messagesRouter from "./messages";
 
 const router: IRouter = Router();
 
@@ -20,5 +21,6 @@ router.use(jobsRouter);
 router.use(worklogsRouter);
 router.use(paymentsRouter);
 router.use(dashboardRouter);
+router.use(messagesRouter);
 
 export default router;

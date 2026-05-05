@@ -4,3 +4,4 @@ export * from "./ownership";
 export * from "./jobs";
 export * from "./worklogs";
 export * from "./payments";
+export * from "./messages";

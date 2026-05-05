@@ -83,4 +83,37 @@ router.get("/auth/me", authenticate, async (req: AuthRequest, res): Promise<void
   res.json(formatUser(user));
 });
 
+router.post("/auth/admin-setup", async (req, res): Promise<void> => {
+  const setupKey = req.headers["x-setup-key"];
+  const validKey = process.env.ADMIN_SETUP_KEY ?? "aps-admin-setup";
+  if (setupKey !== validKey) {
+    res.status(403).json({ error: "Invalid setup key" });
+    return;
+  }
+
+  const { name, email, password } = req.body as { name?: string; email?: string; password?: string };
+  if (!name || !email || !password) {
+    res.status(400).json({ error: "name, email, and password are required" });
+    return;
+  }
+
+  const [existing] = await db.select().from(usersTable).where(eq(usersTable.email, email));
+  if (existing) {
+    res.status(409).json({ error: "Email already registered" });
+    return;
+  }
+
+  const passwordHash = await hashPassword(password);
+  const [user] = await db.insert(usersTable).values({
+    name,
+    email,
+    passwordHash,
+    role: "admin",
+    status: "active",
+  }).returning();
+
+  const token = signToken({ userId: user.id, role: user.role });
+  res.status(201).json({ token, user: formatUser(user) });
+});
+
 export default router;

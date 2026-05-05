@@ -95,6 +95,14 @@ export default function LoginScreen() {
             </Pressable>
           </Link>
         </View>
+
+        <View style={styles.adminRow}>
+          <Link href="/(auth)/admin-setup" asChild>
+            <Pressable>
+              <Text style={[styles.adminLink, { color: colors.mutedForeground }]}>Admin Setup</Text>
+            </Pressable>
+          </Link>
+        </View>
       </KeyboardAwareScrollViewCompat>
     </View>
   );
@@ -131,4 +139,6 @@ const styles = StyleSheet.create({
   },
   footerText: { fontSize: 14 },
   link: { fontSize: 14, fontWeight: "600" },
+  adminRow: { alignItems: "center", marginTop: 20 },
+  adminLink: { fontSize: 12 },
 });

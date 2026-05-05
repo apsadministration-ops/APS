@@ -241,7 +241,25 @@ export default function JobDetailScreen() {
                 <Feather name="navigation" size={16} color={colors.foreground} />
                 <Text style={[styles.toolBtnText, { color: colors.foreground }]}>Track</Text>
               </Pressable>
+              <Pressable
+                style={[styles.toolBtn, { backgroundColor: colors.secondary, borderColor: colors.border }]}
+                onPress={() => router.push(`/messages/${job.id}`)}
+              >
+                <Feather name="message-circle" size={16} color={colors.foreground} />
+                <Text style={[styles.toolBtnText, { color: colors.foreground }]}>Chat</Text>
+              </Pressable>
             </View>
+          )}
+
+          {/* Customer: chat + tracker buttons */}
+          {isCustomer && job.mechanicId && (
+            <Pressable
+              style={[styles.partsBtn, { backgroundColor: colors.secondary, borderColor: colors.border }]}
+              onPress={() => router.push(`/messages/${job.id}`)}
+            >
+              <Feather name="message-circle" size={18} color={colors.foreground} />
+              <Text style={[styles.partsBtnText, { color: colors.foreground }]}>Chat with Mechanic</Text>
+            </Pressable>
           )}
 
           {/* Customer tracker button — visible when job is active */}
