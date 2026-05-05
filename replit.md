@@ -1,27 +1,73 @@
-# Workspace
+# APS — Automotive Platform System
 
-## Overview
+VIN-centric automotive service marketplace connecting customers with mechanics for repairs, diagnostics, maintenance, and detailing. Every vehicle is permanently identified by VIN; service history persists across ownership changes.
 
-pnpm workspace monorepo using TypeScript. Each package manages its own dependencies.
+## Run & Operate
+
+- `pnpm --filter @workspace/api-server run dev` — run API server (port 8080, path `/api`)
+- `pnpm --filter @workspace/mobile run dev` — run Expo mobile app (port 18115)
+- `pnpm run typecheck` — full typecheck across all packages
+- `pnpm run build` — typecheck + build all packages
+- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks + Zod schemas from OpenAPI spec
+- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
+
+**Required env vars:** `SESSION_SECRET` (JWT signing), `DATABASE_URL` (PostgreSQL)
 
 ## Stack
 
-- **Monorepo tool**: pnpm workspaces
-- **Node.js version**: 24
-- **Package manager**: pnpm
-- **TypeScript version**: 5.9
-- **API framework**: Express 5
-- **Database**: PostgreSQL + Drizzle ORM
-- **Validation**: Zod (`zod/v4`), `drizzle-zod`
-- **API codegen**: Orval (from OpenAPI spec)
-- **Build**: esbuild (CJS bundle)
+- **Monorepo:** pnpm workspaces, TypeScript 5.9, Node.js 24
+- **API:** Express 5, esbuild (CJS bundle)
+- **DB:** PostgreSQL + Drizzle ORM (`lib/db`)
+- **Validation:** Zod (`zod/v4`), `drizzle-zod`
+- **API codegen:** Orval from OpenAPI spec (`lib/api-spec`)
+- **Mobile:** Expo (expo-router), React Native, React Query
+- **Auth:** bcryptjs + jsonwebtoken (30-day JWT)
 
-## Key Commands
+## Where things live
 
-- `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- `pnpm --filter @workspace/api-server run dev` — run API server locally
+```
+lib/api-spec/openapi.yaml          — full OpenAPI spec (source of truth)
+lib/api-spec/orval.config.ts       — codegen config
+lib/db/src/schema/                 — Drizzle table definitions
+lib/api-client-react/src/generated — generated React Query hooks + Zod schemas
+artifacts/api-server/src/routes/   — Express route handlers (auth, vehicles, jobs, worklogs, payments, dashboard)
+artifacts/api-server/src/lib/auth.ts — JWT + bcrypt helpers
+artifacts/api-server/src/middlewares/authenticate.ts — JWT auth middleware
+artifacts/mobile/app/              — Expo screens (expo-router file-based)
+artifacts/mobile/context/AuthContext.tsx — auth state + token persistence
+artifacts/mobile/constants/colors.ts    — design tokens (light + dark)
+artifacts/mobile/components/       — shared UI components
+```
 
-See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.
+## Architecture decisions
+
+- **VIN permanence:** Service history (`work_logs`) is written immutably with `immutable_flag = true`. History persists across ownership transfers because records link to `vin`, not `user_id`.
+- **Role-based navigation:** After login, Expo root layout redirects to `/(customer)` or `/(mechanic)` tabs based on `user.role`.
+- **Payment escrow:** When a mechanic submits a work log, a `payments` record is created with `status = "held"`. Admin releases it, setting `status = "released"` and marking the job `PAID`.
+- **Auth token flow:** JWT is stored in AsyncStorage; `setAuthTokenGetter` from `@workspace/api-client-react` injects it into all API requests automatically.
+- **setBaseUrl at top level:** Called outside any React component in `_layout.tsx` using `EXPO_PUBLIC_DOMAIN` env var so it runs synchronously before any hook fires.
+
+## Product
+
+- **Customer:** Register/login, add vehicles by VIN, request services (repair/diagnostic/maintenance/detailing), track job status in real time, view per-VIN service history timeline, transfer vehicle ownership, rate mechanics
+- **Mechanic:** Register/login (pending approval), browse available jobs, accept jobs, update status (EN_ROUTE → IN_PROGRESS → COMPLETED), submit work logs with parts + costs + photos, view earnings history
+- **Admin:** Manage users, release payments, view platform-wide dashboard
+
+## User preferences
+
+_None recorded yet._
+
+## Gotchas
+
+- Do NOT run `pnpm dev` at workspace root — use restart_workflow instead.
+- `orval.config.ts` has `indexFiles: false` for zod output to avoid regeneration conflicts.
+- `lib/db` must be rebuilt (`pnpm run typecheck:libs`) before API server typechecks pick up new schema exports.
+- Mechanic registration sets `status = "pending"` — admin must activate before they can work.
+- Job accept is limited to `REQUESTED` or `OFFERED` status; `CANCELLED` jobs cannot transition.
+
+## Pointers
+
+- Expo skill: `.local/skills/expo/SKILL.md`
+- pnpm workspace skill: `.local/skills/pnpm-workspace/SKILL.md`
+- DB migrations: `.local/skills/pnpm-workspace/references/db.md`
+- OpenAPI codegen: `.local/skills/pnpm-workspace/references/openapi.md`

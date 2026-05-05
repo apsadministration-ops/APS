@@ -1,0 +1,37 @@
+import { pgTable, serial, integer, text, timestamp, real, index } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+import { usersTable } from "./users";
+import { vehiclesTable } from "./vehicles";
+
+export const jobsTable = pgTable("jobs", {
+  id: serial("id").primaryKey(),
+  vehicleId: integer("vehicle_id").notNull().references(() => vehiclesTable.id),
+  vin: text("vin").notNull(),
+  customerId: integer("customer_id").notNull().references(() => usersTable.id),
+  mechanicId: integer("mechanic_id").references(() => usersTable.id),
+  jobType: text("job_type", { enum: ["repair", "diagnostic", "maintenance", "detailing"] }).notNull(),
+  description: text("description").notNull(),
+  locationLat: real("location_lat"),
+  locationLng: real("location_lng"),
+  locationAddress: text("location_address"),
+  status: text("status", {
+    enum: ["REQUESTED", "OFFERED", "ACCEPTED", "EN_ROUTE", "IN_PROGRESS", "COMPLETED", "PAID", "CANCELLED"],
+  }).notNull().default("REQUESTED"),
+  estimatedPrice: real("estimated_price"),
+  finalPrice: real("final_price"),
+  rating: integer("rating"),
+  ratingNote: text("rating_note"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+}, (t) => [
+  index("jobs_vin_idx").on(t.vin),
+  index("jobs_customer_id_idx").on(t.customerId),
+  index("jobs_mechanic_id_idx").on(t.mechanicId),
+  index("jobs_status_idx").on(t.status),
+]);
+
+export const insertJobSchema = createInsertSchema(jobsTable).omit({ id: true, createdAt: true });
+export type InsertJob = z.infer<typeof insertJobSchema>;
+export type Job = typeof jobsTable.$inferSelect;

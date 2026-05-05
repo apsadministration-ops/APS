@@ -3,20 +3,36 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: APS - Automotive Platform System API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Authentication operations
+  - name: users
+    description: User management
+  - name: vehicles
+    description: Vehicle management (VIN-centric)
+  - name: ownership
+    description: Vehicle ownership history
+  - name: jobs
+    description: Service job management
+  - name: worklogs
+    description: Immutable work log records
+  - name: payments
+    description: Payment management
+  - name: dashboard
+    description: Summary and analytics endpoints
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,13 +40,1175 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # Auth
+  /auth/register:
+    post:
+      operationId: register
+      tags: [auth]
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterBody"
+      responses:
+        "201":
+          description: Registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Email already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginBody"
+      responses:
+        "200":
+          description: Logged in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current user
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # Users (admin)
+  /users:
+    get:
+      operationId: listUsers
+      tags: [users]
+      summary: List all users (admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: role
+          in: query
+          schema:
+            type: string
+            enum: [customer, mechanic, admin]
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, suspended, pending]
+      responses:
+        "200":
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
+
+  /users/{userId}:
+    get:
+      operationId: getUser
+      tags: [users]
+      summary: Get user by ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: User
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    patch:
+      operationId: updateUser
+      tags: [users]
+      summary: Update user status (admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserBody"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /users/{userId}/mechanic-profile:
+    get:
+      operationId: getMechanicProfile
+      tags: [users]
+      summary: Get mechanic profile with stats
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Mechanic profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MechanicProfile"
+
+  # Vehicles
+  /vehicles:
+    get:
+      operationId: listVehicles
+      tags: [vehicles]
+      summary: List vehicles owned by current user
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of vehicles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/VehicleWithOwnership"
+
+    post:
+      operationId: createVehicle
+      tags: [vehicles]
+      summary: Register a vehicle by VIN
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateVehicleBody"
+      responses:
+        "201":
+          description: Vehicle created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VehicleWithOwnership"
+        "409":
+          description: VIN already registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /vehicles/vin/{vin}:
+    get:
+      operationId: getVehicleByVin
+      tags: [vehicles]
+      summary: Lookup vehicle by VIN
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: vin
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Vehicle
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VehicleWithOwnership"
+        "404":
+          description: VIN not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /vehicles/{vehicleId}:
+    get:
+      operationId: getVehicle
+      tags: [vehicles]
+      summary: Get vehicle by ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: vehicleId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Vehicle
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VehicleWithOwnership"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /vehicles/{vehicleId}/history:
+    get:
+      operationId: getVehicleHistory
+      tags: [vehicles]
+      summary: Get full VIN-based service history for a vehicle
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: vehicleId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Service history entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WorkLog"
+
+  /vehicles/{vehicleId}/transfer:
+    post:
+      operationId: transferVehicle
+      tags: [vehicles]
+      summary: Initiate vehicle ownership transfer
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: vehicleId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransferVehicleBody"
+      responses:
+        "200":
+          description: Transfer initiated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OwnershipRecord"
+
+  # Ownership
+  /ownership/{vehicleId}:
+    get:
+      operationId: getOwnershipHistory
+      tags: [ownership]
+      summary: Get ownership history for a vehicle
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: vehicleId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Ownership history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OwnershipRecord"
+
+  # Jobs
+  /jobs:
+    get:
+      operationId: listJobs
+      tags: [jobs]
+      summary: List jobs (filtered by role and query params)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [REQUESTED, OFFERED, ACCEPTED, EN_ROUTE, IN_PROGRESS, COMPLETED, PAID, CANCELLED]
+        - name: vehicleId
+          in: query
+          schema:
+            type: integer
+        - name: mechanicId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of jobs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Job"
+
+    post:
+      operationId: createJob
+      tags: [jobs]
+      summary: Create a service request (customer only)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateJobBody"
+      responses:
+        "201":
+          description: Job created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+
+  /jobs/available:
+    get:
+      operationId: listAvailableJobs
+      tags: [jobs]
+      summary: List available jobs for mechanics
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Available jobs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Job"
+
+  /jobs/{jobId}:
+    get:
+      operationId: getJob
+      tags: [jobs]
+      summary: Get job by ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /jobs/{jobId}/status:
+    patch:
+      operationId: updateJobStatus
+      tags: [jobs]
+      summary: Update job status
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateJobStatusBody"
+      responses:
+        "200":
+          description: Updated job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+
+  /jobs/{jobId}/accept:
+    post:
+      operationId: acceptJob
+      tags: [jobs]
+      summary: Mechanic accepts a job
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Job accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+
+  /jobs/{jobId}/cancel:
+    post:
+      operationId: cancelJob
+      tags: [jobs]
+      summary: Cancel a job (customer, before ACCEPTED)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Job cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+
+  /jobs/{jobId}/rate:
+    post:
+      operationId: rateJob
+      tags: [jobs]
+      summary: Rate a completed job (customer only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RateJobBody"
+      responses:
+        "200":
+          description: Rated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+
+  # Work Logs
+  /worklogs:
+    post:
+      operationId: createWorkLog
+      tags: [worklogs]
+      summary: Submit a work log (mechanic only, on job completion)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateWorkLogBody"
+      responses:
+        "201":
+          description: Work log created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkLog"
+
+  /worklogs/vin/{vin}:
+    get:
+      operationId: getWorkLogsByVin
+      tags: [worklogs]
+      summary: Get all work logs for a VIN
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: vin
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Work logs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WorkLog"
+
+  /worklogs/{worklogId}:
+    get:
+      operationId: getWorkLog
+      tags: [worklogs]
+      summary: Get a single work log
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: worklogId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Work log
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkLog"
+
+  # Payments
+  /payments:
+    get:
+      operationId: listPayments
+      tags: [payments]
+      summary: List payments (admin or own)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of payments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Payment"
+
+  /payments/{jobId}/release:
+    post:
+      operationId: releasePayment
+      tags: [payments]
+      summary: Release payment to mechanic (admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Payment released
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payment"
+
+  # Dashboard / Summary
+  /dashboard/customer:
+    get:
+      operationId: getCustomerDashboard
+      tags: [dashboard]
+      summary: Customer dashboard summary
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Customer summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerDashboard"
+
+  /dashboard/mechanic:
+    get:
+      operationId: getMechanicDashboard
+      tags: [dashboard]
+      summary: Mechanic dashboard summary
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Mechanic summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MechanicDashboard"
+
+  /dashboard/admin:
+    get:
+      operationId: getAdminDashboard
+      tags: [dashboard]
+      summary: Admin dashboard summary
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Admin summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminDashboard"
+
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
   schemas:
     HealthStatus:
       type: object
       properties:
         status:
           type: string
-      required:
-        - status
+      required: [status]
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
+
+    # Auth
+    RegisterBody:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+        password:
+          type: string
+        role:
+          type: string
+          enum: [customer, mechanic]
+      required: [name, email, password, role]
+
+    LoginBody:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+      required: [email, password]
+
+    AuthResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        user:
+          $ref: "#/components/schemas/User"
+      required: [token, user]
+
+    # User
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+          nullable: true
+        role:
+          type: string
+          enum: [customer, mechanic, admin]
+        status:
+          type: string
+          enum: [active, suspended, pending]
+        avatarUrl:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, name, email, role, status, createdAt]
+
+    UpdateUserBody:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [active, suspended, pending]
+        name:
+          type: string
+        phone:
+          type: string
+
+    MechanicProfile:
+      type: object
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        totalJobs:
+          type: integer
+        completedJobs:
+          type: integer
+        averageRating:
+          type: number
+          nullable: true
+        totalEarnings:
+          type: number
+      required: [user, totalJobs, completedJobs, totalEarnings]
+
+    # Vehicles
+    Vehicle:
+      type: object
+      properties:
+        id:
+          type: integer
+        vin:
+          type: string
+        make:
+          type: string
+        model:
+          type: string
+        year:
+          type: integer
+        trim:
+          type: string
+          nullable: true
+        color:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, vin, make, model, year, createdAt]
+
+    VehicleWithOwnership:
+      allOf:
+        - $ref: "#/components/schemas/Vehicle"
+        - type: object
+          properties:
+            currentOwner:
+              $ref: "#/components/schemas/User"
+              nullable: true
+            isCurrentUserOwner:
+              type: boolean
+            serviceCount:
+              type: integer
+
+    CreateVehicleBody:
+      type: object
+      properties:
+        vin:
+          type: string
+          minLength: 17
+          maxLength: 17
+        make:
+          type: string
+        model:
+          type: string
+        year:
+          type: integer
+        trim:
+          type: string
+        color:
+          type: string
+      required: [vin, make, model, year]
+
+    TransferVehicleBody:
+      type: object
+      properties:
+        newOwnerEmail:
+          type: string
+          format: email
+      required: [newOwnerEmail]
+
+    OwnershipRecord:
+      type: object
+      properties:
+        id:
+          type: integer
+        vehicleId:
+          type: integer
+        vin:
+          type: string
+        userId:
+          type: integer
+        userName:
+          type: string
+        startDate:
+          type: string
+          format: date-time
+        endDate:
+          type: string
+          format: date-time
+          nullable: true
+        transferVerified:
+          type: boolean
+      required: [id, vehicleId, vin, userId, userName, startDate, transferVerified]
+
+    # Jobs
+    Job:
+      type: object
+      properties:
+        id:
+          type: integer
+        vehicleId:
+          type: integer
+        vin:
+          type: string
+        customerId:
+          type: integer
+        customerName:
+          type: string
+        mechanicId:
+          type: integer
+          nullable: true
+        mechanicName:
+          type: string
+          nullable: true
+        jobType:
+          type: string
+          enum: [repair, diagnostic, maintenance, detailing]
+        description:
+          type: string
+        locationLat:
+          type: number
+          nullable: true
+        locationLng:
+          type: number
+          nullable: true
+        locationAddress:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [REQUESTED, OFFERED, ACCEPTED, EN_ROUTE, IN_PROGRESS, COMPLETED, PAID, CANCELLED]
+        estimatedPrice:
+          type: number
+          nullable: true
+        finalPrice:
+          type: number
+          nullable: true
+        rating:
+          type: integer
+          nullable: true
+        ratingNote:
+          type: string
+          nullable: true
+        vehicle:
+          $ref: "#/components/schemas/Vehicle"
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        acceptedAt:
+          type: string
+          format: date-time
+          nullable: true
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+      required: [id, vehicleId, vin, customerId, customerName, jobType, description, status, createdAt]
+
+    CreateJobBody:
+      type: object
+      properties:
+        vehicleId:
+          type: integer
+        jobType:
+          type: string
+          enum: [repair, diagnostic, maintenance, detailing]
+        description:
+          type: string
+        locationLat:
+          type: number
+        locationLng:
+          type: number
+        locationAddress:
+          type: string
+        estimatedPrice:
+          type: number
+      required: [vehicleId, jobType, description]
+
+    UpdateJobStatusBody:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [REQUESTED, OFFERED, ACCEPTED, EN_ROUTE, IN_PROGRESS, COMPLETED, PAID, CANCELLED]
+        estimatedPrice:
+          type: number
+      required: [status]
+
+    RateJobBody:
+      type: object
+      properties:
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+        note:
+          type: string
+      required: [rating]
+
+    # Work Logs
+    WorkLog:
+      type: object
+      properties:
+        id:
+          type: integer
+        jobId:
+          type: integer
+        vehicleId:
+          type: integer
+        vin:
+          type: string
+        mechanicId:
+          type: integer
+        mechanicName:
+          type: string
+        customerId:
+          type: integer
+        serviceCategory:
+          type: string
+          enum: [repair, diagnostic, maintenance, detailing]
+        serviceDescription:
+          type: string
+        laborCost:
+          type: number
+        partsCost:
+          type: number
+        totalCost:
+          type: number
+        partsUsed:
+          type: array
+          items:
+            type: string
+        notes:
+          type: string
+          nullable: true
+        beforeImages:
+          type: array
+          items:
+            type: string
+        afterImages:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, jobId, vehicleId, vin, mechanicId, mechanicName, customerId, serviceCategory, serviceDescription, laborCost, partsCost, totalCost, partsUsed, beforeImages, afterImages, createdAt]
+
+    CreateWorkLogBody:
+      type: object
+      properties:
+        jobId:
+          type: integer
+        serviceCategory:
+          type: string
+          enum: [repair, diagnostic, maintenance, detailing]
+        serviceDescription:
+          type: string
+        laborCost:
+          type: number
+        partsCost:
+          type: number
+        partsUsed:
+          type: array
+          items:
+            type: string
+        notes:
+          type: string
+        beforeImages:
+          type: array
+          items:
+            type: string
+        afterImages:
+          type: array
+          items:
+            type: string
+      required: [jobId, serviceCategory, serviceDescription, laborCost, partsCost, partsUsed, beforeImages, afterImages]
+
+    # Payments
+    Payment:
+      type: object
+      properties:
+        id:
+          type: integer
+        jobId:
+          type: integer
+        amount:
+          type: number
+        platformFee:
+          type: number
+        mechanicPayout:
+          type: number
+        status:
+          type: string
+          enum: [pending, held, released, failed]
+        createdAt:
+          type: string
+          format: date-time
+        releasedAt:
+          type: string
+          format: date-time
+          nullable: true
+      required: [id, jobId, amount, platformFee, mechanicPayout, status, createdAt]
+
+    # Dashboards
+    CustomerDashboard:
+      type: object
+      properties:
+        vehicleCount:
+          type: integer
+        activeJobCount:
+          type: integer
+        completedJobCount:
+          type: integer
+        recentJobs:
+          type: array
+          items:
+            $ref: "#/components/schemas/Job"
+        totalSpent:
+          type: number
+      required: [vehicleCount, activeJobCount, completedJobCount, recentJobs, totalSpent]
+
+    MechanicDashboard:
+      type: object
+      properties:
+        activeJobCount:
+          type: integer
+        completedJobCount:
+          type: integer
+        availableJobCount:
+          type: integer
+        todayEarnings:
+          type: number
+        totalEarnings:
+          type: number
+        averageRating:
+          type: number
+          nullable: true
+        recentJobs:
+          type: array
+          items:
+            $ref: "#/components/schemas/Job"
+      required: [activeJobCount, completedJobCount, availableJobCount, todayEarnings, totalEarnings, recentJobs]
+
+    AdminDashboard:
+      type: object
+      properties:
+        totalUsers:
+          type: integer
+        totalMechanics:
+          type: integer
+        pendingMechanics:
+          type: integer
+        totalJobs:
+          type: integer
+        activeJobs:
+          type: integer
+        totalRevenue:
+          type: number
+        pendingPayouts:
+          type: number
+        recentJobs:
+          type: array
+          items:
+            $ref: "#/components/schemas/Job"
+      required: [totalUsers, totalMechanics, pendingMechanics, totalJobs, activeJobs, totalRevenue, pendingPayouts, recentJobs]
