@@ -107,6 +107,13 @@ export default function VehicleDetailScreen() {
               <Feather name="settings" size={18} color={colors.secondaryForeground} />
               <Text style={[styles.actionText, { color: colors.secondaryForeground }]}>Parts</Text>
             </Pressable>
+            <Pressable
+              style={[styles.actionBtn, { backgroundColor: colors.secondary, borderWidth: 1, borderColor: colors.border }]}
+              onPress={() => router.push(`/obd2/${vehicle.id}`)}
+            >
+              <Feather name="cpu" size={18} color={colors.secondaryForeground} />
+              <Text style={[styles.actionText, { color: colors.secondaryForeground }]}>OBD2</Text>
+            </Pressable>
           </View>
 
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Service History</Text>

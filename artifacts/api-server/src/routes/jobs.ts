@@ -26,6 +26,9 @@ async function formatJob(job: typeof jobsTable.$inferSelect) {
     locationLng: job.locationLng ?? null,
     locationAddress: job.locationAddress ?? null,
     status: job.status,
+    mechanicLat: job.mechanicLat ?? null,
+    mechanicLng: job.mechanicLng ?? null,
+    mechanicLocationUpdatedAt: job.mechanicLocationUpdatedAt ?? null,
     estimatedPrice: job.estimatedPrice ?? null,
     finalPrice: job.finalPrice ?? null,
     rating: job.rating ?? null,
@@ -150,6 +153,24 @@ router.post("/jobs/:jobId/cancel", authenticate, async (req: AuthRequest, res): 
   }
   const [updated] = await db.update(jobsTable).set({ status: "CANCELLED" }).where(eq(jobsTable.id, jobId)).returning();
   res.json(await formatJob(updated));
+});
+
+// Mechanic updates their live GPS location for a job
+router.put("/jobs/:jobId/mechanic-location", authenticate, async (req: AuthRequest, res): Promise<void> => {
+  if (req.userRole !== "mechanic") { res.status(403).json({ error: "Only mechanics can update location" }); return; }
+  const jobId = parseInt(String(req.params.jobId), 10);
+  if (isNaN(jobId)) { res.status(400).json({ error: "Invalid job ID" }); return; }
+  const { lat, lng } = req.body as { lat: number; lng: number };
+  if (typeof lat !== "number" || typeof lng !== "number") {
+    res.status(400).json({ error: "lat and lng are required numbers" }); return;
+  }
+  const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, jobId));
+  if (!job) { res.status(404).json({ error: "Job not found" }); return; }
+  if (job.mechanicId !== req.userId) { res.status(403).json({ error: "You are not assigned to this job" }); return; }
+  await db.update(jobsTable)
+    .set({ mechanicLat: lat, mechanicLng: lng, mechanicLocationUpdatedAt: new Date() })
+    .where(eq(jobsTable.id, jobId));
+  res.json({ ok: true });
 });
 
 router.post("/jobs/:jobId/rate", authenticate, async (req: AuthRequest, res): Promise<void> => {

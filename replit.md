@@ -31,12 +31,16 @@ lib/api-spec/orval.config.ts       — codegen config
 lib/db/src/schema/                 — Drizzle table definitions
 lib/api-client-react/src/generated — generated React Query hooks + Zod schemas
 artifacts/api-server/src/routes/   — Express route handlers (auth, vehicles, jobs, worklogs, payments, dashboard)
-artifacts/api-server/src/lib/auth.ts — JWT + bcrypt helpers
+artifacts/api-server/src/lib/      — auth.ts, notifications.ts
 artifacts/api-server/src/middlewares/authenticate.ts — JWT auth middleware
 artifacts/mobile/app/              — Expo screens (expo-router file-based)
+artifacts/mobile/app/tracker/      — job status + live mechanic location tracker
+artifacts/mobile/app/obd2/         — VIN-based OBD2 code lookup with repair instructions
+artifacts/mobile/app/parts/        — VIN parts catalog + NHTSA recalls
 artifacts/mobile/context/AuthContext.tsx — auth state + token persistence
+artifacts/mobile/data/obd2Codes.ts — comprehensive OBD2 P/B/C/U code database
 artifacts/mobile/constants/colors.ts    — design tokens (light + dark)
-artifacts/mobile/components/       — shared UI components
+artifacts/mobile/hooks/            — usePushNotifications, useColors
 ```
 
 ## Architecture decisions
@@ -46,11 +50,14 @@ artifacts/mobile/components/       — shared UI components
 - **Payment escrow:** When a mechanic submits a work log, a `payments` record is created with `status = "held"`. Admin releases it, setting `status = "released"` and marking the job `PAID`.
 - **Auth token flow:** JWT is stored in AsyncStorage; `setAuthTokenGetter` from `@workspace/api-client-react` injects it into all API requests automatically.
 - **setBaseUrl at top level:** Called outside any React component in `_layout.tsx` using `EXPO_PUBLIC_DOMAIN` env var so it runs synchronously before any hook fires.
+- **Push notifications:** Expo Push API (no third-party). `push_token` stored on `users` table. Mechanics notified on new jobs; customers notified on job accept + completion. Best-effort, fire-and-forget.
+- **Live location:** Mechanic GPS (expo-location) sent via `PUT /api/jobs/:jobId/mechanic-location` every 15s; stored as `mechanic_lat/lng` on jobs table; customer polls every 10s via React Query refetch.
+- **OBD2 database:** Local static file (`data/obd2Codes.ts`) with 40+ P/B/C/U codes, each with severity, driveability, causes, numbered repair steps, cost range, and affected systems. No API key needed.
 
 ## Product
 
-- **Customer:** Register/login, add vehicles by VIN, request services (repair/diagnostic/maintenance/detailing), track job status in real time, view per-VIN service history timeline, transfer vehicle ownership, rate mechanics
-- **Mechanic:** Register/login (pending approval), browse available jobs, accept jobs, update status (EN_ROUTE → IN_PROGRESS → COMPLETED), submit work logs with parts + costs + photos, view earnings history
+- **Customer:** Register/login, add vehicles by VIN, request services, track job status in real time via live tracker, see mechanic GPS when en route, view per-VIN service history, transfer vehicle ownership, rate mechanics
+- **Mechanic:** Register/login (pending approval), browse/accept jobs, update status, share live GPS location, submit work logs with parts + costs + photos, access parts catalog + OBD2 code lookup per vehicle, view earnings
 - **Admin:** Manage users, release payments, view platform-wide dashboard
 
 ## User preferences
@@ -64,6 +71,7 @@ _None recorded yet._
 - `lib/db` must be rebuilt (`pnpm run typecheck:libs`) before API server typechecks pick up new schema exports.
 - Mechanic registration sets `status = "pending"` — admin must activate before they can work.
 - Job accept is limited to `REQUESTED` or `OFFERED` status; `CANCELLED` jobs cannot transition.
+- `expo-location` requires foreground permission before GPS watch starts; the tracker screen handles this gracefully.
 
 ## Pointers
 

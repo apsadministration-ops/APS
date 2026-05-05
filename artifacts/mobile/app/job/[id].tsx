@@ -217,15 +217,42 @@ export default function JobDetailScreen() {
             </View>
           )}
 
-          {/* Parts Catalog — visible to mechanics only */}
+          {/* Mechanic tools row */}
           {isMechanic && job.vehicleId && (
+            <View style={styles.toolsRow}>
+              <Pressable
+                style={[styles.toolBtn, { backgroundColor: colors.secondary, borderColor: colors.border }]}
+                onPress={() => router.push(`/parts/${job.vehicleId}`)}
+              >
+                <Feather name="settings" size={16} color={colors.foreground} />
+                <Text style={[styles.toolBtnText, { color: colors.foreground }]}>Parts</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.toolBtn, { backgroundColor: colors.secondary, borderColor: colors.border }]}
+                onPress={() => router.push(`/obd2/${job.vehicleId}`)}
+              >
+                <Feather name="cpu" size={16} color={colors.foreground} />
+                <Text style={[styles.toolBtnText, { color: colors.foreground }]}>OBD2</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.toolBtn, { backgroundColor: colors.secondary, borderColor: colors.border }]}
+                onPress={() => router.push(`/tracker/${job.id}`)}
+              >
+                <Feather name="navigation" size={16} color={colors.foreground} />
+                <Text style={[styles.toolBtnText, { color: colors.foreground }]}>Track</Text>
+              </Pressable>
+            </View>
+          )}
+
+          {/* Customer tracker button — visible when job is active */}
+          {isCustomer && ["ACCEPTED","EN_ROUTE","IN_PROGRESS"].includes(job.status) && (
             <Pressable
-              style={[styles.partsBtn, { backgroundColor: colors.secondary, borderColor: colors.border }]}
-              onPress={() => router.push(`/parts/${job.vehicleId}`)}
+              style={[styles.partsBtn, { backgroundColor: colors.primary + "18", borderColor: colors.primary + "44" }]}
+              onPress={() => router.push(`/tracker/${job.id}`)}
             >
-              <Feather name="settings" size={18} color={colors.foreground} />
-              <Text style={[styles.partsBtnText, { color: colors.foreground }]}>Parts Catalog</Text>
-              <Feather name="external-link" size={14} color={colors.mutedForeground} />
+              <Feather name="navigation" size={18} color={colors.primary} />
+              <Text style={[styles.partsBtnText, { color: colors.primary }]}>Track Mechanic</Text>
+              <View style={styles.liveDot} />
             </Pressable>
           )}
 
@@ -305,4 +332,21 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   partsBtnText: { fontSize: 15, fontWeight: "600", flex: 1, textAlign: "center" },
+  toolsRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 4,
+  },
+  toolBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  toolBtnText: { fontSize: 13, fontWeight: "600" },
+  liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#22C55E" },
 });
