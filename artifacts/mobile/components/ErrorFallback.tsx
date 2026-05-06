@@ -1,5 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import { reloadAppAsync } from "expo";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { useState } from "react";
 import {
   Modal,
@@ -27,6 +28,24 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
 
   const handleRestart = async () => {
     try {
+      await reloadAppAsync();
+    } catch (restartError) {
+      console.error("Failed to restart app:", restartError);
+      resetError();
+    }
+  };
+
+  const handleSignOutAndRestart = async () => {
+    try {
+      await AsyncStorage.multiRemove(["auth_token", "auth_user"]);
+    } catch (e) {
+      console.error("Failed to clear auth:", e);
+    }
+    try {
+      if (Platform.OS === "web" && typeof window !== "undefined") {
+        window.location.href = "/";
+        return;
+      }
       await reloadAppAsync();
     } catch (restartError) {
       console.error("Failed to restart app:", restartError);
@@ -95,6 +114,29 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
             ]}
           >
             Try Again
+          </Text>
+        </Pressable>
+
+        <Pressable
+          onPress={handleSignOutAndRestart}
+          style={({ pressed }) => [
+            styles.button,
+            {
+              backgroundColor: "transparent",
+              borderWidth: 1,
+              borderColor: colors.border,
+              opacity: pressed ? 0.7 : 1,
+              marginTop: 8,
+            },
+          ]}
+        >
+          <Text
+            style={[
+              styles.buttonText,
+              { color: colors.foreground },
+            ]}
+          >
+            Sign out & reload
           </Text>
         </Pressable>
       </View>

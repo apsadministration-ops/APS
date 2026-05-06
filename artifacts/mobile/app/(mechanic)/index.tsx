@@ -19,7 +19,9 @@ export default function MechanicDashboard() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
-  const { data: dashboard, isLoading, error, refetch, isRefetching } = useGetMechanicDashboard();
+  const { data: dashboard, isLoading, error, refetch, isRefetching } = useGetMechanicDashboard({
+    query: { enabled: !!user && user.role === "mechanic" },
+  });
 
   if (isLoading) {
     return (
@@ -50,10 +52,10 @@ export default function MechanicDashboard() {
 
         <View style={styles.earningsCard}>
           <Text style={[styles.earningsLabel, { color: "rgba(255,255,255,0.8)" }]}>Today's Earnings</Text>
-          <Text style={styles.earningsValue}>${dashboard.todayEarnings.toFixed(2)}</Text>
+          <Text style={styles.earningsValue}>${(dashboard.todayEarnings ?? 0).toFixed(2)}</Text>
           <View style={styles.totalRow}>
             <Text style={[styles.totalLabel, { color: "rgba(255,255,255,0.8)" }]}>Total Earnings</Text>
-            <Text style={[styles.totalValue, { color: "white" }]}>${dashboard.totalEarnings.toFixed(2)}</Text>
+            <Text style={[styles.totalValue, { color: "white" }]}>${(dashboard.totalEarnings ?? 0).toFixed(2)}</Text>
           </View>
         </View>
 
@@ -114,7 +116,7 @@ export default function MechanicDashboard() {
           </Link>
         </View>
 
-        {dashboard.recentJobs.length === 0 ? (
+        {(dashboard.recentJobs ?? []).length === 0 ? (
           <View style={[styles.emptyState, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Feather name="inbox" size={48} color={colors.mutedForeground} />
             <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No recent jobs</Text>
@@ -124,7 +126,7 @@ export default function MechanicDashboard() {
           </View>
         ) : (
           <View style={styles.list}>
-            {dashboard.recentJobs.map((job) => (
+            {(dashboard.recentJobs ?? []).map((job) => (
               <JobCard key={job.id} job={job} showCustomer />
             ))}
           </View>

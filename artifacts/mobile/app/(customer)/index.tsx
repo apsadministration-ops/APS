@@ -19,7 +19,9 @@ export default function CustomerDashboard() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
-  const { data: dashboard, isLoading, error, refetch, isRefetching } = useGetCustomerDashboard();
+  const { data: dashboard, isLoading, error, refetch, isRefetching } = useGetCustomerDashboard({
+    query: { enabled: !!user && user.role === "customer" },
+  });
 
   if (isLoading) {
     return (
@@ -85,7 +87,7 @@ export default function CustomerDashboard() {
           </Pressable>
           <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Feather name="dollar-sign" size={18} color="#F97316" />
-            <Text style={[styles.statValue, { color: colors.foreground }]}>${dashboard.totalSpent.toFixed(0)}</Text>
+            <Text style={[styles.statValue, { color: colors.foreground }]}>${(dashboard.totalSpent ?? 0).toFixed(0)}</Text>
             <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Spent</Text>
           </View>
         </View>
@@ -127,7 +129,7 @@ export default function CustomerDashboard() {
           </Link>
         </View>
 
-        {dashboard.recentJobs.length === 0 ? (
+        {(dashboard.recentJobs ?? []).length === 0 ? (
           <View style={[styles.emptyState, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Feather name="inbox" size={48} color={colors.mutedForeground} />
             <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No recent jobs</Text>
@@ -137,7 +139,7 @@ export default function CustomerDashboard() {
           </View>
         ) : (
           <View style={styles.list}>
-            {dashboard.recentJobs.map((job) => (
+            {(dashboard.recentJobs ?? []).map((job) => (
               <JobCard key={job.id} job={job} />
             ))}
           </View>
