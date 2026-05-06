@@ -395,6 +395,12 @@ export const WorkLogServiceCategory = {
   detailing: "detailing",
 } as const;
 
+export type WorkLogUpsellsItem = {
+  description: string;
+  amount: number;
+  customerApproved: boolean;
+};
+
 export interface WorkLog {
   id: number;
   jobId: number;
@@ -413,6 +419,8 @@ export interface WorkLog {
   notes?: string | null;
   beforeImages: string[];
   afterImages: string[];
+  /** Optional upsells/recommendations logged on job completion. Only items with customerApproved=true earn mechanic upsell points. */
+  upsells: WorkLogUpsellsItem[];
   createdAt: string;
 }
 
@@ -425,6 +433,12 @@ export const CreateWorkLogBodyServiceCategory = {
   maintenance: "maintenance",
   detailing: "detailing",
 } as const;
+
+export type CreateWorkLogBodyUpsellsItem = {
+  description: string;
+  amount: number;
+  customerApproved: boolean;
+};
 
 export interface CreateWorkLogBody {
   jobId: number;
@@ -441,6 +455,8 @@ export interface CreateWorkLogBody {
   notes?: string;
   beforeImages: string[];
   afterImages: string[];
+  /** Optional upsells/recommendations. Only items with customerApproved=true earn mechanic points. */
+  upsells?: CreateWorkLogBodyUpsellsItem[];
 }
 
 export type PaymentStatus = (typeof PaymentStatus)[keyof typeof PaymentStatus];

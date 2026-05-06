@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CreateWorkLogBodyServiceCategory } from "./createWorkLogBodyServiceCategory";
+import type { CreateWorkLogBodyUpsellsItem } from "./createWorkLogBodyUpsellsItem";
 
 export interface CreateWorkLogBody {
   jobId: number;
@@ -22,4 +23,6 @@ export interface CreateWorkLogBody {
   notes?: string;
   beforeImages: string[];
   afterImages: string[];
+  /** Optional upsells/recommendations. Only items with customerApproved=true earn mechanic points. */
+  upsells?: CreateWorkLogBodyUpsellsItem[];
 }

@@ -1557,10 +1557,23 @@ components:
           type: array
           items:
             type: string
+        upsells:
+          type: array
+          description: Optional upsells/recommendations logged on job completion. Only items with customerApproved=true earn mechanic upsell points.
+          items:
+            type: object
+            properties:
+              description:
+                type: string
+              amount:
+                type: number
+              customerApproved:
+                type: boolean
+            required: [description, amount, customerApproved]
         createdAt:
           type: string
           format: date-time
-      required: [id, jobId, vehicleId, vin, mechanicId, mechanicName, customerId, serviceCategory, serviceDescription, mileageAtService, laborCost, partsCost, totalCost, partsUsed, beforeImages, afterImages, createdAt]
+      required: [id, jobId, vehicleId, vin, mechanicId, mechanicName, customerId, serviceCategory, serviceDescription, mileageAtService, laborCost, partsCost, totalCost, partsUsed, beforeImages, afterImages, upsells, createdAt]
 
     CreateWorkLogBody:
       type: object
@@ -1594,6 +1607,19 @@ components:
           type: array
           items:
             type: string
+        upsells:
+          type: array
+          description: Optional upsells/recommendations. Only items with customerApproved=true earn mechanic points.
+          items:
+            type: object
+            properties:
+              description:
+                type: string
+              amount:
+                type: number
+              customerApproved:
+                type: boolean
+            required: [description, amount, customerApproved]
       required: [jobId, serviceCategory, serviceDescription, mileageAtService, laborCost, partsCost, partsUsed, beforeImages, afterImages]
 
     # Payments

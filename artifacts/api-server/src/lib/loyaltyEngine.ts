@@ -277,7 +277,10 @@ export const RULES = {
     reviewWithText: 50,                                // bonus when reviewText is provided
     reviewQualityBonus: (rating: number) => Math.max(0, (rating - 3)) * 50, // 4★=+50, 5★=+100
     referralFirstPaidJob: 1_000,                       // upgraded from old 500
-    welcomeBonusViaReferral: 200,
+    // NOTE: `welcome` source remains in CustomerSource for future admin-granted
+    // bonuses (e.g. compensation goodwill points). No automatic award path
+    // currently writes it — the old welcome-on-signup was removed when the
+    // referral system was isolated, per spec.
   },
   mechanic: {
     jobBase: { detailing: 50, maintenance: 75, diagnostic: 100, repair: 150 } as Record<string, number>,

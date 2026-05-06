@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { WorkLogServiceCategory } from "./workLogServiceCategory";
+import type { WorkLogUpsellsItem } from "./workLogUpsellsItem";
 
 export interface WorkLog {
   id: number;
@@ -25,5 +26,7 @@ export interface WorkLog {
   notes?: string | null;
   beforeImages: string[];
   afterImages: string[];
+  /** Optional upsells/recommendations logged on job completion. Only items with customerApproved=true earn mechanic upsell points. */
+  upsells: WorkLogUpsellsItem[];
   createdAt: Date;
 }

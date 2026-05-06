@@ -451,6 +451,17 @@ export const GetVehicleHistoryResponseItem = zod.object({
   notes: zod.string().nullish(),
   beforeImages: zod.array(zod.string()),
   afterImages: zod.array(zod.string()),
+  upsells: zod
+    .array(
+      zod.object({
+        description: zod.string(),
+        amount: zod.number(),
+        customerApproved: zod.boolean(),
+      }),
+    )
+    .describe(
+      "Optional upsells\/recommendations logged on job completion. Only items with customerApproved=true earn mechanic upsell points.",
+    ),
   createdAt: zod.coerce.date(),
 });
 export const GetVehicleHistoryResponse = zod.array(
@@ -1063,6 +1074,18 @@ export const CreateWorkLogBody = zod.object({
   notes: zod.string().optional(),
   beforeImages: zod.array(zod.string()),
   afterImages: zod.array(zod.string()),
+  upsells: zod
+    .array(
+      zod.object({
+        description: zod.string(),
+        amount: zod.number(),
+        customerApproved: zod.boolean(),
+      }),
+    )
+    .optional()
+    .describe(
+      "Optional upsells\/recommendations. Only items with customerApproved=true earn mechanic points.",
+    ),
 });
 
 /**
@@ -1095,6 +1118,17 @@ export const GetWorkLogsByVinResponseItem = zod.object({
   notes: zod.string().nullish(),
   beforeImages: zod.array(zod.string()),
   afterImages: zod.array(zod.string()),
+  upsells: zod
+    .array(
+      zod.object({
+        description: zod.string(),
+        amount: zod.number(),
+        customerApproved: zod.boolean(),
+      }),
+    )
+    .describe(
+      "Optional upsells\/recommendations logged on job completion. Only items with customerApproved=true earn mechanic upsell points.",
+    ),
   createdAt: zod.coerce.date(),
 });
 export const GetWorkLogsByVinResponse = zod.array(GetWorkLogsByVinResponseItem);
@@ -1129,6 +1163,17 @@ export const GetWorkLogResponse = zod.object({
   notes: zod.string().nullish(),
   beforeImages: zod.array(zod.string()),
   afterImages: zod.array(zod.string()),
+  upsells: zod
+    .array(
+      zod.object({
+        description: zod.string(),
+        amount: zod.number(),
+        customerApproved: zod.boolean(),
+      }),
+    )
+    .describe(
+      "Optional upsells\/recommendations logged on job completion. Only items with customerApproved=true earn mechanic upsell points.",
+    ),
   createdAt: zod.coerce.date(),
 });
 

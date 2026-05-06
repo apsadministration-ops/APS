@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { db, paymentsTable, jobsTable, usersTable } from "@workspace/db";
 import { tryConvertReferral } from "../lib/referralEngine";
 import { authenticate, requireRole, type AuthRequest } from "../middlewares/authenticate";
-import { awardCustomerPoints, RULES } from "../lib/loyaltyEngine";
+import { awardCustomerPoints } from "../lib/loyaltyEngine";
 import { getStripePublishableKey, getUncachableStripeClient } from "../lib/stripeClient";
 
 const router: IRouter = Router();
