@@ -4,7 +4,7 @@ import { db, usersTable, referralsTable } from "@workspace/db";
 import { RegisterBody, LoginBody } from "@workspace/api-zod";
 import { hashPassword, verifyPassword, signToken } from "../lib/auth";
 import { authenticate, type AuthRequest } from "../middlewares/authenticate";
-import { awardLoyaltyPoints } from "./loyalty";
+import { awardCustomerPoints } from "../lib/loyaltyEngine";
 
 function generateReferralCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -34,6 +34,7 @@ function formatUser(user: typeof usersTable.$inferSelect) {
     referralCode: user.referralCode ?? null,
     mechanicTier: user.mechanicTier ?? null,
     loyaltyPoints: user.loyaltyPoints ?? 0,
+    mechanicPoints: user.mechanicPoints ?? 0,
     address: user.address ?? null,
     city: user.city ?? null,
     region: user.region ?? null,
@@ -92,7 +93,7 @@ router.post("/auth/register", async (req, res): Promise<void> => {
   if (referrer) {
     await db.insert(referralsTable).values({ referrerId: referrer.id, referredId: user.id });
     if (role === "customer") {
-      await awardLoyaltyPoints(user.id, 200, "Welcome bonus — joined via referral");
+      await awardCustomerPoints(user.id, 200, "welcome", "Welcome bonus — joined via referral");
     }
   }
 

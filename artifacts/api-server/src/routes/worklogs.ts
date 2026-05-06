@@ -4,6 +4,7 @@ import { db, workLogsTable, jobsTable, usersTable, paymentsTable, vehiclesTable 
 import { authenticate, type AuthRequest } from "../middlewares/authenticate";
 import { notifyCustomerJobComplete } from "../lib/notifications";
 import { getUncachableStripeClient } from "../lib/stripeClient";
+import { awardMechanicPoints, RULES } from "../lib/loyaltyEngine";
 
 const router: IRouter = Router();
 
@@ -17,18 +18,31 @@ async function formatWorkLog(log: typeof workLogsTable.$inferSelect) {
     laborCost: log.laborCost, partsCost: log.partsCost, totalCost: log.totalCost,
     partsUsed: (log.partsUsed as string[]) ?? [], notes: log.notes ?? null,
     beforeImages: (log.beforeImages as string[]) ?? [], afterImages: (log.afterImages as string[]) ?? [],
+    upsells: (log.upsells as { description: string; amount: number; customerApproved: boolean }[]) ?? [],
     createdAt: log.createdAt,
   };
 }
 
 router.post("/worklogs", authenticate, async (req: AuthRequest, res): Promise<void> => {
   if (req.userRole !== "mechanic") { res.status(403).json({ error: "Only mechanics can submit work logs" }); return; }
-  const { jobId, serviceCategory, serviceDescription, mileageAtService, laborCost, partsCost, partsUsed, notes, beforeImages, afterImages } = req.body as {
+  const { jobId, serviceCategory, serviceDescription, mileageAtService, laborCost, partsCost, partsUsed, notes, beforeImages, afterImages, upsells } = req.body as {
     jobId: number; serviceCategory: string; serviceDescription: string;
     mileageAtService: number;
     laborCost: number; partsCost: number; partsUsed: string[];
     notes?: string; beforeImages: string[]; afterImages: string[];
+    upsells?: { description: string; amount: number; customerApproved?: boolean }[];
   };
+  // Validate upsells: non-empty description, positive amount, and an explicit
+  // boolean `customerApproved` attesting the customer agreed in person.
+  // Only upsells with customerApproved === true earn mechanic points downstream.
+  const cleanUpsells: { description: string; amount: number; customerApproved: boolean }[] = (upsells ?? [])
+    .filter((u) => u && typeof u.description === "string" && u.description.trim().length > 0
+      && typeof u.amount === "number" && Number.isFinite(u.amount) && u.amount > 0)
+    .map((u) => ({
+      description: u.description.trim().slice(0, 200),
+      amount: Math.round(u.amount * 100) / 100,
+      customerApproved: u.customerApproved === true,
+    }));
   const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, jobId));
   if (!job) { res.status(404).json({ error: "Job not found" }); return; }
   if (job.mechanicId !== req.userId) { res.status(403).json({ error: "You are not assigned to this job" }); return; }
@@ -94,6 +108,7 @@ router.post("/worklogs", authenticate, async (req: AuthRequest, res): Promise<vo
       laborCost, partsCost, totalCost,
       partsUsed: partsUsed ?? [], notes: notes ?? null,
       beforeImages: beforeImages ?? [], afterImages: afterImages ?? [],
+      upsells: cleanUpsells,
       immutableFlag: true,
     }).returning();
 
@@ -142,6 +157,18 @@ router.post("/worklogs", authenticate, async (req: AuthRequest, res): Promise<vo
     } catch (err) {
       req.log.error({ err, jobId }, "Stripe capture failed — work log saved, payment requires manual review");
     }
+  }
+
+  // MECHANIC: upsell points — 2 pts per $1 of CUSTOMER-APPROVED upsells only.
+  // Unapproved upsells are recorded for audit but earn nothing.
+  const approvedUpsells = cleanUpsells.filter((u) => u.customerApproved);
+  if (approvedUpsells.length > 0) {
+    const upsellTotal = approvedUpsells.reduce((s, u) => s + u.amount, 0);
+    const pts = Math.round(upsellTotal * RULES.mechanic.upsellPointsPerDollar);
+    await awardMechanicPoints(
+      req.userId!, pts, "upsell",
+      `Approved upsells on Job #${jobId} ($${upsellTotal.toFixed(2)})`, jobId,
+    ).catch(() => {});
   }
 
   // Notify customer job is complete (fire-and-forget)

@@ -18,6 +18,7 @@ function formatUser(user: typeof usersTable.$inferSelect) {
     mechanicTier: user.mechanicTier ?? null,
     certifications: user.certifications ?? "[]",
     loyaltyPoints: user.loyaltyPoints ?? 0,
+    mechanicPoints: user.mechanicPoints ?? 0,
     createdAt: user.createdAt,
   };
 }

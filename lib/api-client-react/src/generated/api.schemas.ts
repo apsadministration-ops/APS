@@ -81,6 +81,7 @@ export interface User {
   mechanicTier?: UserMechanicTier;
   certifications?: string | null;
   loyaltyPoints?: number;
+  mechanicPoints?: number;
   address?: string | null;
   city?: string | null;
   region?: string | null;

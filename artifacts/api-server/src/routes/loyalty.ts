@@ -1,70 +1,112 @@
 import { Router, type IRouter } from "express";
-import { eq, desc, sum } from "drizzle-orm";
-import { db, loyaltyPointsTable, usersTable } from "@workspace/db";
+import { eq, desc } from "drizzle-orm";
+import {
+  db,
+  customerPointsLedgerTable,
+  customerRedemptionsTable,
+  mechanicPointsLedgerTable,
+  mechanicRewardsTable,
+  usersTable,
+} from "@workspace/db";
 import { authenticate, type AuthRequest } from "../middlewares/authenticate";
+import {
+  CUSTOMER_REWARDS,
+  MECHANIC_REWARDS,
+  redeemCustomerReward,
+  redeemMechanicReward,
+} from "../lib/loyaltyEngine";
 
 const router: IRouter = Router();
 
-router.get("/loyalty", authenticate, async (req: AuthRequest, res): Promise<void> => {
-  const history = await db
-    .select()
-    .from(loyaltyPointsTable)
-    .where(eq(loyaltyPointsTable.userId, req.userId!))
-    .orderBy(desc(loyaltyPointsTable.createdAt));
+/* -------------------------------------------------------------------------- */
+/* CUSTOMER LOYALTY                                                            */
+/* -------------------------------------------------------------------------- */
 
+router.get("/loyalty/customer", authenticate, async (req: AuthRequest, res): Promise<void> => {
   const [user] = await db.select({ loyaltyPoints: usersTable.loyaltyPoints })
-    .from(usersTable)
-    .where(eq(usersTable.id, req.userId!));
-
-  res.json({
-    balance: user?.loyaltyPoints ?? 0,
-    history,
-  });
+    .from(usersTable).where(eq(usersTable.id, req.userId!));
+  const history = await db.select().from(customerPointsLedgerTable)
+    .where(eq(customerPointsLedgerTable.userId, req.userId!))
+    .orderBy(desc(customerPointsLedgerTable.createdAt))
+    .limit(100);
+  res.json({ balance: user?.loyaltyPoints ?? 0, history });
 });
 
-/**
- * Reverse all loyalty point grants tied to a specific job (e.g. on refund).
- * Inserts negative-point counter-rows so the audit trail stays intact, then
- * recomputes each affected user's balance from the sum.
- */
-export async function reverseLoyaltyForJob(jobId: number, reason: string) {
-  const grants = await db.select().from(loyaltyPointsTable).where(eq(loyaltyPointsTable.jobId, jobId));
-  // Filter out anything that's already a reversal (negative).
-  const positive = grants.filter((g) => g.points > 0);
-  if (positive.length === 0) return;
-  for (const g of positive) {
-    await db.insert(loyaltyPointsTable).values({
-      userId: g.userId, points: -g.points, reason, jobId,
-    });
-  }
-  const affectedUsers = Array.from(new Set(positive.map((g) => g.userId)));
-  for (const uid of affectedUsers) {
-    const [agg] = await db
-      .select({ total: sum(loyaltyPointsTable.points) })
-      .from(loyaltyPointsTable)
-      .where(eq(loyaltyPointsTable.userId, uid));
-    await db.update(usersTable)
-      .set({ loyaltyPoints: Number(agg?.total ?? 0) })
-      .where(eq(usersTable.id, uid));
-  }
-}
+router.get("/loyalty/rewards/customer", authenticate, async (_req, res): Promise<void> => {
+  res.json(CUSTOMER_REWARDS);
+});
 
-export async function awardLoyaltyPoints(userId: number, points: number, reason: string, jobId?: number) {
-  await db.insert(loyaltyPointsTable).values({ userId, points, reason, jobId: jobId ?? null });
-  await db
-    .update(usersTable)
-    .set({ loyaltyPoints: (await db.select({ lp: usersTable.loyaltyPoints }).from(usersTable).where(eq(usersTable.id, userId)))[0]?.lp ?? 0 + points })
-    .where(eq(usersTable.id, userId));
+router.post("/loyalty/customer/redeem", authenticate, async (req: AuthRequest, res): Promise<void> => {
+  const { rewardKey } = req.body as { rewardKey: string };
+  if (!rewardKey) { res.status(400).json({ error: "rewardKey required" }); return; }
+  try {
+    const newBalance = await redeemCustomerReward(req.userId!, rewardKey);
+    res.json({ ok: true, balance: newBalance });
+  } catch (err) {
+    res.status(400).json({ error: (err as Error).message });
+  }
+});
 
-  // Re-compute to avoid race conditions
-  const [agg] = await db
-    .select({ total: sum(loyaltyPointsTable.points) })
-    .from(loyaltyPointsTable)
-    .where(eq(loyaltyPointsTable.userId, userId));
-  await db
-    .update(usersTable)
-    .set({ loyaltyPoints: Number(agg?.total ?? 0) })
-    .where(eq(usersTable.id, userId));
-}
+router.get("/loyalty/customer/redemptions", authenticate, async (req: AuthRequest, res): Promise<void> => {
+  const rows = await db.select().from(customerRedemptionsTable)
+    .where(eq(customerRedemptionsTable.userId, req.userId!))
+    .orderBy(desc(customerRedemptionsTable.createdAt));
+  res.json(rows);
+});
+
+/* -------------------------------------------------------------------------- */
+/* MECHANIC LOYALTY                                                            */
+/* -------------------------------------------------------------------------- */
+
+router.get("/loyalty/mechanic", authenticate, async (req: AuthRequest, res): Promise<void> => {
+  if (req.userRole !== "mechanic") { res.status(403).json({ error: "Mechanics only" }); return; }
+  const [user] = await db.select({ mechanicPoints: usersTable.mechanicPoints })
+    .from(usersTable).where(eq(usersTable.id, req.userId!));
+  const history = await db.select().from(mechanicPointsLedgerTable)
+    .where(eq(mechanicPointsLedgerTable.mechanicId, req.userId!))
+    .orderBy(desc(mechanicPointsLedgerTable.createdAt))
+    .limit(100);
+  res.json({ balance: user?.mechanicPoints ?? 0, history });
+});
+
+router.get("/loyalty/rewards/mechanic", authenticate, async (req: AuthRequest, res): Promise<void> => {
+  if (req.userRole !== "mechanic") { res.status(403).json({ error: "Mechanics only" }); return; }
+  res.json(MECHANIC_REWARDS);
+});
+
+router.post("/loyalty/mechanic/redeem", authenticate, async (req: AuthRequest, res): Promise<void> => {
+  if (req.userRole !== "mechanic") { res.status(403).json({ error: "Mechanics only" }); return; }
+  const { rewardKey } = req.body as { rewardKey: string };
+  if (!rewardKey) { res.status(400).json({ error: "rewardKey required" }); return; }
+  try {
+    const newBalance = await redeemMechanicReward(req.userId!, rewardKey);
+    res.json({ ok: true, balance: newBalance });
+  } catch (err) {
+    res.status(400).json({ error: (err as Error).message });
+  }
+});
+
+router.get("/loyalty/mechanic/redemptions", authenticate, async (req: AuthRequest, res): Promise<void> => {
+  if (req.userRole !== "mechanic") { res.status(403).json({ error: "Mechanics only" }); return; }
+  const rows = await db.select().from(mechanicRewardsTable)
+    .where(eq(mechanicRewardsTable.mechanicId, req.userId!))
+    .orderBy(desc(mechanicRewardsTable.createdAt));
+  res.json(rows);
+});
+
+/* -------------------------------------------------------------------------- */
+/* LEGACY GET /loyalty — kept so the existing customer screen keeps working    */
+/* until the new screens ship. Returns the customer ledger.                    */
+/* -------------------------------------------------------------------------- */
+
+router.get("/loyalty", authenticate, async (req: AuthRequest, res): Promise<void> => {
+  const [user] = await db.select({ loyaltyPoints: usersTable.loyaltyPoints })
+    .from(usersTable).where(eq(usersTable.id, req.userId!));
+  const history = await db.select().from(customerPointsLedgerTable)
+    .where(eq(customerPointsLedgerTable.userId, req.userId!))
+    .orderBy(desc(customerPointsLedgerTable.createdAt))
+    .limit(100);
+  res.json({ balance: user?.loyaltyPoints ?? 0, history });
+});
 
 export default router;

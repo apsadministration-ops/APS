@@ -22,6 +22,15 @@ export const workLogsTable = pgTable("work_logs", {
   notes: text("notes"),
   beforeImages: json("before_images").$type<string[]>().notNull().default([]),
   afterImages: json("after_images").$type<string[]>().notNull().default([]),
+  // Customer-approved upsells/recommendations logged on job completion.
+  // Each entry: { description, amount } in dollars. Drives mechanic upsell
+  // points in the loyalty engine.
+  // Each entry: { description, amount, customerApproved }. ONLY upsells with
+  // customerApproved === true award mechanic points — this keeps "verified
+  // action" semantics. Mechanic must explicitly attest customer approval at
+  // log time (defense-in-depth: customer can dispute via flag → refund path
+  // also reverses upsell points).
+  upsells: json("upsells").$type<{ description: string; amount: number; customerApproved: boolean }[]>().notNull().default([]),
   immutableFlag: boolean("immutable_flag").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [

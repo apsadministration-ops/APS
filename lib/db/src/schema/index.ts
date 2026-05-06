@@ -6,6 +6,7 @@ export * from "./worklogs";
 export * from "./payments";
 export * from "./messages";
 export * from "./loyalty";
+export * from "./loyaltyV2";
 export * from "./referrals";
 export * from "./favorites";
 export * from "./flags";

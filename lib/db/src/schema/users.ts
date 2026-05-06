@@ -16,6 +16,7 @@ export const usersTable = pgTable("users", {
   mechanicTier: text("mechanic_tier", { enum: ["detailer", "technician", "senior", "master"] }).default("detailer"),
   certifications: text("certifications").default("[]"),
   loyaltyPoints: integer("loyalty_points").notNull().default(0),
+  mechanicPoints: integer("mechanic_points").notNull().default(0),
   address: text("address"),
   city: text("city"),
   region: text("region"),

@@ -1081,6 +1081,8 @@ components:
           nullable: true
         loyaltyPoints:
           type: integer
+        mechanicPoints:
+          type: integer
         address:
           type: string
           nullable: true

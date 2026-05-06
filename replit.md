@@ -35,6 +35,9 @@ artifacts/mobile/context/AuthContext.tsx — auth state + token persistence
 artifacts/mobile/data/obd2Codes.ts — comprehensive OBD2 code database
 artifacts/mobile/constants/colors.ts    — design tokens
 artifacts/mobile/components/AIAssistantWidget.tsx — draggable floating AI chat widget
+artifacts/mobile/app/loyalty.tsx   — unified loyalty screen (branches by role)
+artifacts/api-server/src/lib/loyaltyEngine.ts — dual-ledger points engine (single source of truth)
+lib/db/src/schema/loyaltyV2.ts     — customer/mechanic ledger + redemption tables
 lib/integrations-anthropic-ai/    — Replit AI Integrations Anthropic client
 ```
 
@@ -45,7 +48,7 @@ lib/integrations-anthropic-ai/    — Replit AI Integrations Anthropic client
 - **Payment escrow:** `payments` records are `held` until admin releases them upon work log submission.
 - **Auth token flow:** JWT stored in AsyncStorage and injected into all API requests.
 - **Mechanic tiers:** Progressive tiers (detailer → technician → senior → master), impacting job visibility.
-- **Loyalty points & Referrals:** Automated rewards for job completion and referral bonuses.
+- **Dual loyalty system:** Two parallel ledgers (`customer_points_ledger`, `mechanic_points_ledger`) driven by a single engine. Idempotency via partial unique index `(user/mechanic, job_id, source_type) WHERE points>0 AND job_id IS NOT NULL` + `onConflictDoNothing`. Refund webhooks reverse both ledgers. Redemptions are atomic (`SELECT … FOR UPDATE` + in-tx balance check). Mechanic upsells only earn points when `customerApproved === true`.
 - **User home address & Mechanic service radius:** Captured at registration and verified via Nominatim for location-based services.
 - **AI Assistant:** Floating widget with ephemeral chat history, providing context-aware assistance via Anthropic.
 - **Bidirectional reviews:** Customers and mechanics rate each other, with aggregate ratings and review lists.
@@ -72,6 +75,7 @@ _None recorded yet._
 - `<Link href asChild>` around a `<Pressable>` with `position: "absolute"` + `shadow*` styles crashes on web. Use `<Pressable onPress={() => router.push(...)} style={...}>` instead.
 - `Alert.alert` is a no-op on web; use `confirm()` / `alertMessage()` from `@/utils/confirm` instead.
 - Stripe webhook MUST be mounted with `express.raw()` BEFORE `express.json()` in `app.ts` for signature verification.
+- Legacy `loyalty_points` table is retained as historical data only — all NEW awards go through `loyaltyEngine.ts` and write to `customer_points_ledger` / `mechanic_points_ledger`. `users.loyalty_points` (customer) and `users.mechanic_points` (mechanic) are cached SUMs of the respective ledger and recomputed after every mutation.
 - Web tab bar overlap: `ScrollView`s in tabbed layouts need `paddingBottom` ≥ 100 on web.
 
 ## Pointers

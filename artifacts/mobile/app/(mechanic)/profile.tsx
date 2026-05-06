@@ -231,7 +231,29 @@ export default function MechanicProfileScreen() {
           )}
         </View>
 
-        {/* Loyalty (mechanics earn points for referrals) */}
+        {/* Performance Rewards (job, ratings, upsells, tenure) */}
+        <Pressable
+          style={[styles.card, { backgroundColor: colors.primary + "12", borderColor: colors.primary + "30" }]}
+          onPress={() => router.push("/loyalty")}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            <View style={[styles.tierIcon, { backgroundColor: colors.primary }]}>
+              <Feather name="award" size={20} color="white" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.cardTitle, { color: colors.foreground }]}>Performance Rewards</Text>
+              <Text style={[styles.loyaltyBal, { color: colors.primary, textAlign: "left", fontSize: 22 }]}>
+                {(user?.mechanicPoints ?? 0).toLocaleString()} pts
+              </Text>
+              <Text style={[styles.tierDesc, { color: colors.mutedForeground }]}>
+                Earn for jobs, ratings, and approved upsells
+              </Text>
+            </View>
+            <Feather name="chevron-right" size={20} color={colors.primary} />
+          </View>
+        </Pressable>
+
+        {/* Customer-side referral points (if any) */}
         {loyalty && loyalty.balance > 0 && (
           <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Text style={[styles.cardTitle, { color: colors.foreground }]}>Referral Points</Text>

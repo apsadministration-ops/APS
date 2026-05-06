@@ -5,7 +5,13 @@ import { eq, and, ne } from "drizzle-orm";
 import type Stripe from "stripe";
 import { db, paymentsTable, usersTable, jobsTable, referralsTable } from "@workspace/db";
 import { getUncachableStripeClient, getWebhookSecret } from "../lib/stripeClient";
-import { awardLoyaltyPoints, reverseLoyaltyForJob } from "./loyalty";
+import {
+  awardCustomerPoints,
+  awardMechanicPoints,
+  reverseCustomerPointsForJob,
+  reverseMechanicPointsForJob,
+  RULES,
+} from "../lib/loyaltyEngine";
 import { logger } from "../lib/logger";
 
 export async function stripeWebhookHandler(req: Request, res: Response): Promise<void> {
@@ -106,14 +112,29 @@ async function handleEvent(event: Stripe.Event): Promise<void> {
       await db.update(jobsTable).set({ status: "PAID" }).where(eq(jobsTable.id, payment.jobId));
       const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, payment.jobId));
       if (job?.customerId) {
-        await awardLoyaltyPoints(job.customerId, 100, `Job #${payment.jobId} completed`, payment.jobId).catch((err) => {
-          logger.error({ err, jobId: payment.jobId }, "loyalty award failed");
-        });
+        // CUSTOMER: spending points (1 pt per $1 captured).
+        const spendingPoints = Math.floor((payment.amountCents ?? 0) / 100) * RULES.customer.pointsPerDollar;
+        await awardCustomerPoints(
+          job.customerId, spendingPoints, "service",
+          `Job #${payment.jobId} — service spending`, payment.jobId,
+        ).catch((err) => logger.error({ err, jobId: payment.jobId }, "customer spending points failed"));
+        // REFERRAL: only on the customer's FIRST paid job.
         const [referral] = await db.select().from(referralsTable).where(eq(referralsTable.referredId, job.customerId));
         if (referral && !referral.rewarded) {
-          await awardLoyaltyPoints(referral.referrerId, 500, "Referral reward — friend completed first job", payment.jobId).catch(() => {});
+          await awardCustomerPoints(
+            referral.referrerId, RULES.customer.referralFirstPaidJob, "referral",
+            "Referral reward — friend completed first paid job", payment.jobId,
+          ).catch(() => {});
           await db.update(referralsTable).set({ rewarded: true }).where(eq(referralsTable.id, referral.id));
         }
+      }
+      // MECHANIC: job-volume points weighted by job type.
+      if (job?.mechanicId) {
+        const base = RULES.mechanic.jobBase[job.jobType] ?? RULES.mechanic.jobBase["maintenance"]!;
+        await awardMechanicPoints(
+          job.mechanicId, base, "job",
+          `Job #${payment.jobId} completed (${job.jobType})`, payment.jobId,
+        ).catch((err) => logger.error({ err, jobId: payment.jobId }, "mechanic job points failed"));
       }
       logger.info({ jobId: payment.jobId, intentId: intent.id }, "Payment captured + job marked PAID");
       break;
@@ -162,8 +183,11 @@ async function handleEvent(event: Stripe.Event): Promise<void> {
       // Roll the job back so it's no longer marked PAID, and reverse any
       // loyalty/referral points granted on capture.
       await db.update(jobsTable).set({ status: "COMPLETED" }).where(eq(jobsTable.id, payment.jobId));
-      await reverseLoyaltyForJob(payment.jobId, `Refund — Job #${payment.jobId}`).catch((err) => {
-        logger.error({ err, jobId: payment.jobId }, "loyalty reversal failed on refund");
+      await reverseCustomerPointsForJob(payment.jobId, `Refund — Job #${payment.jobId}`).catch((err) => {
+        logger.error({ err, jobId: payment.jobId }, "customer loyalty reversal failed on refund");
+      });
+      await reverseMechanicPointsForJob(payment.jobId, `Refund — Job #${payment.jobId}`).catch((err) => {
+        logger.error({ err, jobId: payment.jobId }, "mechanic loyalty reversal failed on refund");
       });
       // Un-flag any referral that was rewarded by this job so the referrer
       // doesn't keep credit for a refunded job.

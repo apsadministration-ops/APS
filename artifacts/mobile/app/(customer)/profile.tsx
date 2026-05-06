@@ -96,20 +96,20 @@ export default function ProfileScreen() {
         {/* Loyalty Points Card */}
         <Pressable
           style={[styles.loyaltyCard, { backgroundColor: colors.primary + "12", borderColor: colors.primary + "30" }]}
-          onPress={() => router.push("/referral")}
+          onPress={() => router.push("/loyalty")}
         >
           <View style={[styles.loyaltyIcon, { backgroundColor: colors.primary }]}>
-            <Feather name="star" size={20} color="white" />
+            <Feather name="gift" size={20} color="white" />
           </View>
           <View style={styles.loyaltyInfo}>
-            <Text style={[styles.loyaltyTitle, { color: colors.foreground }]}>Loyalty Points</Text>
+            <Text style={[styles.loyaltyTitle, { color: colors.foreground }]}>APS Rewards</Text>
             {loadingLoyalty
               ? <ActivityIndicator size="small" color={colors.primary} />
               : <Text style={[styles.loyaltyBalance, { color: colors.primary }]}>
                 {pts.toLocaleString()} pts
               </Text>}
             <Text style={[styles.loyaltySub, { color: colors.mutedForeground }]}>
-              Earn points for every completed service
+              Tap to earn, redeem & track rewards
             </Text>
           </View>
           <Feather name="chevron-right" size={18} color={colors.primary} />
@@ -130,8 +130,8 @@ export default function ProfileScreen() {
                 </Text>
               </View>
             ))}
-            <Pressable onPress={() => router.push("/referral")} style={styles.viewAllBtn}>
-              <Text style={[styles.viewAllText, { color: colors.primary }]}>View all & referral program →</Text>
+            <Pressable onPress={() => router.push("/loyalty")} style={styles.viewAllBtn}>
+              <Text style={[styles.viewAllText, { color: colors.primary }]}>View all rewards & history →</Text>
             </Pressable>
           </View>
         )}

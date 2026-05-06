@@ -4,6 +4,7 @@ import { db, jobsTable, vehiclesTable, usersTable, workLogsTable, paymentsTable,
 import { authenticate, type AuthRequest } from "../middlewares/authenticate";
 import { notifyMechanics, notifyCustomerJobAccepted } from "../lib/notifications";
 import { getUncachableStripeClient } from "../lib/stripeClient";
+import { awardCustomerPoints, awardMechanicPoints, RULES } from "../lib/loyaltyEngine";
 
 /**
  * If the job has an uncaptured Stripe authorization, void it so the
@@ -298,7 +299,10 @@ router.delete("/jobs/:jobId", authenticate, async (req: AuthRequest, res): Promi
     await tx.delete(paymentsTable).where(eq(paymentsTable.jobId, jobId));
     await tx.delete(workLogsTable).where(eq(workLogsTable.jobId, jobId));
     await tx.execute(sql`DELETE FROM flags WHERE job_id = ${jobId}`);
+    // Loyalty ledgers FK-reference jobs(id) — wipe before deleting the job.
     await tx.execute(sql`DELETE FROM loyalty_points WHERE job_id = ${jobId}`);
+    await tx.execute(sql`DELETE FROM customer_points_ledger WHERE job_id = ${jobId}`);
+    await tx.execute(sql`DELETE FROM mechanic_points_ledger WHERE job_id = ${jobId}`);
     await tx.delete(jobsTable).where(eq(jobsTable.id, jobId));
   });
   res.json({ ok: true });
@@ -319,6 +323,27 @@ router.post("/jobs/:jobId/rate", authenticate, async (req: AuthRequest, res): Pr
   const [updated] = await db.update(jobsTable)
     .set({ rating, ratingNote: note ?? null, mechanicReviewText: reviewText ?? note ?? null })
     .where(eq(jobsTable.id, jobId)).returning();
+
+  // CUSTOMER: survey points (any rating) + review points (when text supplied)
+  // + quality bonus scaled by star rating.
+  await awardCustomerPoints(
+    job.customerId, RULES.customer.surveyBase, "survey",
+    `Survey — Job #${jobId}`, jobId,
+  ).catch(() => {});
+  if (reviewText && reviewText.trim().length > 0) {
+    const reviewPts = RULES.customer.reviewWithText + RULES.customer.reviewQualityBonus(rating);
+    await awardCustomerPoints(
+      job.customerId, reviewPts, "review",
+      `Verified review (${rating}★) — Job #${jobId}`, jobId,
+    ).catch(() => {});
+  }
+  // MECHANIC: rating bonus.
+  if (job.mechanicId) {
+    await awardMechanicPoints(
+      job.mechanicId, RULES.mechanic.ratingBonus(rating), "rating",
+      `Customer rating ${rating}★ — Job #${jobId}`, jobId,
+    ).catch(() => {});
+  }
   res.json(await formatJob(updated));
 });
 
