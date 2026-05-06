@@ -1,18 +1,26 @@
 import { BlurView } from "expo-blur";
-import { Tabs } from "expo-router";
+import { Redirect, Tabs } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import React from "react";
 import { Platform, StyleSheet, View, useColorScheme } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
+import { useAuth } from "@/context/AuthContext";
 
 export default function AdminTabLayout() {
+  const { user, isLoading } = useAuth();
   const colors = useColors();
   const colorScheme = useColorScheme();
+  const insets = useSafeAreaInsets();
   const isDark = colorScheme === "dark";
   const isIOS = Platform.OS === "ios";
   const isWeb = Platform.OS === "web";
-  const insets = useSafeAreaInsets();
+
+  if (isLoading) return null;
+  if (!user) return <Redirect href="/(auth)/login" />;
+  if (user.role !== "admin") {
+    return <Redirect href={user.role === "mechanic" ? "/(mechanic)" : "/(customer)"} />;
+  }
 
   return (
     <Tabs
