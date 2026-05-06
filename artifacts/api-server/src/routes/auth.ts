@@ -1,9 +1,24 @@
 import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
-import { db, usersTable } from "@workspace/db";
+import { db, usersTable, referralsTable } from "@workspace/db";
 import { RegisterBody, LoginBody } from "@workspace/api-zod";
 import { hashPassword, verifyPassword, signToken } from "../lib/auth";
 import { authenticate, type AuthRequest } from "../middlewares/authenticate";
+import { awardLoyaltyPoints } from "./loyalty";
+
+function generateReferralCode(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  return Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+}
+
+async function uniqueReferralCode(): Promise<string> {
+  let code = generateReferralCode();
+  while (true) {
+    const [existing] = await db.select().from(usersTable).where(eq(usersTable.referralCode, code));
+    if (!existing) return code;
+    code = generateReferralCode();
+  }
+}
 
 const router: IRouter = Router();
 
@@ -16,6 +31,9 @@ function formatUser(user: typeof usersTable.$inferSelect) {
     role: user.role,
     status: user.status,
     avatarUrl: user.avatarUrl ?? null,
+    referralCode: user.referralCode ?? null,
+    mechanicTier: user.mechanicTier ?? null,
+    loyaltyPoints: user.loyaltyPoints ?? 0,
     createdAt: user.createdAt,
   };
 }
@@ -27,6 +45,7 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     return;
   }
   const { name, email, phone, password, role } = parsed.data;
+  const { referredBy } = req.body as { referredBy?: string };
 
   const [existing] = await db.select().from(usersTable).where(eq(usersTable.email, email));
   if (existing) {
@@ -34,17 +53,29 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     return;
   }
 
+  // Resolve referrer
+  let referrer: typeof usersTable.$inferSelect | null = null;
+  if (referredBy) {
+    const [found] = await db.select().from(usersTable).where(eq(usersTable.referralCode, referredBy.toUpperCase()));
+    if (found) referrer = found;
+  }
+
   const passwordHash = await hashPassword(password);
   const status = role === "mechanic" ? "pending" : "active";
+  const referralCode = await uniqueReferralCode();
 
   const [user] = await db.insert(usersTable).values({
-    name,
-    email,
-    phone: phone ?? null,
-    passwordHash,
-    role,
-    status,
+    name, email, phone: phone ?? null, passwordHash, role, status, referralCode,
+    mechanicTier: role === "mechanic" ? "detailer" : null,
   }).returning();
+
+  // Record referral and award welcome points to new customer
+  if (referrer) {
+    await db.insert(referralsTable).values({ referrerId: referrer.id, referredId: user.id });
+    if (role === "customer") {
+      await awardLoyaltyPoints(user.id, 200, "Welcome bonus — joined via referral");
+    }
+  }
 
   const token = signToken({ userId: user.id, role: user.role });
   res.status(201).json({ token, user: formatUser(user) });

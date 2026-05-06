@@ -72,6 +72,8 @@ function RootLayoutNav() {
       <Stack.Screen name="tracker/[jobId]" options={{ presentation: "card" }} />
       <Stack.Screen name="obd2/[vehicleId]" options={{ presentation: "card" }} />
       <Stack.Screen name="messages/[jobId]" options={{ presentation: "card", headerShown: false }} />
+      <Stack.Screen name="referral" options={{ presentation: "card", headerShown: false }} />
+      <Stack.Screen name="detailing" options={{ presentation: "modal", headerShown: false }} />
     </Stack>
   );
 }

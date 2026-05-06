@@ -5,6 +5,7 @@ import { z } from "zod/v4";
 export const vehiclesTable = pgTable("vehicles", {
   id: serial("id").primaryKey(),
   vin: text("vin").notNull(),
+  plateNumber: text("plate_number"),
   make: text("make").notNull(),
   model: text("model").notNull(),
   year: integer("year").notNull(),

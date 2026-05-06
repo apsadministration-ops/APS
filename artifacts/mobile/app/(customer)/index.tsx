@@ -2,13 +2,14 @@ import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from
 import { useColors } from "@/hooks/useColors";
 import { useGetCustomerDashboard } from "@workspace/api-client-react";
 import { Feather } from "@expo/vector-icons";
-import { Link } from "expo-router";
+import { Link, useRouter } from "expo-router";
 import { JobCard } from "@/components/JobCard";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function CustomerDashboard() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { data: dashboard, isLoading, error } = useGetCustomerDashboard();
 
   if (isLoading) {
@@ -46,6 +47,30 @@ export default function CustomerDashboard() {
             <Text style={[styles.statValue, { color: colors.foreground }]}>${dashboard.totalSpent.toFixed(0)}</Text>
             <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Total Spent</Text>
           </View>
+        </View>
+
+        {/* Quick Actions */}
+        <View style={styles.quickActions}>
+          <Pressable
+            style={[styles.quickAction, { backgroundColor: "#0EA5E912", borderColor: "#0EA5E940" }]}
+            onPress={() => router.push("/detailing")}
+          >
+            <View style={[styles.quickActionIcon, { backgroundColor: "#0EA5E9" }]}>
+              <Feather name="droplet" size={20} color="white" />
+            </View>
+            <Text style={[styles.quickActionLabel, { color: colors.foreground }]}>Book Detailing</Text>
+            <Text style={[styles.quickActionSub, { color: colors.mutedForeground }]}>4 packages</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.quickAction, { backgroundColor: "#8B5CF612", borderColor: "#8B5CF640" }]}
+            onPress={() => router.push("/referral")}
+          >
+            <View style={[styles.quickActionIcon, { backgroundColor: "#8B5CF6" }]}>
+              <Feather name="gift" size={20} color="white" />
+            </View>
+            <Text style={[styles.quickActionLabel, { color: colors.foreground }]}>Rewards</Text>
+            <Text style={[styles.quickActionSub, { color: colors.mutedForeground }]}>Earn points</Text>
+          </Pressable>
         </View>
 
         <View style={styles.sectionHeader}>
@@ -164,4 +189,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 4,
   },
+  quickActions: { flexDirection: "row", gap: 12, marginBottom: 24 },
+  quickAction: {
+    flex: 1, borderWidth: 1, borderRadius: 16, padding: 14, alignItems: "center", gap: 6,
+  },
+  quickActionIcon: { width: 44, height: 44, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  quickActionLabel: { fontSize: 13, fontWeight: "700", textAlign: "center" },
+  quickActionSub: { fontSize: 11, textAlign: "center" },
 });

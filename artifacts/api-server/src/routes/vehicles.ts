@@ -15,6 +15,7 @@ function formatVehicle(
   return {
     id: vehicle.id,
     vin: vehicle.vin,
+    plateNumber: vehicle.plateNumber ?? null,
     make: vehicle.make,
     model: vehicle.model,
     year: vehicle.year,
@@ -58,20 +59,15 @@ router.get("/vehicles", authenticate, async (req: AuthRequest, res): Promise<voi
 });
 
 router.post("/vehicles", authenticate, async (req: AuthRequest, res): Promise<void> => {
-  const { vin, make, model, year, trim, color } = req.body as {
-    vin: string;
-    make: string;
-    model: string;
-    year: number;
-    trim?: string;
-    color?: string;
+  const { vin, plateNumber, make, model, year, trim, color } = req.body as {
+    vin: string; plateNumber?: string; make: string; model: string;
+    year: number; trim?: string; color?: string;
   };
 
   if (!vin || !make || !model || !year) {
     res.status(400).json({ error: "vin, make, model, and year are required" });
     return;
   }
-
   if (vin.length !== 17) {
     res.status(400).json({ error: "VIN must be exactly 17 characters" });
     return;
@@ -79,7 +75,6 @@ router.post("/vehicles", authenticate, async (req: AuthRequest, res): Promise<vo
 
   const [existing] = await db.select().from(vehiclesTable).where(eq(vehiclesTable.vin, vin.toUpperCase()));
   if (existing) {
-    // VIN already exists — check if it has an active owner
     const [activeOwnership] = await db
       .select()
       .from(ownershipTable)
@@ -94,7 +89,11 @@ router.post("/vehicles", authenticate, async (req: AuthRequest, res): Promise<vo
       return;
     }
 
-    // No active owner — take ownership
+    // Update plate number if provided
+    if (plateNumber) {
+      await db.update(vehiclesTable).set({ plateNumber: plateNumber.toUpperCase() }).where(eq(vehiclesTable.id, existing.id));
+    }
+
     const [newOwnership] = await db.insert(ownershipTable).values({
       vehicleId: existing.id,
       userId: req.userId!,
@@ -105,15 +104,15 @@ router.post("/vehicles", authenticate, async (req: AuthRequest, res): Promise<vo
 
     const [owner] = await db.select().from(usersTable).where(eq(usersTable.id, req.userId!));
     const [sc] = await db.select({ c: count() }).from(workLogsTable).where(eq(workLogsTable.vehicleId, existing.id));
-    res.status(201).json(formatVehicle(existing, newOwnership, owner ?? null, Number(sc?.c ?? 0), req.userId!));
+    const updated = plateNumber ? { ...existing, plateNumber: plateNumber.toUpperCase() } : existing;
+    res.status(201).json(formatVehicle(updated, newOwnership, owner ?? null, Number(sc?.c ?? 0), req.userId!));
     return;
   }
 
   const [vehicle] = await db.insert(vehiclesTable).values({
     vin: vin.toUpperCase(),
-    make,
-    model,
-    year,
+    plateNumber: plateNumber ? plateNumber.toUpperCase() : null,
+    make, model, year,
     trim: trim ?? null,
     color: color ?? null,
   }).returning();
@@ -130,24 +129,34 @@ router.post("/vehicles", authenticate, async (req: AuthRequest, res): Promise<vo
   res.status(201).json(formatVehicle(vehicle, ownership, owner ?? null, 0, req.userId!));
 });
 
-router.get("/vehicles/vin/:vin", authenticate, async (req: AuthRequest, res): Promise<void> => {
-  const vin = (Array.isArray(req.params.vin) ? req.params.vin[0] : req.params.vin).toUpperCase();
+router.delete("/vehicles/:vehicleId", authenticate, async (req: AuthRequest, res): Promise<void> => {
+  const vehicleId = parseInt(String(req.params.vehicleId), 10);
+  if (isNaN(vehicleId)) { res.status(400).json({ error: "Invalid vehicle ID" }); return; }
 
-  const [vehicle] = await db.select().from(vehiclesTable).where(eq(vehiclesTable.vin, vin));
-  if (!vehicle) {
-    res.status(404).json({ error: "Vehicle not found" });
+  const [ownership] = await db
+    .select()
+    .from(ownershipTable)
+    .where(and(eq(ownershipTable.vehicleId, vehicleId), eq(ownershipTable.userId, req.userId!), isNull(ownershipTable.endDate)));
+
+  if (!ownership) {
+    res.status(404).json({ error: "You do not own this vehicle" });
     return;
   }
 
-  const [activeOwnership] = await db
-    .select()
-    .from(ownershipTable)
-    .where(and(eq(ownershipTable.vehicleId, vehicle.id), isNull(ownershipTable.endDate)));
+  await db.update(ownershipTable).set({ endDate: new Date() }).where(eq(ownershipTable.id, ownership.id));
+  res.json({ message: "Vehicle removed from your account" });
+});
 
+router.get("/vehicles/vin/:vin", authenticate, async (req: AuthRequest, res): Promise<void> => {
+  const vin = (Array.isArray(req.params.vin) ? req.params.vin[0] : req.params.vin).toUpperCase();
+  const [vehicle] = await db.select().from(vehiclesTable).where(eq(vehiclesTable.vin, vin));
+  if (!vehicle) { res.status(404).json({ error: "Vehicle not found" }); return; }
+
+  const [activeOwnership] = await db.select().from(ownershipTable)
+    .where(and(eq(ownershipTable.vehicleId, vehicle.id), isNull(ownershipTable.endDate)));
   const owner = activeOwnership
     ? (await db.select().from(usersTable).where(eq(usersTable.id, activeOwnership.userId)))[0] ?? null
     : null;
-
   const [sc] = await db.select({ c: count() }).from(workLogsTable).where(eq(workLogsTable.vehicleId, vehicle.id));
   res.json(formatVehicle(vehicle, activeOwnership ?? null, owner, Number(sc?.c ?? 0), req.userId!));
 });
@@ -155,27 +164,16 @@ router.get("/vehicles/vin/:vin", authenticate, async (req: AuthRequest, res): Pr
 router.get("/vehicles/:vehicleId", authenticate, async (req: AuthRequest, res): Promise<void> => {
   const rawId = Array.isArray(req.params.vehicleId) ? req.params.vehicleId[0] : req.params.vehicleId;
   const vehicleId = parseInt(rawId, 10);
-
-  if (isNaN(vehicleId)) {
-    res.status(400).json({ error: "Invalid vehicle ID" });
-    return;
-  }
+  if (isNaN(vehicleId)) { res.status(400).json({ error: "Invalid vehicle ID" }); return; }
 
   const [vehicle] = await db.select().from(vehiclesTable).where(eq(vehiclesTable.id, vehicleId));
-  if (!vehicle) {
-    res.status(404).json({ error: "Vehicle not found" });
-    return;
-  }
+  if (!vehicle) { res.status(404).json({ error: "Vehicle not found" }); return; }
 
-  const [activeOwnership] = await db
-    .select()
-    .from(ownershipTable)
+  const [activeOwnership] = await db.select().from(ownershipTable)
     .where(and(eq(ownershipTable.vehicleId, vehicleId), isNull(ownershipTable.endDate)));
-
   const owner = activeOwnership
     ? (await db.select().from(usersTable).where(eq(usersTable.id, activeOwnership.userId)))[0] ?? null
     : null;
-
   const [sc] = await db.select({ c: count() }).from(workLogsTable).where(eq(workLogsTable.vehicleId, vehicleId));
   res.json(formatVehicle(vehicle, activeOwnership ?? null, owner, Number(sc?.c ?? 0), req.userId!));
 });
@@ -183,97 +181,40 @@ router.get("/vehicles/:vehicleId", authenticate, async (req: AuthRequest, res): 
 router.get("/vehicles/:vehicleId/history", authenticate, async (req: AuthRequest, res): Promise<void> => {
   const rawId = Array.isArray(req.params.vehicleId) ? req.params.vehicleId[0] : req.params.vehicleId;
   const vehicleId = parseInt(rawId, 10);
+  if (isNaN(vehicleId)) { res.status(400).json({ error: "Invalid vehicle ID" }); return; }
 
-  if (isNaN(vehicleId)) {
-    res.status(400).json({ error: "Invalid vehicle ID" });
-    return;
-  }
-
-  const logs = await db
-    .select()
-    .from(workLogsTable)
-    .where(eq(workLogsTable.vehicleId, vehicleId))
-    .orderBy(workLogsTable.createdAt);
-
-  const result = await Promise.all(
-    logs.map(async (log) => {
-      const [mechanic] = await db.select().from(usersTable).where(eq(usersTable.id, log.mechanicId));
-      return {
-        ...log,
-        partsUsed: (log.partsUsed as string[]) ?? [],
-        beforeImages: (log.beforeImages as string[]) ?? [],
-        afterImages: (log.afterImages as string[]) ?? [],
-        mechanicName: mechanic?.name ?? "Unknown",
-      };
-    }),
-  );
-
+  const logs = await db.select().from(workLogsTable).where(eq(workLogsTable.vehicleId, vehicleId)).orderBy(workLogsTable.createdAt);
+  const result = await Promise.all(logs.map(async (log) => {
+    const [mechanic] = await db.select().from(usersTable).where(eq(usersTable.id, log.mechanicId));
+    return { ...log, partsUsed: (log.partsUsed as string[]) ?? [], beforeImages: (log.beforeImages as string[]) ?? [], afterImages: (log.afterImages as string[]) ?? [], mechanicName: mechanic?.name ?? "Unknown" };
+  }));
   res.json(result);
 });
 
 router.post("/vehicles/:vehicleId/transfer", authenticate, async (req: AuthRequest, res): Promise<void> => {
   const rawId = Array.isArray(req.params.vehicleId) ? req.params.vehicleId[0] : req.params.vehicleId;
   const vehicleId = parseInt(rawId, 10);
-
-  if (isNaN(vehicleId)) {
-    res.status(400).json({ error: "Invalid vehicle ID" });
-    return;
-  }
+  if (isNaN(vehicleId)) { res.status(400).json({ error: "Invalid vehicle ID" }); return; }
 
   const { newOwnerEmail } = req.body as { newOwnerEmail: string };
-  if (!newOwnerEmail) {
-    res.status(400).json({ error: "newOwnerEmail is required" });
-    return;
-  }
+  if (!newOwnerEmail) { res.status(400).json({ error: "newOwnerEmail is required" }); return; }
 
-  // Verify current ownership
-  const [currentOwnership] = await db
-    .select()
-    .from(ownershipTable)
+  const [currentOwnership] = await db.select().from(ownershipTable)
     .where(and(eq(ownershipTable.vehicleId, vehicleId), isNull(ownershipTable.endDate)));
-
   if (!currentOwnership || currentOwnership.userId !== req.userId) {
-    res.status(403).json({ error: "You do not own this vehicle" });
-    return;
+    res.status(403).json({ error: "You do not own this vehicle" }); return;
   }
 
   const [newOwner] = await db.select().from(usersTable).where(eq(usersTable.email, newOwnerEmail));
-  if (!newOwner) {
-    res.status(404).json({ error: "New owner not found" });
-    return;
-  }
+  if (!newOwner) { res.status(404).json({ error: "New owner not found" }); return; }
 
   const [vehicle] = await db.select().from(vehiclesTable).where(eq(vehiclesTable.id, vehicleId));
-  if (!vehicle) {
-    res.status(404).json({ error: "Vehicle not found" });
-    return;
-  }
+  if (!vehicle) { res.status(404).json({ error: "Vehicle not found" }); return; }
 
-  // Close current ownership
-  await db
-    .update(ownershipTable)
-    .set({ endDate: new Date(), transferVerified: true })
-    .where(eq(ownershipTable.id, currentOwnership.id));
+  await db.update(ownershipTable).set({ endDate: new Date(), transferVerified: true }).where(eq(ownershipTable.id, currentOwnership.id));
+  const [newOwnership] = await db.insert(ownershipTable).values({ vehicleId, userId: newOwner.id, vin: vehicle.vin, startDate: new Date(), transferVerified: true }).returning();
 
-  // Create new ownership
-  const [newOwnership] = await db.insert(ownershipTable).values({
-    vehicleId,
-    userId: newOwner.id,
-    vin: vehicle.vin,
-    startDate: new Date(),
-    transferVerified: true,
-  }).returning();
-
-  res.json({
-    id: newOwnership.id,
-    vehicleId: newOwnership.vehicleId,
-    vin: newOwnership.vin,
-    userId: newOwnership.userId,
-    userName: newOwner.name,
-    startDate: newOwnership.startDate,
-    endDate: newOwnership.endDate ?? null,
-    transferVerified: newOwnership.transferVerified,
-  });
+  res.json({ id: newOwnership.id, vehicleId: newOwnership.vehicleId, vin: newOwnership.vin, userId: newOwnership.userId, userName: newOwner.name, startDate: newOwnership.startDate, endDate: newOwnership.endDate ?? null, transferVerified: newOwnership.transferVerified });
 });
 
 export default router;

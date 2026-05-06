@@ -1,9 +1,10 @@
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, RefreshControl } from "react-native";
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, RefreshControl, Pressable, Alert } from "react-native";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { Feather } from "@expo/vector-icons";
 import { useState, useEffect, useCallback } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Haptics from "expo-haptics";
 
 interface DashboardStats {
   totalUsers: number;
@@ -93,6 +94,23 @@ export default function AdminDashboard() {
           <Text style={[styles.headerTitle, { color: colors.foreground }]}>Admin Console</Text>
           <Text style={[styles.headerSub, { color: colors.mutedForeground }]}>Signed in as {user?.name}</Text>
         </View>
+        <Pressable
+          style={[styles.signOutBtn, { backgroundColor: colors.destructive + "18" }]}
+          onPress={() => {
+            Alert.alert("Sign Out", "Sign out of admin console?", [
+              { text: "Cancel", style: "cancel" },
+              {
+                text: "Sign Out", style: "destructive",
+                onPress: async () => {
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                  await logout();
+                },
+              },
+            ]);
+          }}
+        >
+          <Feather name="log-out" size={18} color={colors.destructive} />
+        </Pressable>
       </View>
 
       {loading ? (
@@ -191,4 +209,5 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
   },
   heldNoteText: { flex: 1, fontSize: 13, lineHeight: 18 },
+  signOutBtn: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center" },
 });

@@ -1,7 +1,8 @@
 import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
-import { db, paymentsTable, jobsTable } from "@workspace/db";
+import { db, paymentsTable, jobsTable, referralsTable, usersTable } from "@workspace/db";
 import { authenticate, requireRole, type AuthRequest } from "../middlewares/authenticate";
+import { awardLoyaltyPoints } from "./loyalty";
 
 const router: IRouter = Router();
 
@@ -54,6 +55,20 @@ router.post("/payments/:jobId/release", authenticate, requireRole("admin"), asyn
 
   // Mark job PAID
   await db.update(jobsTable).set({ status: "PAID" }).where(eq(jobsTable.id, jobId));
+
+  // Award 100 loyalty points to customer for completed job
+  const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, jobId));
+  if (job?.customerId) {
+    await awardLoyaltyPoints(job.customerId, 100, `Job #${jobId} completed`, jobId).catch(() => {});
+
+    // Check if customer was referred — reward referrer 500 pts on first completed job
+    const [referral] = await db.select().from(referralsTable)
+      .where(eq(referralsTable.referredId, job.customerId));
+    if (referral && !referral.rewarded) {
+      await awardLoyaltyPoints(referral.referrerId, 500, `Referral reward — friend completed first job`, jobId).catch(() => {});
+      await db.update(referralsTable).set({ rewarded: true }).where(eq(referralsTable.id, referral.id));
+    }
+  }
 
   res.json(updated);
 });

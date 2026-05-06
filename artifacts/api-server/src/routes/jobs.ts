@@ -54,8 +54,17 @@ router.get("/jobs", authenticate, async (req: AuthRequest, res): Promise<void> =
   res.json(await Promise.all(allJobs.map(formatJob)));
 });
 
-router.get("/jobs/available", authenticate, async (_req: AuthRequest, res): Promise<void> => {
-  const jobs = await db.select().from(jobsTable).where(eq(jobsTable.status, "REQUESTED")).orderBy(jobsTable.createdAt);
+router.get("/jobs/available", authenticate, async (req: AuthRequest, res): Promise<void> => {
+  let jobs = await db.select().from(jobsTable).where(eq(jobsTable.status, "REQUESTED")).orderBy(jobsTable.createdAt);
+
+  // Detailers can only see detailing jobs
+  if (req.userRole === "mechanic") {
+    const [mechanic] = await db.select({ mechanicTier: usersTable.mechanicTier }).from(usersTable).where(eq(usersTable.id, req.userId!));
+    if (mechanic?.mechanicTier === "detailer") {
+      jobs = jobs.filter((j) => j.jobType === "detailing");
+    }
+  }
+
   res.json(await Promise.all(jobs.map(formatJob)));
 });
 

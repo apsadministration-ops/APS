@@ -5,3 +5,5 @@ export * from "./jobs";
 export * from "./worklogs";
 export * from "./payments";
 export * from "./messages";
+export * from "./loyalty";
+export * from "./referrals";

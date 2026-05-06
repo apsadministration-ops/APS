@@ -14,6 +14,10 @@ function formatUser(user: typeof usersTable.$inferSelect) {
     role: user.role,
     status: user.status,
     avatarUrl: user.avatarUrl ?? null,
+    referralCode: user.referralCode ?? null,
+    mechanicTier: user.mechanicTier ?? null,
+    certifications: user.certifications ?? "[]",
+    loyaltyPoints: user.loyaltyPoints ?? 0,
     createdAt: user.createdAt,
   };
 }
@@ -38,14 +42,38 @@ router.get("/users/:userId", authenticate, async (req: AuthRequest, res): Promis
   res.json(formatUser(user));
 });
 
-router.patch("/users/:userId", authenticate, requireRole("admin"), async (req: AuthRequest, res): Promise<void> => {
+router.patch("/users/:userId", authenticate, async (req: AuthRequest, res): Promise<void> => {
   const userId = parseInt(String(req.params.userId), 10);
   if (isNaN(userId)) { res.status(400).json({ error: "Invalid user ID" }); return; }
-  const { status, name, phone } = req.body as { status?: string; name?: string; phone?: string };
+
+  const isAdmin = req.userRole === "admin";
+  const isSelf = req.userId === userId;
+
+  if (!isAdmin && !isSelf) {
+    res.status(403).json({ error: "Forbidden" }); return;
+  }
+
+  const { status, name, phone, mechanicTier, certifications } = req.body as {
+    status?: string; name?: string; phone?: string; mechanicTier?: string; certifications?: string;
+  };
+
   const updates: Partial<typeof usersTable.$inferInsert> = {};
-  if (status) updates.status = status as "active" | "suspended" | "pending";
+
+  // Admin-only fields
+  if (isAdmin) {
+    if (status) updates.status = status as "active" | "suspended" | "pending";
+    if (mechanicTier) updates.mechanicTier = mechanicTier as "detailer" | "technician" | "senior" | "master";
+  }
+
+  // Self or admin
   if (name) updates.name = name;
   if (phone !== undefined) updates.phone = phone;
+  if (certifications !== undefined) updates.certifications = certifications;
+
+  if (Object.keys(updates).length === 0) {
+    res.status(400).json({ error: "No updatable fields provided" }); return;
+  }
+
   const [user] = await db.update(usersTable).set(updates).where(eq(usersTable.id, userId)).returning();
   if (!user) { res.status(404).json({ error: "User not found" }); return; }
   res.json(formatUser(user));

@@ -13,8 +13,17 @@ interface AppUser {
   email: string;
   role: string;
   status: string;
+  mechanicTier?: string;
   createdAt: string;
 }
+
+const TIER_ORDER = ["detailer", "technician", "senior", "master"];
+const TIER_COLOR: Record<string, string> = {
+  detailer: "#60A5FA",
+  technician: "#34D399",
+  senior: "#FBBF24",
+  master: "#F472B6",
+};
 
 const ROLE_COLOR: Record<string, string> = {
   customer: "#0EA5E9",
@@ -27,10 +36,14 @@ const STATUS_COLOR: Record<string, string> = {
   suspended: "#EF4444",
 };
 
-function UserRow({ user, onAction }: { user: AppUser; onAction: (action: string, userId: number) => void }) {
+function UserRow({ user, onAction }: { user: AppUser; onAction: (action: string, userId: number, extra?: string) => void }) {
   const colors = useColors();
   const roleColor = ROLE_COLOR[user.role] ?? colors.mutedForeground;
   const statusColor = STATUS_COLOR[user.status] ?? colors.mutedForeground;
+  const tierColor = user.mechanicTier ? (TIER_COLOR[user.mechanicTier] ?? colors.mutedForeground) : colors.mutedForeground;
+  const nextTier = user.role === "mechanic" && user.mechanicTier
+    ? TIER_ORDER[TIER_ORDER.indexOf(user.mechanicTier) + 1]
+    : null;
 
   return (
     <View style={[styles.userRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -49,6 +62,11 @@ function UserRow({ user, onAction }: { user: AppUser; onAction: (action: string,
           <View style={[styles.pill, { backgroundColor: statusColor + "18" }]}>
             <Text style={[styles.pillText, { color: statusColor }]}>{user.status.toUpperCase()}</Text>
           </View>
+          {user.role === "mechanic" && user.mechanicTier && (
+            <View style={[styles.pill, { backgroundColor: tierColor + "18" }]}>
+              <Text style={[styles.pillText, { color: tierColor }]}>{user.mechanicTier.toUpperCase()}</Text>
+            </View>
+          )}
         </View>
       </View>
       <View style={styles.userActions}>
@@ -79,6 +97,15 @@ function UserRow({ user, onAction }: { user: AppUser; onAction: (action: string,
             <Text style={[styles.actionBtnText, { color: "#22C55E" }]}>Restore</Text>
           </Pressable>
         )}
+        {nextTier && (
+          <Pressable
+            style={[styles.actionBtn, { backgroundColor: tierColor + "18", borderColor: tierColor + "44" }]}
+            onPress={() => onAction("promote", user.id, nextTier)}
+          >
+            <Feather name="arrow-up-circle" size={14} color={tierColor} />
+            <Text style={[styles.actionBtnText, { color: tierColor }]}>→ {nextTier}</Text>
+          </Pressable>
+        )}
       </View>
     </View>
   );
@@ -106,7 +133,33 @@ export default function AdminUsersScreen() {
 
   useEffect(() => { fetchUsers(); }, [fetchUsers]);
 
-  const handleAction = async (action: string, userId: number) => {
+  const handleAction = async (action: string, userId: number, extra?: string) => {
+    if (action === "promote" && extra) {
+      const tierLabels: Record<string, string> = { technician: "Technician", senior: "Senior Tech", master: "Master Tech" };
+      Alert.alert(
+        "Promote Mechanic",
+        `Promote this mechanic to ${tierLabels[extra] ?? extra}?`,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Promote",
+            onPress: async () => {
+              try {
+                const token = await AsyncStorage.getItem("auth_token");
+                const res = await fetch(`https://${domain}/api/users/${userId}`, {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                  body: JSON.stringify({ mechanicTier: extra }),
+                });
+                if (res.ok) fetchUsers();
+              } catch { /* non-fatal */ }
+            },
+          },
+        ],
+      );
+      return;
+    }
+
     const statusMap: Record<string, string> = {
       activate: "active",
       suspend: "suspended",
