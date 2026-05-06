@@ -54,6 +54,7 @@ artifacts/mobile/app/              — Expo screens (expo-router file-based)
   (admin)/users.tsx                — user management + mechanic tier promotion
   referral.tsx                     — referral code + loyalty tier + stats
   detailing.tsx                    — 4-package detailing booking flow
+  request-service.tsx              — booking screen: GPS button (web fallback to navigator.geolocation) + ZIP code lookup via Nominatim; location is now required
 artifacts/mobile/context/AuthContext.tsx — auth state + token persistence
 artifacts/mobile/data/obd2Codes.ts — comprehensive OBD2 P/B/C/U code database
 artifacts/mobile/constants/colors.ts    — design tokens (light + dark)
