@@ -8,6 +8,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import type { JobStatus } from "@workspace/api-client-react";
 import { useState, useEffect, useCallback } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { confirm, alertMessage } from "@/utils/confirm";
 
 interface AdminJob {
   id: number;
@@ -48,6 +49,32 @@ export default function AdminJobsScreen() {
   useEffect(() => { fetchJobs(); }, [fetchJobs]);
 
   const onRefresh = () => { setRefreshing(true); fetchJobs(); };
+
+  const deleteJob = async (job: AdminJob) => {
+    const ok = await confirm({
+      title: "Delete job?",
+      message: `Permanently remove job #${job.id} for ${job.customerName}? This cannot be undone and will also delete its messages, payments, and work logs.`,
+      confirmText: "Delete",
+      cancelText: "Cancel",
+      destructive: true,
+    });
+    if (!ok) return;
+    try {
+      const token = await AsyncStorage.getItem("auth_token");
+      const res = await fetch(`https://${domain}/api/jobs/${job.id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        alertMessage("Couldn't delete", body.error || `Server returned ${res.status}.`);
+        return;
+      }
+      setJobs((prev) => prev.filter((j) => j.id !== job.id));
+    } catch (e: any) {
+      alertMessage("Couldn't delete", e?.message || "Network error");
+    }
+  };
 
   const filtered = jobs.filter((j) => {
     const matchStatus = statusFilter === "ALL" || j.status === statusFilter;
@@ -133,7 +160,17 @@ export default function AdminJobsScreen() {
                     {job.vehicle ? `${job.vehicle.year} ${job.vehicle.make} ${job.vehicle.model}` : job.vin}
                   </Text>
                 </View>
-                <StatusBadge status={job.status as JobStatus} />
+                <View style={styles.headerRight}>
+                  <StatusBadge status={job.status as JobStatus} />
+                  <Pressable
+                    onPress={(e) => { e.stopPropagation?.(); void deleteJob(job); }}
+                    hitSlop={10}
+                    style={[styles.deleteBtn, { backgroundColor: colors.destructive + "18", borderColor: colors.destructive + "55" }]}
+                  >
+                    <Feather name="trash-2" size={14} color={colors.destructive} />
+                    <Text style={[styles.deleteBtnText, { color: colors.destructive }]}>Remove</Text>
+                  </Pressable>
+                </View>
               </View>
               <Text style={[styles.jobDesc, { color: colors.mutedForeground }]} numberOfLines={2}>
                 {job.description}
@@ -185,6 +222,13 @@ const styles = StyleSheet.create({
   jobCard: { borderWidth: 1, borderRadius: 14, padding: 14, gap: 8 },
   jobHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
   jobMeta: { flex: 1, gap: 2 },
+  headerRight: { alignItems: "flex-end", gap: 6 },
+  deleteBtn: {
+    flexDirection: "row", alignItems: "center", gap: 4,
+    paddingHorizontal: 10, paddingVertical: 6,
+    borderRadius: 8, borderWidth: 1,
+  },
+  deleteBtnText: { fontSize: 12, fontWeight: "700" },
   jobType: { fontSize: 11, fontWeight: "700", letterSpacing: 0.5 },
   jobVehicle: { fontSize: 15, fontWeight: "700" },
   jobDesc: { fontSize: 13, lineHeight: 20 },

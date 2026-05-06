@@ -21,5 +21,12 @@ export interface User {
   mechanicTier?: UserMechanicTier;
   certifications?: string | null;
   loyaltyPoints?: number;
+  address?: string | null;
+  city?: string | null;
+  region?: string | null;
+  zipCode?: string | null;
+  homeLat?: number | null;
+  homeLng?: number | null;
+  serviceRadiusMiles?: number | null;
   createdAt: Date;
 }

@@ -38,7 +38,7 @@ lib/api-client-react/src/generated — generated React Query hooks + Zod schemas
 artifacts/api-server/src/routes/   — Express route handlers
   auth.ts                          — register (referral code gen + referredBy), login, me
   vehicles.ts                      — CRUD + DELETE (closes ownership) + plateNumber
-  jobs.ts                          — tier-filtered available jobs (detailers → detailing only)
+  jobs.ts                          — tier-filtered available jobs (detailers → detailing only) + DELETE /jobs/:jobId (admin)
   payments.ts                      — release + loyalty points award
   loyalty.ts                       — GET /loyalty + awardLoyaltyPoints()
   referrals.ts                     — GET /referral stats
@@ -74,6 +74,10 @@ lib/integrations-anthropic-ai/    — Replit AI Integrations Anthropic client (s
 - **Mechanic tiers:** detailer → technician → senior → master. Detailers see only detailing jobs. Admin promotes. Stored as `mechanic_tier` on users table.
 - **Loyalty points:** 100 pts per completed job (customer), 500 pts referrer bonus, 200 pts welcome for joining via referral. `awardLoyaltyPoints()` in `loyalty.ts`.
 - **Referral codes:** 8-char alphanumeric, auto-generated on registration. Stored as `users.referral_code` (unique, nullable).
+- **User home address:** `users.address/city/region/zip_code/home_lat/home_lng` captured at registration for both roles. Address is verified via Nominatim (back-fills city/region/zip + lat/lng) before signup is allowed.
+- **Mechanic service radius:** `users.service_radius_miles` (default 25) chosen at signup from preset chips (5/10/25/50/100). Stored mechanic-only.
+- **Admin job deletion:** `DELETE /jobs/:jobId` (admin only) cascades messages → payments → work_logs → job in a transaction. Trash button on each row in admin/jobs.tsx with confirm().
+- **Job tracker visibility:** `/tracker/[jobId]` is customer-only — entry points are `(customer)` job/[id] "Track Mechanic" pill while job is ACCEPTED/EN_ROUTE/IN_PROGRESS. The mechanic tools row in job/[id] no longer shows Track.
 - **Vehicle plate numbers:** Added to vehicles table. Required in UI when adding a new vehicle.
 - **Vehicle mileage (odometer):** Required when customer adds a vehicle (`vehicles.mileage`, NOT NULL). Mechanics MUST enter `mileageAtService` on every work-log submission; submission is rejected if it's lower than the vehicle's current odometer. On successful work-log creation, the vehicle's stored mileage is updated to the new reading. Re-adding a vehicle by VIN only bumps mileage if the new value is higher.
 - **Certifications:** Stored as JSON string (`[]`) on users table. Mechanics self-add; displayed on profile.

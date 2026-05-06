@@ -236,13 +236,6 @@ export default function JobDetailScreen() {
               </Pressable>
               <Pressable
                 style={[styles.toolBtn, { backgroundColor: colors.secondary, borderColor: colors.border }]}
-                onPress={() => router.push(`/tracker/${job.id}`)}
-              >
-                <Feather name="navigation" size={16} color={colors.foreground} />
-                <Text style={[styles.toolBtnText, { color: colors.foreground }]}>Track</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.toolBtn, { backgroundColor: colors.secondary, borderColor: colors.border }]}
                 onPress={() => router.push(`/messages/${job.id}`)}
               >
                 <Feather name="message-circle" size={16} color={colors.foreground} />

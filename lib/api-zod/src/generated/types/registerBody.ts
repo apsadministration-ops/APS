@@ -13,4 +13,12 @@ export interface RegisterBody {
   phone?: string;
   password: string;
   role: RegisterBodyRole;
+  address: string;
+  city: string;
+  region: string;
+  zipCode: string;
+  homeLat?: number;
+  homeLng?: number;
+  serviceRadiusMiles?: number;
+  referredBy?: string;
 }

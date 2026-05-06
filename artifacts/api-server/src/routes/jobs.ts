@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, and } from "drizzle-orm";
-import { db, jobsTable, vehiclesTable, usersTable } from "@workspace/db";
+import { db, jobsTable, vehiclesTable, usersTable, workLogsTable, paymentsTable, messagesTable } from "@workspace/db";
 import { authenticate, type AuthRequest } from "../middlewares/authenticate";
 import { notifyMechanics, notifyCustomerJobAccepted } from "../lib/notifications";
 
@@ -179,6 +179,25 @@ router.put("/jobs/:jobId/mechanic-location", authenticate, async (req: AuthReque
   await db.update(jobsTable)
     .set({ mechanicLat: lat, mechanicLng: lng, mechanicLocationUpdatedAt: new Date() })
     .where(eq(jobsTable.id, jobId));
+  res.json({ ok: true });
+});
+
+// Admin can permanently delete a job and all related rows (work logs, payments, messages)
+router.delete("/jobs/:jobId", authenticate, async (req: AuthRequest, res): Promise<void> => {
+  if (req.userRole !== "admin") {
+    res.status(403).json({ error: "Only admins can delete jobs" }); return;
+  }
+  const jobId = parseInt(String(req.params.jobId), 10);
+  if (isNaN(jobId)) { res.status(400).json({ error: "Invalid job ID" }); return; }
+  const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, jobId));
+  if (!job) { res.status(404).json({ error: "Job not found" }); return; }
+
+  await db.transaction(async (tx) => {
+    await tx.delete(messagesTable).where(eq(messagesTable.jobId, jobId));
+    await tx.delete(paymentsTable).where(eq(paymentsTable.jobId, jobId));
+    await tx.delete(workLogsTable).where(eq(workLogsTable.jobId, jobId));
+    await tx.delete(jobsTable).where(eq(jobsTable.id, jobId));
+  });
   res.json({ ok: true });
 });
 

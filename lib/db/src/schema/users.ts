@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, timestamp, doublePrecision } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -16,6 +16,13 @@ export const usersTable = pgTable("users", {
   mechanicTier: text("mechanic_tier", { enum: ["detailer", "technician", "senior", "master"] }).default("detailer"),
   certifications: text("certifications").default("[]"),
   loyaltyPoints: integer("loyalty_points").notNull().default(0),
+  address: text("address"),
+  city: text("city"),
+  region: text("region"),
+  zipCode: text("zip_code"),
+  homeLat: doublePrecision("home_lat"),
+  homeLng: doublePrecision("home_lng"),
+  serviceRadiusMiles: integer("service_radius_miles"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

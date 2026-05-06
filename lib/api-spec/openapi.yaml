@@ -798,7 +798,23 @@ components:
         role:
           type: string
           enum: [customer, mechanic]
-      required: [name, email, password, role]
+        address:
+          type: string
+        city:
+          type: string
+        region:
+          type: string
+        zipCode:
+          type: string
+        homeLat:
+          type: number
+        homeLng:
+          type: number
+        serviceRadiusMiles:
+          type: integer
+        referredBy:
+          type: string
+      required: [name, email, password, role, address, city, region, zipCode]
 
     LoginBody:
       type: object
@@ -853,6 +869,27 @@ components:
           nullable: true
         loyaltyPoints:
           type: integer
+        address:
+          type: string
+          nullable: true
+        city:
+          type: string
+          nullable: true
+        region:
+          type: string
+          nullable: true
+        zipCode:
+          type: string
+          nullable: true
+        homeLat:
+          type: number
+          nullable: true
+        homeLng:
+          type: number
+          nullable: true
+        serviceRadiusMiles:
+          type: integer
+          nullable: true
         createdAt:
           type: string
           format: date-time

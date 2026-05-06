@@ -27,6 +27,14 @@ export interface RegisterBody {
   phone?: string;
   password: string;
   role: RegisterBodyRole;
+  address: string;
+  city: string;
+  region: string;
+  zipCode: string;
+  homeLat?: number;
+  homeLng?: number;
+  serviceRadiusMiles?: number;
+  referredBy?: string;
 }
 
 export interface LoginBody {
@@ -73,6 +81,13 @@ export interface User {
   mechanicTier?: UserMechanicTier;
   certifications?: string | null;
   loyaltyPoints?: number;
+  address?: string | null;
+  city?: string | null;
+  region?: string | null;
+  zipCode?: string | null;
+  homeLat?: number | null;
+  homeLng?: number | null;
+  serviceRadiusMiles?: number | null;
   createdAt: string;
 }
 

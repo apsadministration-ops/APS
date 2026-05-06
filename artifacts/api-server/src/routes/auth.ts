@@ -34,6 +34,13 @@ function formatUser(user: typeof usersTable.$inferSelect) {
     referralCode: user.referralCode ?? null,
     mechanicTier: user.mechanicTier ?? null,
     loyaltyPoints: user.loyaltyPoints ?? 0,
+    address: user.address ?? null,
+    city: user.city ?? null,
+    region: user.region ?? null,
+    zipCode: user.zipCode ?? null,
+    homeLat: user.homeLat ?? null,
+    homeLng: user.homeLng ?? null,
+    serviceRadiusMiles: user.serviceRadiusMiles ?? null,
     createdAt: user.createdAt,
   };
 }
@@ -44,9 +51,11 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const { name, phone, password, role } = parsed.data;
+  const {
+    name, phone, password, role,
+    address, city, region, zipCode, homeLat, homeLng, serviceRadiusMiles, referredBy,
+  } = parsed.data;
   const email = parsed.data.email.trim().toLowerCase();
-  const { referredBy } = req.body as { referredBy?: string };
 
   const [existing] = await db.select().from(usersTable).where(eq(usersTable.email, email));
   if (existing) {
@@ -68,6 +77,15 @@ router.post("/auth/register", async (req, res): Promise<void> => {
   const [user] = await db.insert(usersTable).values({
     name, email, phone: phone ?? null, passwordHash, role, status, referralCode,
     mechanicTier: role === "mechanic" ? "detailer" : null,
+    address: address ?? null,
+    city: city ?? null,
+    region: region ?? null,
+    zipCode: zipCode ?? null,
+    homeLat: homeLat ?? null,
+    homeLng: homeLng ?? null,
+    serviceRadiusMiles: role === "mechanic"
+      ? Math.min(500, Math.max(1, Math.round(Number(serviceRadiusMiles ?? 25))))
+      : null,
   }).returning();
 
   // Record referral and award welcome points to new customer
