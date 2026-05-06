@@ -61,7 +61,7 @@ export default function TrackerScreen() {
   const { jobId: rawId } = useLocalSearchParams<{ jobId: string }>();
   const jobId = parseInt(rawId, 10);
 
-  const { data: job, refetch } = useGetJob(jobId, { query: { enabled: !!jobId } });
+  const { data: job, refetch } = useGetJob(jobId);
 
   const [mechanicCoords, setMechanicCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locationPermission, setLocationPermission] = useState<"unknown" | "granted" | "denied">("unknown");

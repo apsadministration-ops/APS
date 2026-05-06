@@ -27,6 +27,9 @@ export interface Job {
   finalPrice?: number | null;
   rating?: number | null;
   ratingNote?: string | null;
+  mechanicLat?: number | null;
+  mechanicLng?: number | null;
+  mechanicLocationUpdatedAt?: Date | null;
   vehicle?: Vehicle | null;
   createdAt: Date;
   acceptedAt?: Date | null;

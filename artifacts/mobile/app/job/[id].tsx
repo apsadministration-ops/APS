@@ -35,7 +35,7 @@ export default function JobDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const jobId = parseInt(id, 10);
 
-  const { data: job, isLoading, refetch } = useGetJob(jobId, { query: { enabled: !!jobId } });
+  const { data: job, isLoading, refetch } = useGetJob(jobId);
   const rateMutation = useRateJob();
   const cancelMutation = useCancelJob();
 
@@ -137,16 +137,16 @@ export default function JobDetailScreen() {
           </View>
 
           {/* Pricing */}
-          {(job.estimatedPrice !== null || job.finalPrice !== null) && (
+          {(job.estimatedPrice != null || job.finalPrice != null) && (
             <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <Text style={[styles.cardTitle, { color: colors.foreground }]}>Pricing</Text>
-              {job.estimatedPrice !== null && (
+              {job.estimatedPrice != null && (
                 <View style={styles.priceRow}>
                   <Text style={[styles.priceLabel, { color: colors.mutedForeground }]}>Estimated</Text>
                   <Text style={[styles.priceValue, { color: colors.foreground }]}>${job.estimatedPrice.toFixed(2)}</Text>
                 </View>
               )}
-              {job.finalPrice !== null && (
+              {job.finalPrice != null && (
                 <View style={styles.priceRow}>
                   <Text style={[styles.priceLabel, { color: colors.mutedForeground }]}>Final</Text>
                   <Text style={[styles.priceValue, { color: colors.primary, fontWeight: "700" }]}>${job.finalPrice.toFixed(2)}</Text>

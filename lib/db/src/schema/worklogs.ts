@@ -14,6 +14,7 @@ export const workLogsTable = pgTable("work_logs", {
   customerId: integer("customer_id").notNull().references(() => usersTable.id),
   serviceCategory: text("service_category", { enum: ["repair", "diagnostic", "maintenance", "detailing"] }).notNull(),
   serviceDescription: text("service_description").notNull(),
+  mileageAtService: integer("mileage_at_service").notNull(),
   laborCost: real("labor_cost").notNull(),
   partsCost: real("parts_cost").notNull(),
   totalCost: real("total_cost").notNull(),

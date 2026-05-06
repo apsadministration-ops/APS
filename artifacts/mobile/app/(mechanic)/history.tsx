@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet, FlatList, ActivityIndicator } from "react-native";
 import { useColors } from "@/hooks/useColors";
-import { useListJobs, Job } from "@workspace/api-client-react";
+import { useListJobs, Job, getListJobsQueryKey } from "@workspace/api-client-react";
 import { Feather } from "@expo/vector-icons";
 import { JobCard } from "@/components/JobCard";
 import { useAuth } from "@/context/AuthContext";
@@ -10,9 +10,10 @@ const DONE_STATUSES = ["COMPLETED", "PAID", "CANCELLED"];
 export default function MechanicHistoryScreen() {
   const colors = useColors();
   const { user } = useAuth();
+  const params = { mechanicId: user?.id };
   const { data: jobs, isLoading, refetch } = useListJobs(
-    { mechanicId: user?.id },
-    { query: { enabled: !!user?.id } }
+    params,
+    { query: { enabled: !!user?.id, queryKey: getListJobsQueryKey(params) } }
   );
 
   const done = (jobs ?? []).filter((j: Job) => DONE_STATUSES.includes(j.status));

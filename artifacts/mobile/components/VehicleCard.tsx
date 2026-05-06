@@ -26,6 +26,14 @@ export function VehicleCard({ vehicle }: { vehicle: VehicleWithOwnership }) {
           </Text>
           
           <View style={styles.metaRow}>
+            {vehicle.mileage != null && (
+              <View style={[styles.badge, { backgroundColor: colors.secondary }]}>
+                <Feather name="activity" size={12} color={colors.secondaryForeground} />
+                <Text style={[styles.badgeText, { color: colors.secondaryForeground }]}>
+                  {vehicle.mileage.toLocaleString()} mi
+                </Text>
+              </View>
+            )}
             {vehicle.serviceCount !== undefined && (
               <View style={[styles.badge, { backgroundColor: colors.secondary }]}>
                 <Feather name="tool" size={12} color={colors.secondaryForeground} />

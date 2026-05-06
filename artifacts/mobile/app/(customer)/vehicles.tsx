@@ -26,17 +26,23 @@ export default function VehiclesScreen() {
   const [year, setYear] = useState("");
   const [trim, setTrim] = useState("");
   const [color, setColor] = useState("");
+  const [mileage, setMileage] = useState("");
   const [error, setError] = useState("");
   const [removingId, setRemovingId] = useState<number | null>(null);
 
   const handleAdd = () => {
     setError("");
-    if (!vin || !plateNumber || !make || !model || !year) {
-      setError("VIN, plate number, make, model and year are required.");
+    if (!vin || !plateNumber || !make || !model || !year || !mileage) {
+      setError("VIN, plate number, make, model, year, and mileage are required.");
       return;
     }
     if (vin.length !== 17) {
       setError("VIN must be exactly 17 characters.");
+      return;
+    }
+    const mileageNum = parseInt(mileage, 10);
+    if (Number.isNaN(mileageNum) || mileageNum < 0) {
+      setError("Mileage must be a non-negative whole number.");
       return;
     }
     createMutation.mutate(
@@ -48,13 +54,14 @@ export default function VehiclesScreen() {
           year: parseInt(year, 10),
           trim: trim || undefined,
           color: color || undefined,
-        } as any,
+          mileage: mileageNum,
+        },
       },
       {
         onSuccess: () => {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           setShowForm(false);
-          setVin(""); setPlateNumber(""); setMake(""); setModel(""); setYear(""); setTrim(""); setColor("");
+          setVin(""); setPlateNumber(""); setMake(""); setModel(""); setYear(""); setTrim(""); setColor(""); setMileage("");
           refetch();
         },
         onError: (e: any) => {
@@ -103,6 +110,7 @@ export default function VehiclesScreen() {
               { label: "Make *", value: make, set: setMake, placeholder: "e.g. Honda", upper: false },
               { label: "Model *", value: model, set: setModel, placeholder: "e.g. Accord", upper: false },
               { label: "Year *", value: year, set: setYear, placeholder: "e.g. 2020", numeric: true },
+              { label: "Mileage *", value: mileage, set: setMileage, placeholder: "e.g. 45000", numeric: true },
               { label: "Trim (optional)", value: trim, set: setTrim, placeholder: "e.g. Sport" },
               { label: "Color (optional)", value: color, set: setColor, placeholder: "e.g. Blue" },
             ].map(({ label, value, set, placeholder, upper, numeric, max }) => (

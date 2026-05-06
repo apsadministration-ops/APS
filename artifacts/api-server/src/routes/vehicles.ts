@@ -21,6 +21,7 @@ function formatVehicle(
     year: vehicle.year,
     trim: vehicle.trim ?? null,
     color: vehicle.color ?? null,
+    mileage: vehicle.mileage ?? 0,
     createdAt: vehicle.createdAt,
     currentOwner: owner
       ? {
@@ -59,9 +60,9 @@ router.get("/vehicles", authenticate, async (req: AuthRequest, res): Promise<voi
 });
 
 router.post("/vehicles", authenticate, async (req: AuthRequest, res): Promise<void> => {
-  const { vin, plateNumber, make, model, year, trim, color } = req.body as {
+  const { vin, plateNumber, make, model, year, trim, color, mileage } = req.body as {
     vin: string; plateNumber?: string; make: string; model: string;
-    year: number; trim?: string; color?: string;
+    year: number; trim?: string; color?: string; mileage: number;
   };
 
   if (!vin || !make || !model || !year) {
@@ -70,6 +71,10 @@ router.post("/vehicles", authenticate, async (req: AuthRequest, res): Promise<vo
   }
   if (vin.length !== 17) {
     res.status(400).json({ error: "VIN must be exactly 17 characters" });
+    return;
+  }
+  if (mileage == null || typeof mileage !== "number" || !Number.isFinite(mileage) || mileage < 0) {
+    res.status(400).json({ error: "Mileage is required and must be a non-negative number" });
     return;
   }
 
@@ -89,9 +94,14 @@ router.post("/vehicles", authenticate, async (req: AuthRequest, res): Promise<vo
       return;
     }
 
-    // Update plate number if provided
-    if (plateNumber) {
-      await db.update(vehiclesTable).set({ plateNumber: plateNumber.toUpperCase() }).where(eq(vehiclesTable.id, existing.id));
+    // Update plate number + mileage if provided
+    const updateFields: { plateNumber?: string; mileage?: number } = {};
+    if (plateNumber) updateFields.plateNumber = plateNumber.toUpperCase();
+    // Only accept a higher mileage on re-add (odometers don't go down)
+    const newMileageInt = Math.floor(mileage);
+    if (newMileageInt > (existing.mileage ?? 0)) updateFields.mileage = newMileageInt;
+    if (Object.keys(updateFields).length > 0) {
+      await db.update(vehiclesTable).set(updateFields).where(eq(vehiclesTable.id, existing.id));
     }
 
     const [newOwnership] = await db.insert(ownershipTable).values({
@@ -104,7 +114,7 @@ router.post("/vehicles", authenticate, async (req: AuthRequest, res): Promise<vo
 
     const [owner] = await db.select().from(usersTable).where(eq(usersTable.id, req.userId!));
     const [sc] = await db.select({ c: count() }).from(workLogsTable).where(eq(workLogsTable.vehicleId, existing.id));
-    const updated = plateNumber ? { ...existing, plateNumber: plateNumber.toUpperCase() } : existing;
+    const updated = { ...existing, ...updateFields } as typeof existing;
     res.status(201).json(formatVehicle(updated, newOwnership, owner ?? null, Number(sc?.c ?? 0), req.userId!));
     return;
   }
@@ -115,6 +125,7 @@ router.post("/vehicles", authenticate, async (req: AuthRequest, res): Promise<vo
     make, model, year,
     trim: trim ?? null,
     color: color ?? null,
+    mileage: Math.floor(mileage),
   }).returning();
 
   const [ownership] = await db.insert(ownershipTable).values({

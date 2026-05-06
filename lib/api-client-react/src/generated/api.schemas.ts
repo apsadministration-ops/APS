@@ -125,6 +125,7 @@ export interface Vehicle {
   year: number;
   trim?: string | null;
   color?: string | null;
+  mileage: number;
   createdAt: string;
 }
 
@@ -146,6 +147,11 @@ export interface CreateVehicleBody {
   year: number;
   trim?: string;
   color?: string;
+  /**
+   * Current odometer reading in miles. Required.
+   * @minimum 0
+   */
+  mileage: number;
 }
 
 export interface TransferVehicleBody {
@@ -203,6 +209,9 @@ export interface Job {
   finalPrice?: number | null;
   rating?: number | null;
   ratingNote?: string | null;
+  mechanicLat?: number | null;
+  mechanicLng?: number | null;
+  mechanicLocationUpdatedAt?: string | null;
   vehicle?: Vehicle | null;
   createdAt: string;
   acceptedAt?: string | null;
@@ -277,6 +286,7 @@ export interface WorkLog {
   customerId: number;
   serviceCategory: WorkLogServiceCategory;
   serviceDescription: string;
+  mileageAtService: number;
   laborCost: number;
   partsCost: number;
   totalCost: number;
@@ -301,6 +311,11 @@ export interface CreateWorkLogBody {
   jobId: number;
   serviceCategory: CreateWorkLogBodyServiceCategory;
   serviceDescription: string;
+  /**
+   * Odometer reading at time of service. Required.
+   * @minimum 0
+   */
+  mileageAtService: number;
   laborCost: number;
   partsCost: number;
   partsUsed: string[];

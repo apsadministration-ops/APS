@@ -17,6 +17,7 @@ export interface WorkLog {
   customerId: number;
   serviceCategory: WorkLogServiceCategory;
   serviceDescription: string;
+  mileageAtService: number;
   laborCost: number;
   partsCost: number;
   totalCost: number;

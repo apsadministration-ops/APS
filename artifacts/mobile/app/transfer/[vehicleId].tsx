@@ -14,7 +14,7 @@ export default function TransferScreen() {
   const { vehicleId } = useLocalSearchParams<{ vehicleId: string }>();
   const id = parseInt(vehicleId, 10);
 
-  const { data: vehicle } = useGetVehicle(id, { query: { enabled: !!id } });
+  const { data: vehicle } = useGetVehicle(id);
   const transferMutation = useTransferVehicle();
 
   const [email, setEmail] = useState("");

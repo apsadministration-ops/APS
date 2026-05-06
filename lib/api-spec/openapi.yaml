@@ -913,10 +913,12 @@ components:
         color:
           type: string
           nullable: true
+        mileage:
+          type: integer
         createdAt:
           type: string
           format: date-time
-      required: [id, vin, make, model, year, createdAt]
+      required: [id, vin, make, model, year, mileage, createdAt]
 
     VehicleWithOwnership:
       allOf:
@@ -950,7 +952,11 @@ components:
           type: string
         color:
           type: string
-      required: [vin, make, model, year]
+        mileage:
+          type: integer
+          minimum: 0
+          description: Current odometer reading in miles. Required.
+      required: [vin, make, model, year, mileage]
 
     TransferVehicleBody:
       type: object
@@ -1033,6 +1039,16 @@ components:
         ratingNote:
           type: string
           nullable: true
+        mechanicLat:
+          type: number
+          nullable: true
+        mechanicLng:
+          type: number
+          nullable: true
+        mechanicLocationUpdatedAt:
+          type: string
+          format: date-time
+          nullable: true
         vehicle:
           $ref: "#/components/schemas/Vehicle"
           nullable: true
@@ -1113,6 +1129,8 @@ components:
           enum: [repair, diagnostic, maintenance, detailing]
         serviceDescription:
           type: string
+        mileageAtService:
+          type: integer
         laborCost:
           type: number
         partsCost:
@@ -1137,7 +1155,7 @@ components:
         createdAt:
           type: string
           format: date-time
-      required: [id, jobId, vehicleId, vin, mechanicId, mechanicName, customerId, serviceCategory, serviceDescription, laborCost, partsCost, totalCost, partsUsed, beforeImages, afterImages, createdAt]
+      required: [id, jobId, vehicleId, vin, mechanicId, mechanicName, customerId, serviceCategory, serviceDescription, mileageAtService, laborCost, partsCost, totalCost, partsUsed, beforeImages, afterImages, createdAt]
 
     CreateWorkLogBody:
       type: object
@@ -1149,6 +1167,10 @@ components:
           enum: [repair, diagnostic, maintenance, detailing]
         serviceDescription:
           type: string
+        mileageAtService:
+          type: integer
+          minimum: 0
+          description: Odometer reading at time of service. Required.
         laborCost:
           type: number
         partsCost:
@@ -1167,7 +1189,7 @@ components:
           type: array
           items:
             type: string
-      required: [jobId, serviceCategory, serviceDescription, laborCost, partsCost, partsUsed, beforeImages, afterImages]
+      required: [jobId, serviceCategory, serviceDescription, mileageAtService, laborCost, partsCost, partsUsed, beforeImages, afterImages]
 
     # Payments
     Payment:

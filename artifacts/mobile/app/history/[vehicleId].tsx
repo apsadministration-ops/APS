@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet, FlatList, ActivityIndicator } from "react-native";
 import { useColors } from "@/hooks/useColors";
-import { useGetWorkLogsByVin, useGetVehicle, WorkLog } from "@workspace/api-client-react";
+import { useGetWorkLogsByVin, useGetVehicle, WorkLog, getGetWorkLogsByVinQueryKey } from "@workspace/api-client-react";
 import { useLocalSearchParams, Stack } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { WorkLogCard } from "@/components/WorkLogCard";
@@ -10,9 +10,10 @@ export default function VehicleHistoryScreen() {
   const { vehicleId } = useLocalSearchParams<{ vehicleId: string }>();
   const id = parseInt(vehicleId, 10);
 
-  const { data: vehicle } = useGetVehicle(id, { query: { enabled: !!id } });
-  const { data: logs, isLoading } = useGetWorkLogsByVin(vehicle?.vin ?? "", {
-    query: { enabled: !!vehicle?.vin },
+  const { data: vehicle } = useGetVehicle(id);
+  const vin = vehicle?.vin ?? "";
+  const { data: logs, isLoading } = useGetWorkLogsByVin(vin, {
+    query: { enabled: !!vehicle?.vin, queryKey: getGetWorkLogsByVinQueryKey(vin) },
   });
 
   return (

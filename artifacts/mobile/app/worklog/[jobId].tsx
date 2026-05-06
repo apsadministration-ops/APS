@@ -20,11 +20,12 @@ export default function WorkLogScreen() {
   const { jobId } = useLocalSearchParams<{ jobId: string }>();
   const jid = parseInt(jobId, 10);
 
-  const { data: job } = useGetJob(jid, { query: { enabled: !!jid } });
+  const { data: job } = useGetJob(jid);
   const createMutation = useCreateWorkLog();
 
   const [category, setCategory] = useState<string>("repair");
   const [description, setDescription] = useState("");
+  const [mileageAtService, setMileageAtService] = useState("");
   const [laborCost, setLaborCost] = useState("");
   const [partsCost, setPartsCost] = useState("");
   const [partsUsed, setPartsUsed] = useState<string[]>([]);
@@ -64,6 +65,15 @@ export default function WorkLogScreen() {
       setError("Please provide a service description.");
       return;
     }
+    if (!mileageAtService.trim()) {
+      setError("Please enter the vehicle's current mileage.");
+      return;
+    }
+    const mileageNum = parseInt(mileageAtService, 10);
+    if (Number.isNaN(mileageNum) || mileageNum < 0) {
+      setError("Mileage must be a non-negative whole number.");
+      return;
+    }
     if (!laborCost) {
       setError("Please enter a labor cost (can be 0).");
       return;
@@ -75,6 +85,7 @@ export default function WorkLogScreen() {
           jobId: jid,
           serviceCategory: category as "repair" | "diagnostic" | "maintenance" | "detailing",
           serviceDescription: description,
+          mileageAtService: mileageNum,
           laborCost: parseFloat(laborCost) || 0,
           partsCost: parseFloat(partsCost) || 0,
           partsUsed,
@@ -151,6 +162,18 @@ export default function WorkLogScreen() {
             value={description}
             onChangeText={setDescription}
             textAlignVertical="top"
+          />
+
+          <Text style={[styles.sectionLabel, { color: colors.mutedForeground, marginTop: 16 }]}>
+            ODOMETER (MILES) *
+          </Text>
+          <TextInput
+            style={[styles.input, { backgroundColor: colors.card, color: colors.foreground, borderColor: colors.border }]}
+            placeholder="Enter the vehicle's current mileage"
+            placeholderTextColor={colors.mutedForeground}
+            keyboardType="number-pad"
+            value={mileageAtService}
+            onChangeText={(t) => setMileageAtService(t.replace(/[^0-9]/g, ""))}
           />
 
           <Text style={[styles.sectionLabel, { color: colors.mutedForeground, marginTop: 16 }]}>COSTS</Text>

@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet, FlatList, Pressable, ActivityIndicator } from "react-native";
 import { confirm } from "@/utils/confirm";
 import { useColors } from "@/hooks/useColors";
-import { useListJobs, useUpdateJobStatus, Job } from "@workspace/api-client-react";
+import { useListJobs, useUpdateJobStatus, Job, UpdateJobStatusBodyStatus, getListJobsQueryKey } from "@workspace/api-client-react";
 import { Feather } from "@expo/vector-icons";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useAuth } from "@/context/AuthContext";
@@ -35,7 +35,7 @@ function ActiveJobCard({ job }: { job: Job }) {
     });
     if (!ok) return;
     updateMutation.mutate(
-      { jobId: job.id, data: { status: flow.next } },
+      { jobId: job.id, data: { status: flow.next as UpdateJobStatusBodyStatus } },
       {
         onSuccess: () => { try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch { /* web */ } },
       }
@@ -96,9 +96,10 @@ function ActiveJobCard({ job }: { job: Job }) {
 export default function ActiveJobsScreen() {
   const colors = useColors();
   const { user } = useAuth();
+  const params = { mechanicId: user?.id };
   const { data: jobs, isLoading, refetch } = useListJobs(
-    { mechanicId: user?.id },
-    { query: { enabled: !!user?.id } }
+    params,
+    { query: { enabled: !!user?.id, queryKey: getListJobsQueryKey(params) } }
   );
 
   const active = (jobs ?? []).filter((j: Job) => ACTIVE_STATUSES.includes(j.status));

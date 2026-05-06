@@ -31,7 +31,7 @@ lib/api-spec/openapi.yaml          — full OpenAPI spec (source of truth)
 lib/api-spec/orval.config.ts       — codegen config
 lib/db/src/schema/                 — Drizzle table definitions
   users.ts                         — users (referralCode, mechanicTier, certifications, loyaltyPoints)
-  vehicles.ts                      — vehicles (plateNumber added)
+  vehicles.ts                      — vehicles (plateNumber, mileage required)
   loyalty.ts                       — loyalty_points table
   referrals.ts                     — referrals table
 lib/api-client-react/src/generated — generated React Query hooks + Zod schemas
@@ -74,6 +74,7 @@ lib/integrations-anthropic-ai/    — Replit AI Integrations Anthropic client (s
 - **Loyalty points:** 100 pts per completed job (customer), 500 pts referrer bonus, 200 pts welcome for joining via referral. `awardLoyaltyPoints()` in `loyalty.ts`.
 - **Referral codes:** 8-char alphanumeric, auto-generated on registration. Stored as `users.referral_code` (unique, nullable).
 - **Vehicle plate numbers:** Added to vehicles table. Required in UI when adding a new vehicle.
+- **Vehicle mileage (odometer):** Required when customer adds a vehicle (`vehicles.mileage`, NOT NULL). Mechanics MUST enter `mileageAtService` on every work-log submission; submission is rejected if it's lower than the vehicle's current odometer. On successful work-log creation, the vehicle's stored mileage is updated to the new reading. Re-adding a vehicle by VIN only bumps mileage if the new value is higher.
 - **Certifications:** Stored as JSON string (`[]`) on users table. Mechanics self-add; displayed on profile.
 - **Push notifications:** Expo Push API (no third-party). Mechanics notified on new jobs; customers on accept + completion.
 - **Live location:** Mechanic GPS sent via `PUT /api/jobs/:jobId/mechanic-location` every 15s; customer polls every 10s.

@@ -15,5 +15,6 @@ export interface Vehicle {
   year: number;
   trim?: string | null;
   color?: string | null;
+  mileage: number;
   createdAt: Date;
 }

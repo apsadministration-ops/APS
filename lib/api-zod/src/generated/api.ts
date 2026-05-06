@@ -200,6 +200,7 @@ export const ListVehiclesResponseItem = zod
     year: zod.number(),
     trim: zod.string().nullish(),
     color: zod.string().nullish(),
+    mileage: zod.number(),
     createdAt: zod.coerce.date(),
   })
   .and(
@@ -234,6 +235,8 @@ export const ListVehiclesResponse = zod.array(ListVehiclesResponseItem);
 export const createVehicleBodyVinMin = 17;
 export const createVehicleBodyVinMax = 17;
 
+export const createVehicleBodyMileageMin = 0;
+
 export const CreateVehicleBody = zod.object({
   vin: zod.string().min(createVehicleBodyVinMin).max(createVehicleBodyVinMax),
   plateNumber: zod.string().optional(),
@@ -242,6 +245,10 @@ export const CreateVehicleBody = zod.object({
   year: zod.number(),
   trim: zod.string().optional(),
   color: zod.string().optional(),
+  mileage: zod
+    .number()
+    .min(createVehicleBodyMileageMin)
+    .describe("Current odometer reading in miles. Required."),
 });
 
 /**
@@ -261,6 +268,7 @@ export const GetVehicleByVinResponse = zod
     year: zod.number(),
     trim: zod.string().nullish(),
     color: zod.string().nullish(),
+    mileage: zod.number(),
     createdAt: zod.coerce.date(),
   })
   .and(
@@ -305,6 +313,7 @@ export const GetVehicleResponse = zod
     year: zod.number(),
     trim: zod.string().nullish(),
     color: zod.string().nullish(),
+    mileage: zod.number(),
     createdAt: zod.coerce.date(),
   })
   .and(
@@ -354,6 +363,7 @@ export const GetVehicleHistoryResponseItem = zod.object({
     "detailing",
   ]),
   serviceDescription: zod.string(),
+  mileageAtService: zod.number(),
   laborCost: zod.number(),
   partsCost: zod.number(),
   totalCost: zod.number(),
@@ -457,6 +467,9 @@ export const ListJobsResponseItem = zod.object({
   finalPrice: zod.number().nullish(),
   rating: zod.number().nullish(),
   ratingNote: zod.string().nullish(),
+  mechanicLat: zod.number().nullish(),
+  mechanicLng: zod.number().nullish(),
+  mechanicLocationUpdatedAt: zod.coerce.date().nullish(),
   vehicle: zod
     .object({
       id: zod.number(),
@@ -467,6 +480,7 @@ export const ListJobsResponseItem = zod.object({
       year: zod.number(),
       trim: zod.string().nullish(),
       color: zod.string().nullish(),
+      mileage: zod.number(),
       createdAt: zod.coerce.date(),
     })
     .nullish(),
@@ -519,6 +533,9 @@ export const ListAvailableJobsResponseItem = zod.object({
   finalPrice: zod.number().nullish(),
   rating: zod.number().nullish(),
   ratingNote: zod.string().nullish(),
+  mechanicLat: zod.number().nullish(),
+  mechanicLng: zod.number().nullish(),
+  mechanicLocationUpdatedAt: zod.coerce.date().nullish(),
   vehicle: zod
     .object({
       id: zod.number(),
@@ -529,6 +546,7 @@ export const ListAvailableJobsResponseItem = zod.object({
       year: zod.number(),
       trim: zod.string().nullish(),
       color: zod.string().nullish(),
+      mileage: zod.number(),
       createdAt: zod.coerce.date(),
     })
     .nullish(),
@@ -574,6 +592,9 @@ export const GetJobResponse = zod.object({
   finalPrice: zod.number().nullish(),
   rating: zod.number().nullish(),
   ratingNote: zod.string().nullish(),
+  mechanicLat: zod.number().nullish(),
+  mechanicLng: zod.number().nullish(),
+  mechanicLocationUpdatedAt: zod.coerce.date().nullish(),
   vehicle: zod
     .object({
       id: zod.number(),
@@ -584,6 +605,7 @@ export const GetJobResponse = zod.object({
       year: zod.number(),
       trim: zod.string().nullish(),
       color: zod.string().nullish(),
+      mileage: zod.number(),
       createdAt: zod.coerce.date(),
     })
     .nullish(),
@@ -640,6 +662,9 @@ export const UpdateJobStatusResponse = zod.object({
   finalPrice: zod.number().nullish(),
   rating: zod.number().nullish(),
   ratingNote: zod.string().nullish(),
+  mechanicLat: zod.number().nullish(),
+  mechanicLng: zod.number().nullish(),
+  mechanicLocationUpdatedAt: zod.coerce.date().nullish(),
   vehicle: zod
     .object({
       id: zod.number(),
@@ -650,6 +675,7 @@ export const UpdateJobStatusResponse = zod.object({
       year: zod.number(),
       trim: zod.string().nullish(),
       color: zod.string().nullish(),
+      mileage: zod.number(),
       createdAt: zod.coerce.date(),
     })
     .nullish(),
@@ -692,6 +718,9 @@ export const AcceptJobResponse = zod.object({
   finalPrice: zod.number().nullish(),
   rating: zod.number().nullish(),
   ratingNote: zod.string().nullish(),
+  mechanicLat: zod.number().nullish(),
+  mechanicLng: zod.number().nullish(),
+  mechanicLocationUpdatedAt: zod.coerce.date().nullish(),
   vehicle: zod
     .object({
       id: zod.number(),
@@ -702,6 +731,7 @@ export const AcceptJobResponse = zod.object({
       year: zod.number(),
       trim: zod.string().nullish(),
       color: zod.string().nullish(),
+      mileage: zod.number(),
       createdAt: zod.coerce.date(),
     })
     .nullish(),
@@ -744,6 +774,9 @@ export const CancelJobResponse = zod.object({
   finalPrice: zod.number().nullish(),
   rating: zod.number().nullish(),
   ratingNote: zod.string().nullish(),
+  mechanicLat: zod.number().nullish(),
+  mechanicLng: zod.number().nullish(),
+  mechanicLocationUpdatedAt: zod.coerce.date().nullish(),
   vehicle: zod
     .object({
       id: zod.number(),
@@ -754,6 +787,7 @@ export const CancelJobResponse = zod.object({
       year: zod.number(),
       trim: zod.string().nullish(),
       color: zod.string().nullish(),
+      mileage: zod.number(),
       createdAt: zod.coerce.date(),
     })
     .nullish(),
@@ -803,6 +837,9 @@ export const RateJobResponse = zod.object({
   finalPrice: zod.number().nullish(),
   rating: zod.number().nullish(),
   ratingNote: zod.string().nullish(),
+  mechanicLat: zod.number().nullish(),
+  mechanicLng: zod.number().nullish(),
+  mechanicLocationUpdatedAt: zod.coerce.date().nullish(),
   vehicle: zod
     .object({
       id: zod.number(),
@@ -813,6 +850,7 @@ export const RateJobResponse = zod.object({
       year: zod.number(),
       trim: zod.string().nullish(),
       color: zod.string().nullish(),
+      mileage: zod.number(),
       createdAt: zod.coerce.date(),
     })
     .nullish(),
@@ -824,6 +862,8 @@ export const RateJobResponse = zod.object({
 /**
  * @summary Submit a work log (mechanic only, on job completion)
  */
+export const createWorkLogBodyMileageAtServiceMin = 0;
+
 export const CreateWorkLogBody = zod.object({
   jobId: zod.number(),
   serviceCategory: zod.enum([
@@ -833,6 +873,10 @@ export const CreateWorkLogBody = zod.object({
     "detailing",
   ]),
   serviceDescription: zod.string(),
+  mileageAtService: zod
+    .number()
+    .min(createWorkLogBodyMileageAtServiceMin)
+    .describe("Odometer reading at time of service. Required."),
   laborCost: zod.number(),
   partsCost: zod.number(),
   partsUsed: zod.array(zod.string()),
@@ -863,6 +907,7 @@ export const GetWorkLogsByVinResponseItem = zod.object({
     "detailing",
   ]),
   serviceDescription: zod.string(),
+  mileageAtService: zod.number(),
   laborCost: zod.number(),
   partsCost: zod.number(),
   totalCost: zod.number(),
@@ -896,6 +941,7 @@ export const GetWorkLogResponse = zod.object({
     "detailing",
   ]),
   serviceDescription: zod.string(),
+  mileageAtService: zod.number(),
   laborCost: zod.number(),
   partsCost: zod.number(),
   totalCost: zod.number(),
@@ -974,6 +1020,9 @@ export const GetCustomerDashboardResponse = zod.object({
       finalPrice: zod.number().nullish(),
       rating: zod.number().nullish(),
       ratingNote: zod.string().nullish(),
+      mechanicLat: zod.number().nullish(),
+      mechanicLng: zod.number().nullish(),
+      mechanicLocationUpdatedAt: zod.coerce.date().nullish(),
       vehicle: zod
         .object({
           id: zod.number(),
@@ -984,6 +1033,7 @@ export const GetCustomerDashboardResponse = zod.object({
           year: zod.number(),
           trim: zod.string().nullish(),
           color: zod.string().nullish(),
+          mileage: zod.number(),
           createdAt: zod.coerce.date(),
         })
         .nullish(),
@@ -1033,6 +1083,9 @@ export const GetMechanicDashboardResponse = zod.object({
       finalPrice: zod.number().nullish(),
       rating: zod.number().nullish(),
       ratingNote: zod.string().nullish(),
+      mechanicLat: zod.number().nullish(),
+      mechanicLng: zod.number().nullish(),
+      mechanicLocationUpdatedAt: zod.coerce.date().nullish(),
       vehicle: zod
         .object({
           id: zod.number(),
@@ -1043,6 +1096,7 @@ export const GetMechanicDashboardResponse = zod.object({
           year: zod.number(),
           trim: zod.string().nullish(),
           color: zod.string().nullish(),
+          mileage: zod.number(),
           createdAt: zod.coerce.date(),
         })
         .nullish(),
@@ -1092,6 +1146,9 @@ export const GetAdminDashboardResponse = zod.object({
       finalPrice: zod.number().nullish(),
       rating: zod.number().nullish(),
       ratingNote: zod.string().nullish(),
+      mechanicLat: zod.number().nullish(),
+      mechanicLng: zod.number().nullish(),
+      mechanicLocationUpdatedAt: zod.coerce.date().nullish(),
       vehicle: zod
         .object({
           id: zod.number(),
@@ -1102,6 +1159,7 @@ export const GetAdminDashboardResponse = zod.object({
           year: zod.number(),
           trim: zod.string().nullish(),
           color: zod.string().nullish(),
+          mileage: zod.number(),
           createdAt: zod.coerce.date(),
         })
         .nullish(),

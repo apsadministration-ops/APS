@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, RefreshControl } from "react-native";
 import { useColors } from "@/hooks/useColors";
-import { useGetCustomerDashboard } from "@workspace/api-client-react";
+import { useGetCustomerDashboard, getGetCustomerDashboardQueryKey } from "@workspace/api-client-react";
 import { useAuth } from "@/context/AuthContext";
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -20,7 +20,10 @@ export default function CustomerDashboard() {
   const router = useRouter();
   const { user } = useAuth();
   const { data: dashboard, isLoading, error, refetch, isRefetching } = useGetCustomerDashboard({
-    query: { enabled: !!user && user.role === "customer" },
+    query: {
+      enabled: !!user && user.role === "customer",
+      queryKey: getGetCustomerDashboardQueryKey(),
+    },
   });
 
   if (isLoading) {

@@ -11,6 +11,7 @@ export const vehiclesTable = pgTable("vehicles", {
   year: integer("year").notNull(),
   trim: text("trim"),
   color: text("color"),
+  mileage: integer("mileage").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   uniqueIndex("vehicles_vin_unique").on(t.vin),

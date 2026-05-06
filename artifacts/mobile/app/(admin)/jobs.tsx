@@ -5,6 +5,7 @@ import { useColors } from "@/hooks/useColors";
 import { useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { StatusBadge } from "@/components/StatusBadge";
+import type { JobStatus } from "@workspace/api-client-react";
 import { useState, useEffect, useCallback } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
@@ -132,7 +133,7 @@ export default function AdminJobsScreen() {
                     {job.vehicle ? `${job.vehicle.year} ${job.vehicle.make} ${job.vehicle.model}` : job.vin}
                   </Text>
                 </View>
-                <StatusBadge status={job.status} />
+                <StatusBadge status={job.status as JobStatus} />
               </View>
               <Text style={[styles.jobDesc, { color: colors.mutedForeground }]} numberOfLines={2}>
                 {job.description}

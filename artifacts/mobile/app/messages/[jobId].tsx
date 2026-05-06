@@ -58,7 +58,7 @@ export default function MessagesScreen() {
   const { user } = useAuth();
   const { jobId: rawId } = useLocalSearchParams<{ jobId: string }>();
   const jobId = parseInt(rawId, 10);
-  const { data: job } = useGetJob(jobId, { query: { enabled: !!jobId } });
+  const { data: job } = useGetJob(jobId);
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");

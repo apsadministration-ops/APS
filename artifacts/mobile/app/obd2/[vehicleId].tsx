@@ -148,7 +148,7 @@ export default function Obd2Screen() {
   const { vehicleId } = useLocalSearchParams<{ vehicleId: string }>();
   const id = parseInt(vehicleId, 10);
 
-  const { data: vehicle } = useGetVehicle(id, { query: { enabled: !!id } });
+  const { data: vehicle } = useGetVehicle(id);
 
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Obd2Code[]>([]);

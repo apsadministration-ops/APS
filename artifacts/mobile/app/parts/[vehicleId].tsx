@@ -136,7 +136,7 @@ export default function PartsScreen() {
   const { vehicleId } = useLocalSearchParams<{ vehicleId: string }>();
   const id = parseInt(vehicleId, 10);
 
-  const { data: vehicle } = useGetVehicle(id, { query: { enabled: !!id } });
+  const { data: vehicle } = useGetVehicle(id);
 
   const [vinData, setVinData] = useState<DecodedVehicle | null>(null);
   const [recalls, setRecalls] = useState<Recall[]>([]);

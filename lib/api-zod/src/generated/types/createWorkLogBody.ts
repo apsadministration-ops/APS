@@ -11,6 +11,11 @@ export interface CreateWorkLogBody {
   jobId: number;
   serviceCategory: CreateWorkLogBodyServiceCategory;
   serviceDescription: string;
+  /**
+   * Odometer reading at time of service. Required.
+   * @minimum 0
+   */
+  mileageAtService: number;
   laborCost: number;
   partsCost: number;
   partsUsed: string[];

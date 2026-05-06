@@ -11,12 +11,8 @@ export default function VehicleDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const vehicleId = parseInt(id, 10);
 
-  const { data: vehicle, isLoading: vehicleLoading } = useGetVehicle(vehicleId, {
-    query: { enabled: !!vehicleId },
-  });
-  const { data: history, isLoading: historyLoading } = useGetVehicleHistory(vehicleId, {
-    query: { enabled: !!vehicleId },
-  });
+  const { data: vehicle, isLoading: vehicleLoading } = useGetVehicle(vehicleId);
+  const { data: history, isLoading: historyLoading } = useGetVehicleHistory(vehicleId);
 
   const isLoading = vehicleLoading || historyLoading;
 

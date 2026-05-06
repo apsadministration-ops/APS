@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, RefreshControl } from "react-native";
 import { useColors } from "@/hooks/useColors";
-import { useGetMechanicDashboard } from "@workspace/api-client-react";
+import { useGetMechanicDashboard, getGetMechanicDashboardQueryKey } from "@workspace/api-client-react";
 import { useAuth } from "@/context/AuthContext";
 import { Feather } from "@expo/vector-icons";
 import { Link, useRouter } from "expo-router";
@@ -20,7 +20,10 @@ export default function MechanicDashboard() {
   const router = useRouter();
   const { user } = useAuth();
   const { data: dashboard, isLoading, error, refetch, isRefetching } = useGetMechanicDashboard({
-    query: { enabled: !!user && user.role === "mechanic" },
+    query: {
+      enabled: !!user && user.role === "mechanic",
+      queryKey: getGetMechanicDashboardQueryKey(),
+    },
   });
 
   if (isLoading) {

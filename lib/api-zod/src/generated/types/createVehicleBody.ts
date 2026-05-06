@@ -18,4 +18,9 @@ export interface CreateVehicleBody {
   year: number;
   trim?: string;
   color?: string;
+  /**
+   * Current odometer reading in miles. Required.
+   * @minimum 0
+   */
+  mileage: number;
 }
