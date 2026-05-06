@@ -5,7 +5,7 @@ import { eq, and, ne } from "drizzle-orm";
 import type Stripe from "stripe";
 import { db, paymentsTable, usersTable, jobsTable, referralsTable } from "@workspace/db";
 import { getUncachableStripeClient, getWebhookSecret } from "../lib/stripeClient";
-import { awardLoyaltyPoints } from "./loyalty";
+import { awardLoyaltyPoints, reverseLoyaltyForJob } from "./loyalty";
 import { logger } from "../lib/logger";
 
 export async function stripeWebhookHandler(req: Request, res: Response): Promise<void> {
@@ -48,13 +48,30 @@ async function handleEvent(event: Stripe.Event): Promise<void> {
         ? session.payment_intent
         : session.payment_intent?.id ?? null;
       if (!session.id || !intentId) return;
-      // Move pending → authorized; do not regress already-captured rows.
-      await db.update(paymentsTable)
+      // Move pending → authorized ONLY. If the row is already in any other
+      // state (canceled/failed/refunded/captured/authorized), do NOT regress —
+      // and treat it as orphaned so the late-arriving authorization is voided.
+      const updated = await db.update(paymentsTable)
         .set({ providerPaymentIntentId: intentId, status: "authorized" })
         .where(and(
           eq(paymentsTable.providerSessionId, session.id),
-          ne(paymentsTable.status, "captured"),
-        ));
+          eq(paymentsTable.status, "pending"),
+        ))
+        .returning();
+      if (updated.length === 0) {
+        // Either no payment row matches this session, or the row has already
+        // moved past "pending" (e.g. job was cancelled/deleted between the
+        // customer paying and this webhook arriving). Auto-cancel the intent
+        // so the customer's card isn't held for an orphaned auth.
+        try {
+          const stripe = await getUncachableStripeClient();
+          await stripe.paymentIntents.cancel(intentId);
+          logger.warn({ sessionId: session.id, intentId }, "Orphaned Stripe authorization auto-canceled (no matching payment row)");
+        } catch (err) {
+          logger.error({ err, sessionId: session.id, intentId }, "Failed to auto-cancel orphaned Stripe authorization");
+        }
+        break;
+      }
       logger.info({ sessionId: session.id, intentId }, "Stripe checkout session completed → authorized");
       break;
     }
@@ -128,9 +145,35 @@ async function handleEvent(event: Stripe.Event): Promise<void> {
       const charge = event.data.object as Stripe.Charge;
       const intentId = typeof charge.payment_intent === "string" ? charge.payment_intent : charge.payment_intent?.id;
       if (!intentId) return;
-      await db.update(paymentsTable)
+      // Atomic: only the FIRST transition to "refunded" returns a row,
+      // so retried webhooks don't double-reverse loyalty/job state.
+      const updated = await db.update(paymentsTable)
         .set({ status: "refunded" })
-        .where(eq(paymentsTable.providerPaymentIntentId, intentId));
+        .where(and(
+          eq(paymentsTable.providerPaymentIntentId, intentId),
+          ne(paymentsTable.status, "refunded"),
+        ))
+        .returning();
+      if (updated.length === 0) {
+        logger.info({ intentId }, "charge.refunded: already reflected — skipping reversal");
+        break;
+      }
+      const payment = updated[0]!;
+      // Roll the job back so it's no longer marked PAID, and reverse any
+      // loyalty/referral points granted on capture.
+      await db.update(jobsTable).set({ status: "COMPLETED" }).where(eq(jobsTable.id, payment.jobId));
+      await reverseLoyaltyForJob(payment.jobId, `Refund — Job #${payment.jobId}`).catch((err) => {
+        logger.error({ err, jobId: payment.jobId }, "loyalty reversal failed on refund");
+      });
+      // Un-flag any referral that was rewarded by this job so the referrer
+      // doesn't keep credit for a refunded job.
+      const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, payment.jobId));
+      if (job?.customerId) {
+        await db.update(referralsTable)
+          .set({ rewarded: false })
+          .where(eq(referralsTable.referredId, job.customerId));
+      }
+      logger.info({ jobId: payment.jobId, intentId }, "Payment refunded — job reverted + loyalty reversed");
       break;
     }
 

@@ -33,6 +33,14 @@ router.post("/worklogs", authenticate, async (req: AuthRequest, res): Promise<vo
   if (!job) { res.status(404).json({ error: "Job not found" }); return; }
   if (job.mechanicId !== req.userId) { res.status(403).json({ error: "You are not assigned to this job" }); return; }
 
+  // One worklog per job. Prevents duplicate submissions that would otherwise
+  // trigger a second Stripe capture attempt on the same intent.
+  const [existingLog] = await db.select().from(workLogsTable).where(eq(workLogsTable.jobId, jobId)).limit(1);
+  if (existingLog) {
+    res.status(409).json({ error: "A work log has already been submitted for this job." });
+    return;
+  }
+
   if (mileageAtService == null || typeof mileageAtService !== "number" || !Number.isFinite(mileageAtService) || mileageAtService < 0) {
     res.status(400).json({ error: "mileageAtService is required and must be a non-negative number" });
     return;
@@ -52,18 +60,18 @@ router.post("/worklogs", authenticate, async (req: AuthRequest, res): Promise<vo
 
   const mileageInt = Math.floor(mileageAtService);
 
-  // Stripe payment gate: if a Stripe-flow payment row exists for this job, the
-  // mechanic cannot complete work until funds are AUTHORIZED, and the final
-  // cost cannot exceed the authorized amount (else customer must re-auth).
+  // Stripe payment gate. A row is treated as Stripe-managed if it exists and
+  // was ever in a Stripe state (anything other than legacy "held"). We can't
+  // rely on providerSessionId alone — it gets cleared when we void a stale
+  // authorization, but the row remains and must still block the legacy fall-
+  // through below (otherwise a reassigned job could complete with no capture).
   const [existingPayment] = await db.select().from(paymentsTable).where(eq(paymentsTable.jobId, jobId));
-  const isStripeFlow = !!existingPayment?.providerSessionId;
-  if (isStripeFlow) {
-    if (existingPayment!.status === "pending" || !existingPayment!.providerPaymentIntentId) {
-      res.status(409).json({ error: "Customer has not yet authorized payment for this job." });
-      return;
-    }
-    if (!["authorized"].includes(existingPayment!.status)) {
-      res.status(409).json({ error: `Payment is ${existingPayment!.status}; cannot submit work log.` });
+  const isStripeManaged = !!existingPayment && existingPayment.status !== "held";
+  if (isStripeManaged) {
+    if (existingPayment!.status !== "authorized" || !existingPayment!.providerPaymentIntentId) {
+      res.status(409).json({
+        error: `Payment must be authorized before submitting a work log (current status: ${existingPayment!.status}). Ask the customer to authorize before completing the job.`,
+      });
       return;
     }
     const authorizedCents = existingPayment!.amountCents ?? Math.round((existingPayment!.amount ?? 0) * 100);
@@ -75,6 +83,7 @@ router.post("/worklogs", authenticate, async (req: AuthRequest, res): Promise<vo
       return;
     }
   }
+  const isStripeFlow = isStripeManaged;
 
   const workLog = await db.transaction(async (tx) => {
     const [created] = await tx.insert(workLogsTable).values({
@@ -107,10 +116,29 @@ router.post("/worklogs", authenticate, async (req: AuthRequest, res): Promise<vo
       const authorizedCents = existingPayment!.amountCents ?? Math.round((existingPayment!.amount ?? totalCost) * 100);
       const finalCents = Math.round(totalCost * 100);
       const captureCents = Math.min(authorizedCents, finalCents);
+      // Recompute platform fee against the ACTUAL captured amount. If we left
+      // application_fee_amount at the original (estimate-based) figure, Stripe
+      // would either reject a small capture (fee > capture) or take a larger
+      // cut than 10% — shorting the mechanic.
+      const newFeeCents = Math.round(captureCents * 0.1);
+      const newPayoutCents = captureCents - newFeeCents;
       await stripe.paymentIntents.capture(existingPayment!.providerPaymentIntentId, {
         amount_to_capture: captureCents,
+        application_fee_amount: newFeeCents,
       });
-      req.log.info({ jobId, intentId: existingPayment!.providerPaymentIntentId, captureCents }, "Stripe payment captured");
+      // Sync DB columns with what was actually captured so admin/customer
+      // dashboards display the correct numbers.
+      await db.update(paymentsTable)
+        .set({
+          amount: captureCents / 100,
+          platformFee: newFeeCents / 100,
+          mechanicPayout: newPayoutCents / 100,
+          amountCents: captureCents,
+          platformFeeCents: newFeeCents,
+          mechanicPayoutCents: newPayoutCents,
+        })
+        .where(eq(paymentsTable.id, existingPayment!.id));
+      req.log.info({ jobId, intentId: existingPayment!.providerPaymentIntentId, captureCents, newFeeCents }, "Stripe payment captured");
     } catch (err) {
       req.log.error({ err, jobId }, "Stripe capture failed — work log saved, payment requires manual review");
     }

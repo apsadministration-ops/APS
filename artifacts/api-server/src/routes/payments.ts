@@ -70,6 +70,21 @@ router.post("/payments/jobs/:jobId/checkout", authenticate, async (req: AuthRequ
     res.status(409).json({ error: "Payment already authorized for this job", paymentId: existing.id });
     return;
   }
+  // If a previous "pending" attempt left a session/intent dangling, void it
+  // before creating a new one. Otherwise the old session could still be
+  // completed by the customer (in another tab) and create a ghost hold on
+  // their card with no DB linkage. Best-effort — Stripe may already have
+  // expired the session, in which case the call is a no-op.
+  if (existing && existing.status === "pending") {
+    try {
+      const stripeAdmin = await getUncachableStripeClient();
+      if (existing.providerPaymentIntentId) {
+        await stripeAdmin.paymentIntents.cancel(existing.providerPaymentIntentId).catch(() => {});
+      } else if (existing.providerSessionId) {
+        await stripeAdmin.checkout.sessions.expire(existing.providerSessionId).catch(() => {});
+      }
+    } catch { /* non-fatal — proceed with new session */ }
+  }
 
   const [customer] = await db.select().from(usersTable).where(eq(usersTable.id, req.userId!));
   const [mechanic] = await db.select().from(usersTable).where(eq(usersTable.id, job.mechanicId));
@@ -128,6 +143,8 @@ router.post("/payments/jobs/:jobId/checkout", authenticate, async (req: AuthRequ
   // Upsert payment row — pre-record so webhook can find it by session id.
   const totalCost = amountCents / 100;
   if (existing) {
+    // Reset Stripe references so a late webhook from the previous (now
+    // canceled) intent can't flip this fresh row back to authorized.
     await db.update(paymentsTable)
       .set({
         amount: totalCost,
@@ -137,6 +154,8 @@ router.post("/payments/jobs/:jobId/checkout", authenticate, async (req: AuthRequ
         platformFeeCents,
         mechanicPayoutCents,
         providerSessionId: session.id,
+        providerPaymentIntentId: null,
+        failureReason: null,
         status: "pending",
       })
       .where(eq(paymentsTable.id, existing.id));
@@ -261,6 +280,47 @@ router.post("/payments/:jobId/release", authenticate, requireRole("admin"), asyn
     }
   }
   res.json(updated);
+});
+
+/* -------------------------------------------------------------------------- */
+/* REFUND — admin issues a refund on a captured Stripe payment                */
+/* -------------------------------------------------------------------------- */
+
+router.post("/payments/:jobId/refund", authenticate, requireRole("admin"), async (req: AuthRequest, res): Promise<void> => {
+  const jobId = parseInt(String(req.params.jobId), 10);
+  if (isNaN(jobId)) { res.status(400).json({ error: "Invalid job ID" }); return; }
+  const [payment] = await db.select().from(paymentsTable).where(eq(paymentsTable.jobId, jobId));
+  if (!payment) { res.status(404).json({ error: "Payment not found" }); return; }
+  if (payment.status === "refunded") { res.status(400).json({ error: "Payment already refunded" }); return; }
+  if (!payment.providerPaymentIntentId) {
+    res.status(400).json({ error: "This is a legacy (non-Stripe) payment and cannot be refunded through this endpoint." });
+    return;
+  }
+  if (!["captured", "authorized"].includes(payment.status)) {
+    res.status(400).json({ error: `Cannot refund a payment in status "${payment.status}".` });
+    return;
+  }
+  try {
+    const stripe = await getUncachableStripeClient();
+    if (payment.status === "authorized") {
+      // Funds not yet captured — cancel the intent, no refund needed.
+      await stripe.paymentIntents.cancel(payment.providerPaymentIntentId);
+      // Webhook payment_intent.canceled will set status. Reflect immediately too.
+      await db.update(paymentsTable).set({ status: "canceled" }).where(eq(paymentsTable.id, payment.id));
+    } else {
+      // Captured → issue full refund. Webhook charge.refunded handles status flip
+      // + job/loyalty reversal; doing it here too would risk double-reversal,
+      // so we leave job status / loyalty to the webhook.
+      await stripe.refunds.create({
+        payment_intent: payment.providerPaymentIntentId,
+        reverse_transfer: true,
+        refund_application_fee: true,
+      });
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(502).json({ error: "Stripe refund failed", details: (err as Error).message });
+  }
 });
 
 export default router;

@@ -3,6 +3,51 @@ import { eq, and, sql } from "drizzle-orm";
 import { db, jobsTable, vehiclesTable, usersTable, workLogsTable, paymentsTable, messagesTable } from "@workspace/db";
 import { authenticate, type AuthRequest } from "../middlewares/authenticate";
 import { notifyMechanics, notifyCustomerJobAccepted } from "../lib/notifications";
+import { getUncachableStripeClient } from "../lib/stripeClient";
+
+/**
+ * If the job has an uncaptured Stripe authorization, void it so the
+ * customer's funds aren't held indefinitely. Best-effort — failures are
+ * logged but don't block the cancel/delete operation.
+ */
+async function voidStripeAuthorizationForJob(jobId: number, log: { error: (o: object, m: string) => void }) {
+  const [payment] = await db.select().from(paymentsTable).where(eq(paymentsTable.jobId, jobId));
+  if (!payment) return;
+  if (!["pending", "authorized"].includes(payment.status)) return;
+  try {
+    const stripe = await getUncachableStripeClient();
+    // Expire any open Checkout session FIRST so the customer can't still
+    // complete it post-cancel and create an orphaned hold. (No-op if the
+    // session has already moved past the open state.)
+    if (payment.providerSessionId) {
+      await stripe.checkout.sessions.expire(payment.providerSessionId).catch(() => {});
+    }
+    // Then cancel the intent if one was already issued (i.e. we got past
+    // checkout.session.completed).
+    // If the intent ID isn't on file yet (webhook may be delayed), look it
+    // up from the Checkout session so we can cancel it now and avoid leaving
+    // a hold on the customer's card.
+    let intentId = payment.providerPaymentIntentId;
+    if (!intentId && payment.providerSessionId) {
+      try {
+        const sess = await stripe.checkout.sessions.retrieve(payment.providerSessionId);
+        intentId = typeof sess.payment_intent === "string"
+          ? sess.payment_intent
+          : sess.payment_intent?.id ?? null;
+      } catch { /* session may have expired — nothing to cancel */ }
+    }
+    if (intentId) {
+      await stripe.paymentIntents.cancel(intentId).catch(() => {});
+    }
+    // Clear providerSessionId so a delayed checkout.session.completed webhook
+    // won't find a row to update — it'll hit the orphan path and self-cancel.
+    await db.update(paymentsTable)
+      .set({ status: "canceled", providerSessionId: null, providerPaymentIntentId: intentId ?? payment.providerPaymentIntentId })
+      .where(eq(paymentsTable.id, payment.id));
+  } catch (err) {
+    log.error({ err, jobId }, "Failed to cancel Stripe authorization on job cancel/delete");
+  }
+}
 
 const router: IRouter = Router();
 
@@ -197,14 +242,22 @@ router.post("/jobs/:jobId/cancel", authenticate, async (req: AuthRequest, res): 
     res.status(400).json({ error: msg }); return;
   }
 
-  // If a mechanic cancels, free the job back up so other mechanics can pick it up.
+  // If a mechanic cancels, free the job back up so other mechanics can pick
+  // it up. The existing Stripe authorization is locked to the ORIGINAL
+  // mechanic's Connect account (transfer_data.destination), so we MUST void
+  // it — otherwise capture by the next mechanic would route funds to the old
+  // mechanic. The customer will re-authorize once a new mechanic is assigned.
   if (req.userRole === "mechanic") {
+    await voidStripeAuthorizationForJob(jobId, req.log);
     const [reopened] = await db.update(jobsTable)
       .set({ status: "REQUESTED", mechanicId: null, mechanicLat: null, mechanicLng: null, mechanicLocationUpdatedAt: null })
       .where(eq(jobsTable.id, jobId)).returning();
     res.json(await formatJob(reopened));
     return;
   }
+  // Customer/admin cancellation: release any uncaptured Stripe hold so the
+  // customer's funds are returned (otherwise they'd stay frozen until expiry).
+  await voidStripeAuthorizationForJob(jobId, req.log);
   const [updated] = await db.update(jobsTable).set({ status: "CANCELLED" }).where(eq(jobsTable.id, jobId)).returning();
   res.json(await formatJob(updated));
 });
@@ -237,6 +290,9 @@ router.delete("/jobs/:jobId", authenticate, async (req: AuthRequest, res): Promi
   const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, jobId));
   if (!job) { res.status(404).json({ error: "Job not found" }); return; }
 
+  // Void any uncaptured Stripe authorization BEFORE deleting the payment row,
+  // otherwise we'd lose the intent reference and orphan the customer's funds.
+  await voidStripeAuthorizationForJob(jobId, req.log);
   await db.transaction(async (tx) => {
     await tx.delete(messagesTable).where(eq(messagesTable.jobId, jobId));
     await tx.delete(paymentsTable).where(eq(paymentsTable.jobId, jobId));

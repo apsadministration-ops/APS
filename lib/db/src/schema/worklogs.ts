@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, timestamp, real, json, index, boolean } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, timestamp, real, json, index, uniqueIndex, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
@@ -27,7 +27,9 @@ export const workLogsTable = pgTable("work_logs", {
 }, (t) => [
   index("worklogs_vin_idx").on(t.vin),
   index("worklogs_vehicle_id_idx").on(t.vehicleId),
-  index("worklogs_job_id_idx").on(t.jobId),
+  // One worklog per job — defense-in-depth against duplicate submissions
+  // that could trigger duplicate Stripe captures.
+  uniqueIndex("worklogs_job_id_unique").on(t.jobId),
 ]);
 
 export const insertWorkLogSchema = createInsertSchema(workLogsTable).omit({ id: true, createdAt: true, immutableFlag: true });
