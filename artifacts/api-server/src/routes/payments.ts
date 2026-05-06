@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
-import { db, paymentsTable, jobsTable, referralsTable, usersTable } from "@workspace/db";
+import { db, paymentsTable, jobsTable, usersTable } from "@workspace/db";
+import { tryConvertReferral } from "../lib/referralEngine";
 import { authenticate, requireRole, type AuthRequest } from "../middlewares/authenticate";
 import { awardCustomerPoints, RULES } from "../lib/loyaltyEngine";
 import { getStripePublishableKey, getUncachableStripeClient } from "../lib/stripeClient";
@@ -276,12 +277,8 @@ router.post("/payments/:jobId/release", authenticate, requireRole("admin"), asyn
     // would have awarded (1 pt per $ released).
     const dollars = Math.floor(updated?.amount ?? 0);
     await awardCustomerPoints(job.customerId, dollars, "service", `Job #${jobId} — service spending`, jobId).catch(() => {});
-    const [referral] = await db.select().from(referralsTable).where(eq(referralsTable.referredId, job.customerId));
-    if (referral && !referral.rewarded) {
-      await awardCustomerPoints(referral.referrerId, RULES.customer.referralFirstPaidJob, "referral",
-        "Referral reward — friend completed first paid job", jobId).catch(() => {});
-      await db.update(referralsTable).set({ rewarded: true }).where(eq(referralsTable.id, referral.id));
-    }
+    // Delegate referral conversion to the isolated referral engine.
+    await tryConvertReferral(jobId).catch(() => {});
   }
   res.json(updated);
 });

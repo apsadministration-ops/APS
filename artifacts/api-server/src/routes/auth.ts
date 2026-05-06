@@ -1,14 +1,17 @@
 import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
-import { db, usersTable, referralsTable } from "@workspace/db";
+import { db, usersTable } from "@workspace/db";
 import { RegisterBody, LoginBody } from "@workspace/api-zod";
 import { hashPassword, verifyPassword, signToken } from "../lib/auth";
 import { authenticate, type AuthRequest } from "../middlewares/authenticate";
-import { awardCustomerPoints } from "../lib/loyaltyEngine";
+import { recordReferralSignup } from "../lib/referralEngine";
 
+// Format APS-XXXXXX (6 chars after the prefix) — distinctive, brand-friendly,
+// and easy to share verbally. 32^6 ≈ 1B combinations, plenty for our scale.
 function generateReferralCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  return Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+  const suffix = Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+  return `APS-${suffix}`;
 }
 
 async function uniqueReferralCode(): Promise<string> {
@@ -64,10 +67,12 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     return;
   }
 
-  // Resolve referrer
+  // Resolve referrer. Codes are case-insensitive and tolerate the "APS-"
+  // prefix being typed in any case.
   let referrer: typeof usersTable.$inferSelect | null = null;
   if (referredBy) {
-    const [found] = await db.select().from(usersTable).where(eq(usersTable.referralCode, referredBy.toUpperCase()));
+    const normalized = referredBy.trim().toUpperCase();
+    const [found] = await db.select().from(usersTable).where(eq(usersTable.referralCode, normalized));
     if (found) referrer = found;
   }
 
@@ -89,12 +94,11 @@ router.post("/auth/register", async (req, res): Promise<void> => {
       : null,
   }).returning();
 
-  // Record referral and award welcome points to new customer
+  // Hand off to the standalone referral engine. Per spec, signup only
+  // records a PENDING referral — no points fire until the referred user
+  // completes their first paid job (verified by the conversion gate).
   if (referrer) {
-    await db.insert(referralsTable).values({ referrerId: referrer.id, referredId: user.id });
-    if (role === "customer") {
-      await awardCustomerPoints(user.id, 200, "welcome", "Welcome bonus — joined via referral");
-    }
+    await recordReferralSignup(referrer, user, referredBy?.trim().toUpperCase() ?? "");
   }
 
   const token = signToken({ userId: user.id, role: user.role });

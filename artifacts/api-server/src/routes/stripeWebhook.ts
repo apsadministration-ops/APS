@@ -3,7 +3,8 @@
 import type { Request, Response } from "express";
 import { eq, and, ne } from "drizzle-orm";
 import type Stripe from "stripe";
-import { db, paymentsTable, usersTable, jobsTable, referralsTable } from "@workspace/db";
+import { db, paymentsTable, usersTable, jobsTable } from "@workspace/db";
+import { tryConvertReferral, revertReferralForJob } from "../lib/referralEngine";
 import { getUncachableStripeClient, getWebhookSecret } from "../lib/stripeClient";
 import {
   awardCustomerPoints,
@@ -118,15 +119,12 @@ async function handleEvent(event: Stripe.Event): Promise<void> {
           job.customerId, spendingPoints, "service",
           `Job #${payment.jobId} — service spending`, payment.jobId,
         ).catch((err) => logger.error({ err, jobId: payment.jobId }, "customer spending points failed"));
-        // REFERRAL: only on the customer's FIRST paid job.
-        const [referral] = await db.select().from(referralsTable).where(eq(referralsTable.referredId, job.customerId));
-        if (referral && !referral.rewarded) {
-          await awardCustomerPoints(
-            referral.referrerId, RULES.customer.referralFirstPaidJob, "referral",
-            "Referral reward — friend completed first paid job", payment.jobId,
-          ).catch(() => {});
-          await db.update(referralsTable).set({ rewarded: true }).where(eq(referralsTable.id, referral.id));
-        }
+        // REFERRAL CONVERSION — delegated to the isolated referral engine.
+        // Engine validates: pending referral exists, this is the customer's
+        // FIRST captured payment, and no refund. Idempotent.
+        await tryConvertReferral(payment.jobId).catch((err) =>
+          logger.error({ err, jobId: payment.jobId }, "referral conversion failed"),
+        );
       }
       // MECHANIC: job-volume points weighted by job type.
       if (job?.mechanicId) {
@@ -189,14 +187,10 @@ async function handleEvent(event: Stripe.Event): Promise<void> {
       await reverseMechanicPointsForJob(payment.jobId, `Refund — Job #${payment.jobId}`).catch((err) => {
         logger.error({ err, jobId: payment.jobId }, "mechanic loyalty reversal failed on refund");
       });
-      // Un-flag any referral that was rewarded by this job so the referrer
-      // doesn't keep credit for a refunded job.
-      const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, payment.jobId));
-      if (job?.customerId) {
-        await db.update(referralsTable)
-          .set({ rewarded: false })
-          .where(eq(referralsTable.referredId, job.customerId));
-      }
+      // REFERRAL REVERSAL — engine handles the un-conversion + points reversal.
+      await revertReferralForJob(payment.jobId).catch((err) =>
+        logger.error({ err, jobId: payment.jobId }, "referral revert failed on refund"),
+      );
       logger.info({ jobId: payment.jobId, intentId }, "Payment refunded — job reverted + loyalty reversed");
       break;
     }

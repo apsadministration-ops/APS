@@ -37,7 +37,9 @@ artifacts/mobile/constants/colors.ts    — design tokens
 artifacts/mobile/components/AIAssistantWidget.tsx — draggable floating AI chat widget
 artifacts/mobile/app/loyalty.tsx   — unified loyalty screen (branches by role)
 artifacts/api-server/src/lib/loyaltyEngine.ts — dual-ledger points engine (single source of truth)
+artifacts/api-server/src/lib/referralEngine.ts — standalone referral system (isolated from loyalty)
 lib/db/src/schema/loyaltyV2.ts     — customer/mechanic ledger + redemption tables
+lib/db/src/schema/referrals.ts     — referrals + referral_events tables
 lib/integrations-anthropic-ai/    — Replit AI Integrations Anthropic client
 ```
 
@@ -49,6 +51,7 @@ lib/integrations-anthropic-ai/    — Replit AI Integrations Anthropic client
 - **Auth token flow:** JWT stored in AsyncStorage and injected into all API requests.
 - **Mechanic tiers:** Progressive tiers (detailer → technician → senior → master), impacting job visibility.
 - **Dual loyalty system:** Two parallel ledgers (`customer_points_ledger`, `mechanic_points_ledger`) driven by a single engine. Idempotency via partial unique index `(user/mechanic, job_id, source_type) WHERE points>0 AND job_id IS NOT NULL` + `onConflictDoNothing`. Refund webhooks reverse both ledgers. Redemptions are atomic (`SELECT … FOR UPDATE` + in-tx balance check). Mechanic upsells only earn points when `customerApproved === true`.
+- **Standalone referral system:** Isolated user-acquisition engine in `referralEngine.ts`. Writes ONLY `source_type="referral"` rows to the customer ledger via `awardCustomerPoints` — does not compute spending/review/survey/mechanic/tier points. Codes use `APS-XXXXXX` format. Conversion gates: referred user's FIRST captured payment + no refund. Atomic via `SELECT … FOR UPDATE` row lock; `pointsAwarded` is only stamped after the loyalty ledger insert succeeds (UI shows `pending` → `converted` → `rewarded`). `unique(referred_id)` enforces one referral per referred user. Refund path calls `revertReferralForJob` to un-convert + reverse points. Self-referral and same-address abuse heuristics block at signup.
 - **User home address & Mechanic service radius:** Captured at registration and verified via Nominatim for location-based services.
 - **AI Assistant:** Floating widget with ephemeral chat history, providing context-aware assistance via Anthropic.
 - **Bidirectional reviews:** Customers and mechanics rate each other, with aggregate ratings and review lists.
