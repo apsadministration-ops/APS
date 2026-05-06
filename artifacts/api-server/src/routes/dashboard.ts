@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq, and, isNull, count, sum, avg } from "drizzle-orm";
 import { db, jobsTable, vehiclesTable, ownershipTable, usersTable, paymentsTable } from "@workspace/db";
-import { authenticate, requireRole, type AuthRequest } from "../middlewares/authenticate";
+import { authenticate, requireRole, requireActiveMechanic, type AuthRequest } from "../middlewares/authenticate";
 
 const router: IRouter = Router();
 
@@ -47,7 +47,7 @@ async function formatJob(job: typeof jobsTable.$inferSelect) {
   };
 }
 
-router.get("/dashboard/customer", authenticate, async (req: AuthRequest, res): Promise<void> => {
+router.get("/dashboard/customer", authenticate, requireRole("customer", "admin"), async (req: AuthRequest, res): Promise<void> => {
   const ownerships = await db
     .select()
     .from(ownershipTable)
@@ -77,7 +77,7 @@ router.get("/dashboard/customer", authenticate, async (req: AuthRequest, res): P
   });
 });
 
-router.get("/dashboard/mechanic", authenticate, async (req: AuthRequest, res): Promise<void> => {
+router.get("/dashboard/mechanic", authenticate, requireActiveMechanic, async (req: AuthRequest, res): Promise<void> => {
   const myJobs = await db.select().from(jobsTable).where(eq(jobsTable.mechanicId, req.userId!));
   const availableJobs = await db.select().from(jobsTable).where(eq(jobsTable.status, "REQUESTED"));
 
