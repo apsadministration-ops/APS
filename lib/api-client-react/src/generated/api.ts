@@ -18,6 +18,8 @@ import type {
 
 import type {
   AdminDashboard,
+  AssistantChatRequest,
+  AssistantChatResponse,
   AuthResponse,
   CreateJobBody,
   CreateVehicleBody,
@@ -2623,3 +2625,89 @@ export function useGetAdminDashboard<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Send a message to the AI Assistant
+ */
+export const getAssistantChatUrl = () => {
+  return `/api/assistant/chat`;
+};
+
+export const assistantChat = async (
+  assistantChatRequest: AssistantChatRequest,
+  options?: RequestInit,
+): Promise<AssistantChatResponse> => {
+  return customFetch<AssistantChatResponse>(getAssistantChatUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(assistantChatRequest),
+  });
+};
+
+export const getAssistantChatMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof assistantChat>>,
+    TError,
+    { data: BodyType<AssistantChatRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof assistantChat>>,
+  TError,
+  { data: BodyType<AssistantChatRequest> },
+  TContext
+> => {
+  const mutationKey = ["assistantChat"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof assistantChat>>,
+    { data: BodyType<AssistantChatRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return assistantChat(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AssistantChatMutationResult = NonNullable<
+  Awaited<ReturnType<typeof assistantChat>>
+>;
+export type AssistantChatMutationBody = BodyType<AssistantChatRequest>;
+export type AssistantChatMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Send a message to the AI Assistant
+ */
+export const useAssistantChat = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof assistantChat>>,
+    TError,
+    { data: BodyType<AssistantChatRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof assistantChat>>,
+  TError,
+  { data: BodyType<AssistantChatRequest> },
+  TContext
+> => {
+  return useMutation(getAssistantChatMutationOptions(options));
+};

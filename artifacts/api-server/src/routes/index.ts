@@ -11,6 +11,7 @@ import dashboardRouter from "./dashboard";
 import messagesRouter from "./messages";
 import loyaltyRouter from "./loyalty";
 import referralsRouter from "./referrals";
+import assistantRouter from "./assistant";
 
 const router: IRouter = Router();
 
@@ -26,5 +27,6 @@ router.use(dashboardRouter);
 router.use(messagesRouter);
 router.use(loyaltyRouter);
 router.use(referralsRouter);
+router.use(assistantRouter);
 
 export default router;

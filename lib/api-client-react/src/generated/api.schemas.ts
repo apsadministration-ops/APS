@@ -358,6 +358,53 @@ export interface AdminDashboard {
   recentJobs: Job[];
 }
 
+export type AssistantChatMessageRole =
+  (typeof AssistantChatMessageRole)[keyof typeof AssistantChatMessageRole];
+
+export const AssistantChatMessageRole = {
+  user: "user",
+  assistant: "assistant",
+} as const;
+
+export interface AssistantChatMessage {
+  role: AssistantChatMessageRole;
+  content: string;
+}
+
+export interface AssistantScreenContext {
+  /** Logical screen name e.g. "vehicle", "job", "worklog" */
+  screen: string;
+  /** @nullable */
+  vehicleId?: number | null;
+  /** @nullable */
+  jobId?: number | null;
+}
+
+export interface AssistantChatRequest {
+  message: string;
+  history?: AssistantChatMessage[];
+  context?: AssistantScreenContext;
+}
+
+/**
+ * @nullable
+ */
+export type AssistantChatResponseUrgency =
+  | (typeof AssistantChatResponseUrgency)[keyof typeof AssistantChatResponseUrgency]
+  | null;
+
+export const AssistantChatResponseUrgency = {
+  low: "low",
+  medium: "medium",
+  high: "high",
+} as const;
+
+export interface AssistantChatResponse {
+  reply: string;
+  /** @nullable */
+  urgency?: AssistantChatResponseUrgency;
+}
+
 export type ListUsersParams = {
   role?: ListUsersRole;
   status?: ListUsersStatus;

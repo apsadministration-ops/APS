@@ -1111,3 +1111,39 @@ export const GetAdminDashboardResponse = zod.object({
     }),
   ),
 });
+
+/**
+ * @summary Send a message to the AI Assistant
+ */
+export const AssistantChatBody = zod.object({
+  message: zod.string(),
+  history: zod
+    .array(
+      zod.object({
+        role: zod.enum(["user", "assistant"]),
+        content: zod.string(),
+      }),
+    )
+    .optional(),
+  context: zod
+    .object({
+      screen: zod
+        .string()
+        .describe('Logical screen name e.g. \"vehicle\", \"job\", \"worklog\"'),
+      vehicleId: zod.number().nullish(),
+      jobId: zod.number().nullish(),
+    })
+    .optional(),
+});
+
+export const AssistantChatResponse = zod.object({
+  reply: zod.string(),
+  urgency: zod
+    .union([
+      zod.literal("low"),
+      zod.literal("medium"),
+      zod.literal("high"),
+      zod.literal(null),
+    ])
+    .nullish(),
+});

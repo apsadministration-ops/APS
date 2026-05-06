@@ -26,6 +26,8 @@ tags:
     description: Payment management
   - name: dashboard
     description: Summary and analytics endpoints
+  - name: assistant
+    description: AI Assistant for explaining repairs and parts
 
 paths:
   /healthz:
@@ -737,6 +739,27 @@ paths:
               schema:
                 $ref: "#/components/schemas/AdminDashboard"
 
+  /assistant/chat:
+    post:
+      operationId: assistantChat
+      tags: [assistant]
+      summary: Send a message to the AI Assistant
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssistantChatRequest"
+      responses:
+        "200":
+          description: Assistant reply
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssistantChatResponse"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1234,3 +1257,48 @@ components:
           items:
             $ref: "#/components/schemas/Job"
       required: [totalUsers, totalMechanics, pendingMechanics, totalJobs, activeJobs, totalRevenue, pendingPayouts, recentJobs]
+
+    AssistantChatMessage:
+      type: object
+      properties:
+        role:
+          type: string
+          enum: [user, assistant]
+        content:
+          type: string
+      required: [role, content]
+
+    AssistantScreenContext:
+      type: object
+      properties:
+        screen:
+          type: string
+          description: Logical screen name e.g. "vehicle", "job", "worklog"
+        vehicleId:
+          type: ["integer", "null"]
+        jobId:
+          type: ["integer", "null"]
+      required: [screen]
+
+    AssistantChatRequest:
+      type: object
+      properties:
+        message:
+          type: string
+        history:
+          type: array
+          items:
+            $ref: "#/components/schemas/AssistantChatMessage"
+        context:
+          $ref: "#/components/schemas/AssistantScreenContext"
+      required: [message]
+
+    AssistantChatResponse:
+      type: object
+      properties:
+        reply:
+          type: string
+        urgency:
+          type: ["string", "null"]
+          enum: [low, medium, high, null]
+      required: [reply]

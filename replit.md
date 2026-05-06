@@ -43,6 +43,7 @@ artifacts/api-server/src/routes/   — Express route handlers
   loyalty.ts                       — GET /loyalty + awardLoyaltyPoints()
   referrals.ts                     — GET /referral stats
   users.ts                         — PATCH accepts mechanicTier + certifications
+  assistant.ts                     — POST /assistant/chat (Anthropic, loads vehicle/job/worklog context)
 artifacts/mobile/app/              — Expo screens (expo-router file-based)
   (customer)/index.tsx             — dashboard with Detailing + Rewards quick actions
   (customer)/vehicles.tsx          — plateNumber field + remove vehicle button
@@ -58,6 +59,8 @@ artifacts/mobile/data/obd2Codes.ts — comprehensive OBD2 P/B/C/U code database
 artifacts/mobile/constants/colors.ts    — design tokens (light + dark)
 artifacts/mobile/hooks/            — usePushNotifications, useColors
 artifacts/mobile/utils/confirm.ts  — cross-platform confirm() / alertMessage() (web → window.confirm/alert; native → Alert.alert)
+artifacts/mobile/components/AIAssistantWidget.tsx — draggable floating AI chat widget mounted in root layout
+lib/integrations-anthropic-ai/    — Replit AI Integrations Anthropic client (server-only)
 ```
 
 ## Architecture decisions
@@ -74,6 +77,7 @@ artifacts/mobile/utils/confirm.ts  — cross-platform confirm() / alertMessage()
 - **Certifications:** Stored as JSON string (`[]`) on users table. Mechanics self-add; displayed on profile.
 - **Push notifications:** Expo Push API (no third-party). Mechanics notified on new jobs; customers on accept + completion.
 - **Live location:** Mechanic GPS sent via `PUT /api/jobs/:jobId/mechanic-location` every 15s; customer polls every 10s.
+- **AI Assistant:** Floating widget mounted once in `app/_layout.tsx` (renders only when authed). Drags + snaps to edges, persists position/visibility in AsyncStorage. Server route `assistant.ts` injects vehicle/job/worklog context into the system prompt (with role-based access checks) and calls Anthropic via `@workspace/integrations-anthropic-ai` (`AI_INTEGRATIONS_ANTHROPIC_*` envs auto-provisioned by Replit). Chat history is ephemeral (in-memory in widget). Urgency level (low/medium/high) is detected from reply text and shown as a chip.
 
 ## Product
 

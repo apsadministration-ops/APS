@@ -14,6 +14,7 @@ import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import AIAssistantWidget from "@/components/AIAssistantWidget";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { setBaseUrl } from "@workspace/api-client-react";
@@ -57,24 +58,27 @@ function RootLayoutNav() {
   }
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-      <Stack.Screen name="(customer)" options={{ headerShown: false }} />
-      <Stack.Screen name="(mechanic)" options={{ headerShown: false }} />
-      <Stack.Screen name="(admin)" options={{ headerShown: false }} />
-      <Stack.Screen name="vehicle/[id]" options={{ presentation: "card" }} />
-      <Stack.Screen name="job/[id]" options={{ presentation: "card" }} />
-      <Stack.Screen name="request-service" options={{ presentation: "modal" }} />
-      <Stack.Screen name="transfer/[vehicleId]" options={{ presentation: "modal" }} />
-      <Stack.Screen name="history/[vehicleId]" options={{ presentation: "card" }} />
-      <Stack.Screen name="worklog/[jobId]" options={{ presentation: "modal" }} />
-      <Stack.Screen name="parts/[vehicleId]" options={{ presentation: "card" }} />
-      <Stack.Screen name="tracker/[jobId]" options={{ presentation: "card" }} />
-      <Stack.Screen name="obd2/[vehicleId]" options={{ presentation: "card" }} />
-      <Stack.Screen name="messages/[jobId]" options={{ presentation: "card", headerShown: false }} />
-      <Stack.Screen name="referral" options={{ presentation: "card", headerShown: false }} />
-      <Stack.Screen name="detailing" options={{ presentation: "modal", headerShown: false }} />
-    </Stack>
+    <View style={{ flex: 1 }}>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+        <Stack.Screen name="(customer)" options={{ headerShown: false }} />
+        <Stack.Screen name="(mechanic)" options={{ headerShown: false }} />
+        <Stack.Screen name="(admin)" options={{ headerShown: false }} />
+        <Stack.Screen name="vehicle/[id]" options={{ presentation: "card" }} />
+        <Stack.Screen name="job/[id]" options={{ presentation: "card" }} />
+        <Stack.Screen name="request-service" options={{ presentation: "modal" }} />
+        <Stack.Screen name="transfer/[vehicleId]" options={{ presentation: "modal" }} />
+        <Stack.Screen name="history/[vehicleId]" options={{ presentation: "card" }} />
+        <Stack.Screen name="worklog/[jobId]" options={{ presentation: "modal" }} />
+        <Stack.Screen name="parts/[vehicleId]" options={{ presentation: "card" }} />
+        <Stack.Screen name="tracker/[jobId]" options={{ presentation: "card" }} />
+        <Stack.Screen name="obd2/[vehicleId]" options={{ presentation: "card" }} />
+        <Stack.Screen name="messages/[jobId]" options={{ presentation: "card", headerShown: false }} />
+        <Stack.Screen name="referral" options={{ presentation: "card", headerShown: false }} />
+        <Stack.Screen name="detailing" options={{ presentation: "modal", headerShown: false }} />
+      </Stack>
+      <AIAssistantWidget />
+    </View>
   );
 }
 
