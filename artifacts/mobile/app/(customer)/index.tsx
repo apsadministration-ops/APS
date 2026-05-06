@@ -3,7 +3,7 @@ import { useColors } from "@/hooks/useColors";
 import { useGetCustomerDashboard } from "@workspace/api-client-react";
 import { useAuth } from "@/context/AuthContext";
 import { Feather } from "@expo/vector-icons";
-import { Link, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import { JobCard } from "@/components/JobCard";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -122,11 +122,9 @@ export default function CustomerDashboard() {
 
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Recent Jobs</Text>
-          <Link href="/(customer)/jobs" asChild>
-            <Pressable>
-              <Text style={[styles.seeAll, { color: colors.primary }]}>See All</Text>
-            </Pressable>
-          </Link>
+          <Pressable onPress={() => router.push("/(customer)/jobs")}>
+            <Text style={[styles.seeAll, { color: colors.primary }]}>See All</Text>
+          </Pressable>
         </View>
 
         {(dashboard.recentJobs ?? []).length === 0 ? (
@@ -146,13 +144,12 @@ export default function CustomerDashboard() {
         )}
       </ScrollView>
 
-      <Link href="/request-service" asChild>
-        <Pressable 
-          style={[styles.fab, { backgroundColor: colors.primary, bottom: insets.bottom + 80 }]}
-        >
-          <Feather name="plus" size={24} color={colors.primaryForeground} />
-        </Pressable>
-      </Link>
+      <Pressable
+        onPress={() => router.push("/request-service")}
+        style={[styles.fab, { backgroundColor: colors.primary, bottom: insets.bottom + 80 }]}
+      >
+        <Feather name="plus" size={24} color={colors.primaryForeground} />
+      </Pressable>
     </View>
   );
 }

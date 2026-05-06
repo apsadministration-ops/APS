@@ -93,6 +93,7 @@ _None recorded yet._
 - `drizzle-kit push` may prompt interactively for unique constraints on existing tables — use direct SQL node script instead.
 - `expo-location` requires foreground permission before GPS watch starts; the tracker screen handles this gracefully.
 - PATCH `/api/users/:userId` accepts `mechanicTier` (admin only), `certifications` (self or admin), `status`/`name`/`phone`.
+- **`<Link href asChild>` around a `<Pressable>` with `position: "absolute"` + `shadow*` styles crashes on web** with `Failed to set an indexed property [0] on 'CSSStyleDeclaration'`. Use `<Pressable onPress={() => router.push(...)} style={...}>` for FABs / floating buttons instead. Plain text-only Pressables wrapped in Link asChild are fine.
 
 ## Pointers
 
