@@ -1,5 +1,5 @@
 import {
-  View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator,
+  View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, TextInput, Platform,
 } from "react-native";
 import { alertMessage } from "@/utils/confirm";
 import { Stack, useRouter } from "expo-router";
@@ -75,34 +75,108 @@ export default function DetailingScreen() {
   const [locationAddress, setLocationAddress] = useState("");
   const [locationLat, setLocationLat] = useState<number | null>(null);
   const [locationLng, setLocationLng] = useState<number | null>(null);
+  const [zipCode, setZipCode] = useState("");
   const [locating, setLocating] = useState(false);
+  const [lookingUpZip, setLookingUpZip] = useState(false);
   const [error, setError] = useState("");
+
+  const fetchWithTimeout = async (url: string, ms = 8000): Promise<Response | null> => {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), ms);
+    try {
+      return await fetch(url, { headers: { "Accept-Language": "en" }, signal: ctrl.signal });
+    } catch { return null; }
+    finally { clearTimeout(timer); }
+  };
+
+  const getCurrentCoords = async (): Promise<{ lat: number; lng: number } | null> => {
+    if (Platform.OS === "web") {
+      if (typeof navigator === "undefined" || !navigator.geolocation) return null;
+      return await new Promise((resolve) => {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+          () => resolve(null),
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
+        );
+      });
+    }
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== "granted") return null;
+    const loc = await Location.getCurrentPositionAsync({});
+    return { lat: loc.coords.latitude, lng: loc.coords.longitude };
+  };
+
+  const reverseGeocode = async (lat: number, lng: number): Promise<string | null> => {
+    const res = await fetchWithTimeout(
+      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&zoom=18&addressdetails=1`,
+    );
+    if (!res || !res.ok) return null;
+    try {
+      const json = await res.json() as { display_name?: string; address?: { postcode?: string } };
+      if (json?.address?.postcode && !zipCode) setZipCode(json.address.postcode);
+      return json?.display_name ?? null;
+    } catch { return null; }
+  };
 
   const handleDetectLocation = async () => {
     setLocating(true);
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
-        void alertMessage("Permission denied", "Location permission is needed to auto-fill your address.");
+      const coords = await getCurrentCoords();
+      if (!coords) {
+        void alertMessage(
+          "Location unavailable",
+          "We couldn't access your location. Please allow location access, or enter your ZIP code below.",
+        );
         return;
       }
-      const loc = await Location.getCurrentPositionAsync({});
-      setLocationLat(loc.coords.latitude);
-      setLocationLng(loc.coords.longitude);
-      const [addr] = await Location.reverseGeocodeAsync({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
-      if (addr) setLocationAddress(`${addr.street ?? ""} ${addr.city ?? ""}, ${addr.region ?? ""}`.trim());
-    } catch { void alertMessage("Error", "Could not detect location."); }
-    finally { setLocating(false); }
+      setLocationLat(coords.lat);
+      setLocationLng(coords.lng);
+      const addr = await reverseGeocode(coords.lat, coords.lng);
+      if (addr) setLocationAddress(addr);
+    } catch {
+      void alertMessage("Error", "Could not detect location. Try entering your ZIP code instead.");
+    } finally { setLocating(false); }
+  };
+
+  const handleLookupZip = async () => {
+    const zip = zipCode.trim();
+    if (!zip) { void alertMessage("Enter ZIP code", "Type your ZIP/postal code above first."); return; }
+    setLookingUpZip(true);
+    try {
+      const res = await fetchWithTimeout(
+        `https://nominatim.openstreetmap.org/search?postalcode=${encodeURIComponent(zip)}&country=USA&format=json&addressdetails=1&limit=1`,
+      );
+      if (!res || !res.ok) {
+        void alertMessage("Lookup failed", "Could not look up that ZIP code right now. Please try again.");
+        return;
+      }
+      const json = await res.json() as Array<{ lat: string; lon: string; display_name: string }>;
+      const hit = json?.[0];
+      if (!hit) {
+        void alertMessage("ZIP not found", `No location found for "${zip}". Double-check the ZIP code.`);
+        return;
+      }
+      setLocationLat(parseFloat(hit.lat));
+      setLocationLng(parseFloat(hit.lon));
+      setLocationAddress(hit.display_name);
+    } catch {
+      void alertMessage("Lookup failed", "Could not look up that ZIP code right now. Please try again.");
+    } finally { setLookingUpZip(false); }
   };
 
   const handleSubmit = () => {
     setError("");
     if (!selectedVehicleId) { setError("Please select your vehicle."); return; }
     if (!selectedPackage) { setError("Please choose a detailing package."); return; }
+    if (!locationAddress.trim() && !zipCode.trim() && locationLat == null) {
+      setError("Please share your service location: tap the location button or enter your ZIP code.");
+      return;
+    }
 
     const pkg = selectedPackage;
     const vehicle = vehicles?.find((v) => v.id === selectedVehicleId);
     const desc = `${pkg.name}: ${pkg.description} Vehicle: ${vehicle?.year} ${vehicle?.make} ${vehicle?.model}.`;
+    const finalAddress = locationAddress.trim() || (zipCode.trim() ? `ZIP ${zipCode.trim()}` : "");
 
     createMutation.mutate(
       {
@@ -111,7 +185,7 @@ export default function DetailingScreen() {
           jobType: "detailing",
           description: desc,
           estimatedPrice: pkg.priceValue,
-          locationAddress: locationAddress || undefined,
+          locationAddress: finalAddress || undefined,
           locationLat: locationLat ?? undefined,
           locationLng: locationLng ?? undefined,
         },
@@ -274,6 +348,7 @@ export default function DetailingScreen() {
               borderColor: locationAddress ? colors.primary : colors.border,
             }]}
             onPress={handleDetectLocation}
+            disabled={locating}
           >
             {locating
               ? <ActivityIndicator size="small" color={colors.primary} />
@@ -283,6 +358,36 @@ export default function DetailingScreen() {
             </Text>
             {!locating && <Feather name="navigation" size={16} color={locationAddress ? colors.primary : colors.mutedForeground} />}
           </Pressable>
+
+          <View style={styles.zipRow}>
+            <TextInput
+              style={[styles.zipInput, { backgroundColor: colors.card, color: colors.foreground, borderColor: colors.border }]}
+              placeholder="Or enter ZIP / postal code"
+              placeholderTextColor={colors.mutedForeground}
+              value={zipCode}
+              onChangeText={setZipCode}
+              keyboardType="number-pad"
+              maxLength={10}
+              autoCapitalize="characters"
+            />
+            <Pressable
+              style={[styles.zipBtn, { backgroundColor: colors.primary }, lookingUpZip && { opacity: 0.6 }]}
+              onPress={handleLookupZip}
+              disabled={lookingUpZip}
+            >
+              {lookingUpZip
+                ? <ActivityIndicator color="white" size="small" />
+                : <Text style={styles.zipBtnText}>Use ZIP</Text>}
+            </Pressable>
+          </View>
+          {locationLat != null && locationLng != null ? (
+            <View style={[styles.locBadge, { backgroundColor: colors.primary + "12", borderColor: colors.primary + "40" }]}>
+              <Feather name="check-circle" size={12} color={colors.primary} />
+              <Text style={[styles.locBadgeText, { color: colors.primary }]} numberOfLines={1}>
+                Location pinned ({locationLat.toFixed(3)}, {locationLng.toFixed(3)})
+              </Text>
+            </View>
+          ) : null}
         </View>
 
         {error ? <Text style={[styles.error, { color: colors.destructive }]}>{error}</Text> : null}
@@ -344,6 +449,16 @@ const styles = StyleSheet.create({
   featureText: { fontSize: 13 },
   locationBtn: { flexDirection: "row", alignItems: "center", gap: 12, padding: 16, borderRadius: 14, borderWidth: 1 },
   locationText: { flex: 1, fontSize: 14 },
+  zipRow: { flexDirection: "row", gap: 8, marginTop: 10 },
+  zipInput: { flex: 1, height: 48, borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, fontSize: 15 },
+  zipBtn: { height: 48, paddingHorizontal: 16, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  zipBtnText: { color: "white", fontWeight: "700", fontSize: 14 },
+  locBadge: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1,
+    alignSelf: "flex-start", marginTop: 10,
+  },
+  locBadgeText: { fontSize: 12, fontWeight: "600" },
   error: { fontSize: 14 },
   submitBtn: {
     height: 56, borderRadius: 16, alignItems: "center", justifyContent: "center",
