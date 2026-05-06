@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { eq, avg, count, sum } from "drizzle-orm";
-import { db, usersTable, jobsTable, workLogsTable } from "@workspace/db";
+import { eq, or, avg, count, sum } from "drizzle-orm";
+import { db, usersTable, jobsTable, workLogsTable, ownershipTable, loyaltyPointsTable, referralsTable, messagesTable } from "@workspace/db";
 import { authenticate, requireRole, type AuthRequest } from "../middlewares/authenticate";
 
 const router: IRouter = Router();
@@ -94,6 +94,43 @@ router.get("/users/:userId/mechanic-profile", authenticate, async (req: AuthRequ
     averageRating: ratingStats?.averageRating ? Number(ratingStats.averageRating) : null,
     totalEarnings: Number(earningsStats?.totalEarnings ?? 0),
   });
+});
+
+router.delete("/users/:userId", authenticate, requireRole("admin"), async (req: AuthRequest, res): Promise<void> => {
+  const userId = parseInt(String(req.params.userId), 10);
+  if (isNaN(userId)) { res.status(400).json({ error: "Invalid user ID" }); return; }
+  if (req.userId === userId) { res.status(400).json({ error: "You cannot delete your own admin account." }); return; }
+
+  const [target] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
+  if (!target) { res.status(404).json({ error: "User not found" }); return; }
+  if (target.role === "admin") { res.status(400).json({ error: "Admin accounts cannot be removed." }); return; }
+
+  // Refuse delete if user has service history (preserves VIN-permanent records). Suspend instead.
+  const [{ c: workLogCount }] = await db
+    .select({ c: count() })
+    .from(workLogsTable)
+    .where(or(eq(workLogsTable.mechanicId, userId), eq(workLogsTable.customerId, userId)));
+  const [{ c: jobCount }] = await db
+    .select({ c: count() })
+    .from(jobsTable)
+    .where(or(eq(jobsTable.customerId, userId), eq(jobsTable.mechanicId, userId)));
+  if (Number(workLogCount) > 0 || Number(jobCount) > 0) {
+    res.status(409).json({
+      error: "This user has service history and cannot be removed. Suspend the account instead to preserve VIN records.",
+    });
+    return;
+  }
+
+  // Clean up rows that reference the user (no service history at this point).
+  await db.transaction(async (tx) => {
+    await tx.delete(messagesTable).where(eq(messagesTable.senderId, userId));
+    await tx.delete(loyaltyPointsTable).where(eq(loyaltyPointsTable.userId, userId));
+    await tx.delete(referralsTable).where(or(eq(referralsTable.referrerId, userId), eq(referralsTable.referredId, userId)));
+    await tx.delete(ownershipTable).where(eq(ownershipTable.userId, userId));
+    await tx.delete(usersTable).where(eq(usersTable.id, userId));
+  });
+
+  res.json({ ok: true });
 });
 
 // Register or update Expo push token for the current user

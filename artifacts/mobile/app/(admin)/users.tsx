@@ -2,7 +2,7 @@ import {
   View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator,
   RefreshControl, TextInput,
 } from "react-native";
-import { confirm } from "@/utils/confirm";
+import { confirm, alertMessage } from "@/utils/confirm";
 import { useColors } from "@/hooks/useColors";
 import { Feather } from "@expo/vector-icons";
 import { useState, useEffect, useCallback } from "react";
@@ -17,6 +17,8 @@ interface AppUser {
   mechanicTier?: string;
   createdAt: string;
 }
+
+type TabKey = "mechanic" | "customer";
 
 const TIER_ORDER = ["detailer", "technician", "senior", "master"];
 const TIER_COLOR: Record<string, string> = {
@@ -107,6 +109,15 @@ function UserRow({ user, onAction }: { user: AppUser; onAction: (action: string,
             <Text style={[styles.actionBtnText, { color: tierColor }]}>→ {nextTier}</Text>
           </Pressable>
         )}
+        {user.role !== "admin" && (
+          <Pressable
+            style={[styles.actionBtn, { backgroundColor: "#EF444418", borderColor: "#EF444444" }]}
+            onPress={() => onAction("remove", user.id)}
+          >
+            <Feather name="trash-2" size={14} color="#EF4444" />
+            <Text style={[styles.actionBtnText, { color: "#EF4444" }]}>Remove</Text>
+          </Pressable>
+        )}
       </View>
     </View>
   );
@@ -118,7 +129,7 @@ export default function AdminUsersScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
-  const [roleFilter, setRoleFilter] = useState<string>("all");
+  const [tab, setTab] = useState<TabKey>("mechanic");
   const domain = process.env.EXPO_PUBLIC_DOMAIN;
 
   const fetchUsers = useCallback(async () => {
@@ -155,6 +166,31 @@ export default function AdminUsersScreen() {
       return;
     }
 
+    if (action === "remove") {
+      const target = users.find((u) => u.id === userId);
+      const ok = await confirm({
+        title: "Remove User",
+        message: `Permanently remove ${target?.name ?? "this user"}? This cannot be undone. Users with service history cannot be removed — suspend them instead.`,
+        confirmText: "Remove",
+        destructive: true,
+      });
+      if (!ok) return;
+      try {
+        const token = await AsyncStorage.getItem("auth_token");
+        const res = await fetch(`https://${domain}/api/users/${userId}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          fetchUsers();
+        } else {
+          const body = await res.json().catch(() => ({}));
+          await alertMessage("Could not remove user", body?.error ?? `Server returned ${res.status}.`);
+        }
+      } catch { /* non-fatal */ }
+      return;
+    }
+
     const statusMap: Record<string, string> = {
       activate: "active",
       suspend: "suspended",
@@ -184,37 +220,48 @@ export default function AdminUsersScreen() {
 
   const onRefresh = () => { setRefreshing(true); fetchUsers(); };
 
+  const mechanicCount = users.filter((u) => u.role === "mechanic").length;
+  const customerCount = users.filter((u) => u.role === "customer").length;
+
   const filtered = users.filter((u) => {
-    const matchRole = roleFilter === "all" || u.role === roleFilter;
-    const matchSearch = !search || u.name.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase());
-    return matchRole && matchSearch;
+    if (u.role !== tab) return false;
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q);
   });
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.toolbar, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
+        <View style={[styles.tabRow, { borderColor: colors.border }]}>
+          <Pressable
+            style={[styles.tab, tab === "mechanic" && { backgroundColor: colors.primary }]}
+            onPress={() => setTab("mechanic")}
+          >
+            <Feather name="tool" size={14} color={tab === "mechanic" ? "white" : colors.foreground} />
+            <Text style={[styles.tabText, { color: tab === "mechanic" ? "white" : colors.foreground }]}>
+              Mechanics ({mechanicCount})
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[styles.tab, tab === "customer" && { backgroundColor: colors.primary }]}
+            onPress={() => setTab("customer")}
+          >
+            <Feather name="users" size={14} color={tab === "customer" ? "white" : colors.foreground} />
+            <Text style={[styles.tabText, { color: tab === "customer" ? "white" : colors.foreground }]}>
+              Customers ({customerCount})
+            </Text>
+          </Pressable>
+        </View>
         <View style={[styles.searchBar, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Feather name="search" size={16} color={colors.mutedForeground} />
           <TextInput
             style={[styles.searchInput, { color: colors.foreground }]}
-            placeholder="Search users…"
+            placeholder={`Search ${tab === "mechanic" ? "mechanics" : "customers"}…`}
             placeholderTextColor={colors.mutedForeground}
             value={search}
             onChangeText={setSearch}
           />
-        </View>
-        <View style={styles.filterRow}>
-          {["all", "customer", "mechanic", "admin"].map((r) => (
-            <Pressable
-              key={r}
-              style={[styles.filterPill, { backgroundColor: roleFilter === r ? colors.primary : colors.secondary, borderColor: colors.border }]}
-              onPress={() => setRoleFilter(r)}
-            >
-              <Text style={[styles.filterPillText, { color: roleFilter === r ? "white" : colors.foreground }]}>
-                {r.charAt(0).toUpperCase() + r.slice(1)}
-              </Text>
-            </Pressable>
-          ))}
         </View>
       </View>
 
@@ -225,8 +272,19 @@ export default function AdminUsersScreen() {
           contentContainerStyle={{ padding: 16, paddingBottom: 120, gap: 10 }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
         >
-          <Text style={[styles.count, { color: colors.mutedForeground }]}>{filtered.length} user{filtered.length !== 1 ? "s" : ""}</Text>
-          {filtered.map((u) => <UserRow key={u.id} user={u} onAction={handleAction} />)}
+          <Text style={[styles.count, { color: colors.mutedForeground }]}>
+            {filtered.length} {tab}{filtered.length !== 1 ? "s" : ""}
+          </Text>
+          {filtered.length === 0 ? (
+            <View style={[styles.empty, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Feather name="inbox" size={32} color={colors.mutedForeground} />
+              <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
+                No {tab}s {search ? "match your search." : "yet."}
+              </Text>
+            </View>
+          ) : (
+            filtered.map((u) => <UserRow key={u.id} user={u} onAction={handleAction} />)
+          )}
         </ScrollView>
       )}
     </View>
@@ -237,6 +295,19 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   toolbar: { padding: 12, gap: 10, borderBottomWidth: 1 },
+  tabRow: { flexDirection: "row", gap: 8 },
+  tab: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "transparent",
+  },
+  tabText: { fontSize: 13, fontWeight: "700" },
   searchBar: {
     flexDirection: "row",
     alignItems: "center",
@@ -247,15 +318,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   searchInput: { flex: 1, fontSize: 15 },
-  filterRow: { flexDirection: "row", gap: 8 },
-  filterPill: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-  filterPillText: { fontSize: 13, fontWeight: "600" },
   count: { fontSize: 13, marginBottom: 4 },
+  empty: {
+    alignItems: "center",
+    gap: 10,
+    padding: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderStyle: "dashed",
+  },
+  emptyText: { fontSize: 13, textAlign: "center" },
   userRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -269,10 +341,10 @@ const styles = StyleSheet.create({
   userInfo: { flex: 1, gap: 3 },
   userName: { fontSize: 15, fontWeight: "600" },
   userEmail: { fontSize: 12 },
-  userPills: { flexDirection: "row", gap: 6, marginTop: 2 },
+  userPills: { flexDirection: "row", gap: 6, marginTop: 2, flexWrap: "wrap" },
   pill: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 },
   pillText: { fontSize: 10, fontWeight: "700", letterSpacing: 0.3 },
-  userActions: { gap: 6 },
+  userActions: { gap: 6, alignItems: "flex-end" },
   actionBtn: {
     flexDirection: "row",
     alignItems: "center",
