@@ -15,4 +15,6 @@ export interface CreateJobBody {
   locationLng?: number;
   locationAddress?: string;
   estimatedPrice?: number;
+  /** If set, only this mechanic sees the job in Available. */
+  requestedMechanicId?: number;
 }

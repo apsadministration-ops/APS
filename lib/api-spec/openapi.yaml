@@ -561,6 +561,33 @@ paths:
               schema:
                 $ref: "#/components/schemas/Job"
 
+  /jobs/{jobId}/rate-customer:
+    post:
+      operationId: rateCustomer
+      tags: [jobs]
+      summary: Mechanic rates customer + optional review/flag (mechanic only, after COMPLETED)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RateCustomerBody"
+      responses:
+        "200":
+          description: Customer rated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+
   /jobs/{jobId}/rate:
     post:
       operationId: rateJob
@@ -738,6 +765,191 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AdminDashboard"
+
+  # Mechanics directory
+  /mechanics:
+    get:
+      operationId: listMechanics
+      tags: [mechanics]
+      summary: Browse available mechanics with ratings, reviews, and favorite/flag info
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: jobType
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [repair, diagnostic, maintenance, detailing]
+      responses:
+        "200":
+          description: List of mechanics
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MechanicSummary"
+
+  /mechanics/{mechanicId}/reviews:
+    get:
+      operationId: getMechanicReviews
+      tags: [mechanics]
+      summary: Get all reviews left for a mechanic by customers
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: mechanicId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Reviews
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Review"
+
+  /me/reviews:
+    get:
+      operationId: getMyReviews
+      tags: [mechanics]
+      summary: Reviews left for the current user (by the other party)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Reviews
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Review"
+
+  # Favorites
+  /favorites:
+    get:
+      operationId: listFavorites
+      tags: [favorites]
+      summary: Customer's favorite mechanics
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Favorites
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Favorite"
+    post:
+      operationId: addFavorite
+      tags: [favorites]
+      summary: Add a mechanic to favorites (customer only)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddFavoriteBody"
+      responses:
+        "201":
+          description: Added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Favorite"
+
+  /favorites/{mechanicId}:
+    delete:
+      operationId: removeFavorite
+      tags: [favorites]
+      summary: Remove a mechanic from favorites (customer only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: mechanicId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Removed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                required: [ok]
+
+  # Flags / Reports
+  /flags:
+    get:
+      operationId: listFlags
+      tags: [flags]
+      summary: List flags. Admin sees all; users see flags they have filed.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Flags
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Flag"
+    post:
+      operationId: createFlag
+      tags: [flags]
+      summary: Report a customer or mechanic
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateFlagBody"
+      responses:
+        "201":
+          description: Flag created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Flag"
+
+  /flags/{flagId}/resolve:
+    post:
+      operationId: resolveFlag
+      tags: [flags]
+      summary: Mark a flag resolved (admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: flagId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Resolved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Flag"
 
   /assistant/chat:
     post:
@@ -1100,6 +1312,18 @@ components:
           type: string
           format: date-time
           nullable: true
+        mechanicReviewText:
+          type: string
+          nullable: true
+        customerRating:
+          type: integer
+          nullable: true
+        customerReviewText:
+          type: string
+          nullable: true
+        requestedMechanicId:
+          type: integer
+          nullable: true
       required: [id, vehicleId, vin, customerId, customerName, jobType, description, status, createdAt]
 
     CreateJobBody:
@@ -1120,6 +1344,9 @@ components:
           type: string
         estimatedPrice:
           type: number
+        requestedMechanicId:
+          type: integer
+          description: If set, only this mechanic sees the job in Available.
       required: [vehicleId, jobType, description]
 
     UpdateJobStatusBody:
@@ -1141,7 +1368,146 @@ components:
           maximum: 5
         note:
           type: string
+        reviewText:
+          type: string
       required: [rating]
+
+    RateCustomerBody:
+      type: object
+      properties:
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+        reviewText:
+          type: string
+      required: [rating]
+
+    Favorite:
+      type: object
+      properties:
+        id:
+          type: integer
+        mechanicId:
+          type: integer
+        mechanicName:
+          type: string
+        mechanicTier:
+          type: string
+          nullable: true
+        averageRating:
+          type: number
+          nullable: true
+        completedJobs:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, mechanicId, mechanicName, completedJobs, createdAt]
+
+    AddFavoriteBody:
+      type: object
+      properties:
+        mechanicId:
+          type: integer
+      required: [mechanicId]
+
+    Flag:
+      type: object
+      properties:
+        id:
+          type: integer
+        reporterId:
+          type: integer
+        reporterName:
+          type: string
+        targetId:
+          type: integer
+        targetName:
+          type: string
+        targetRole:
+          type: string
+          enum: [customer, mechanic]
+        jobId:
+          type: integer
+          nullable: true
+        type:
+          type: string
+          enum: [scam, rude, no_show, unsafe, other]
+        reason:
+          type: string
+          nullable: true
+        resolved:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, reporterId, reporterName, targetId, targetName, targetRole, type, resolved, createdAt]
+
+    CreateFlagBody:
+      type: object
+      properties:
+        targetId:
+          type: integer
+        jobId:
+          type: integer
+        type:
+          type: string
+          enum: [scam, rude, no_show, unsafe, other]
+        reason:
+          type: string
+      required: [targetId, type]
+
+    Review:
+      type: object
+      properties:
+        jobId:
+          type: integer
+        rating:
+          type: integer
+        text:
+          type: string
+          nullable: true
+        reviewerId:
+          type: integer
+        reviewerName:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required: [jobId, rating, reviewerId, reviewerName, createdAt]
+
+    MechanicSummary:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        mechanicTier:
+          type: string
+          nullable: true
+        certifications:
+          type: string
+          nullable: true
+        city:
+          type: string
+          nullable: true
+        region:
+          type: string
+          nullable: true
+        averageRating:
+          type: number
+          nullable: true
+        reviewCount:
+          type: integer
+        completedJobs:
+          type: integer
+        isFavorite:
+          type: boolean
+        flagCount:
+          type: integer
+      required: [id, name, reviewCount, completedJobs, isFavorite, flagCount]
 
     # Work Logs
     WorkLog:

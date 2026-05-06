@@ -34,4 +34,8 @@ export interface Job {
   createdAt: Date;
   acceptedAt?: Date | null;
   completedAt?: Date | null;
+  mechanicReviewText?: string | null;
+  customerRating?: number | null;
+  customerReviewText?: string | null;
+  requestedMechanicId?: number | null;
 }

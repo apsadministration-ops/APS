@@ -34,11 +34,16 @@ lib/db/src/schema/                 — Drizzle table definitions
   vehicles.ts                      — vehicles (plateNumber, mileage required)
   loyalty.ts                       — loyalty_points table
   referrals.ts                     — referrals table
+  favorites.ts                     — customer ↔ mechanic favorites
+  flags.ts                         — user reports (scam/rude/no_show/unsafe/other)
 lib/api-client-react/src/generated — generated React Query hooks + Zod schemas
 artifacts/api-server/src/routes/   — Express route handlers
   auth.ts                          — register (referral code gen + referredBy), login, me
   vehicles.ts                      — CRUD + DELETE (closes ownership) + plateNumber
-  jobs.ts                          — tier-filtered available jobs (detailers → detailing only) + DELETE /jobs/:jobId (admin)
+  jobs.ts                          — tier-filtered available jobs + requestedMechanicId filter + rate + rate-customer + DELETE /jobs/:jobId (admin)
+  mechanics.ts                     — GET /mechanics (browse with avg rating, reviews, fav, flag count), /mechanics/:id/reviews, /me/reviews
+  favorites.ts                     — GET/POST/DELETE /favorites (customer-only)
+  flags.ts                         — GET/POST /flags + POST /flags/:id/resolve (admin)
   payments.ts                      — release + loyalty points award
   loyalty.ts                       — GET /loyalty + awardLoyaltyPoints()
   referrals.ts                     — GET /referral stats
@@ -54,7 +59,10 @@ artifacts/mobile/app/              — Expo screens (expo-router file-based)
   (admin)/users.tsx                — user management + mechanic tier promotion
   referral.tsx                     — referral code + loyalty tier + stats
   detailing.tsx                    — 4-package detailing booking flow
-  request-service.tsx              — booking screen: GPS button (web fallback to navigator.geolocation) + ZIP code lookup via Nominatim; location is now required
+  request-service.tsx              — booking screen: GPS + ZIP lookup; accepts ?mechanicId= to lock-in a specific mechanic
+  mechanics.tsx                    — customer browse-mechanics list (heart fav, ratings, ?select=1 → pick mode)
+  mechanic/[id].tsx                — mechanic detail: stats, certifications, reviews list, request CTA, fav, report
+  (admin)/flags.tsx                — admin reports queue (resolve flags)
 artifacts/mobile/context/AuthContext.tsx — auth state + token persistence
 artifacts/mobile/data/obd2Codes.ts — comprehensive OBD2 P/B/C/U code database
 artifacts/mobile/constants/colors.ts    — design tokens (light + dark)
@@ -85,12 +93,16 @@ lib/integrations-anthropic-ai/    — Replit AI Integrations Anthropic client (s
 - **Push notifications:** Expo Push API (no third-party). Mechanics notified on new jobs; customers on accept + completion.
 - **Live location:** Mechanic GPS sent via `PUT /api/jobs/:jobId/mechanic-location` every 15s; customer polls every 10s.
 - **AI Assistant:** Floating widget mounted once in `app/_layout.tsx` (renders only when authed). Drags + snaps to edges, persists position/visibility in AsyncStorage. Server route `assistant.ts` injects vehicle/job/worklog context into the system prompt (with role-based access checks) and calls Anthropic via `@workspace/integrations-anthropic-ai` (`AI_INTEGRATIONS_ANTHROPIC_*` envs auto-provisioned by Replit). Chat history is ephemeral (in-memory in widget). Urgency level (low/medium/high) is detected from reply text and shown as a chip.
+- **Bidirectional reviews:** Customer rates mechanic via `POST /jobs/:id/rate` (sets `rating` + `mechanicReviewText`). Mechanic rates customer via `POST /jobs/:id/rate-customer` (sets `customerRating` + `customerReviewText`). Both reviews are visible to each other on the job detail screen. Mechanic profile pages show aggregate rating + reviews list (`GET /mechanics/:id/reviews`). `GET /me/reviews` returns reviews left for the current user.
+- **Favorites:** `favorites` table (unique customer+mechanic). Customer-only `GET/POST/DELETE /favorites`. Heart toggle on browse screen + mechanic detail.
+- **Flags / reports:** `flags` table (reporter, target, target_role, job_id, type[scam/rude/no_show/unsafe/other], reason, resolved). `POST /flags` enforces role rules (customers report mechanics only; mechanics report customers only; admins anything). `GET /flags` returns user's own flags or all (admin). `POST /flags/:id/resolve` admin-only. Admin Reports tab in `(admin)/flags.tsx`.
+- **Pick a mechanic flow:** `CreateJobBody.requestedMechanicId` restricts the new job to a single mechanic — `/jobs/available` filters out other mechanics' results when set. Customer entry points: `/mechanics?select=1` → pick → `/request-service?mechanicId=` (preselected). Direct entry from mechanic detail page also passes `mechanicId`.
 
 ## Product
 
-- **Customer:** Register/login, add vehicles by VIN + plate, request services, book detailing (4 packages), track jobs live, view loyalty points + referral program, share referral code, rate mechanics
-- **Mechanic:** Register/login (pending approval → detailer tier), browse/accept jobs (tier-filtered), update status, share GPS, submit work logs, add certifications, view profile with tier progression, access OBD2 + parts catalog
-- **Admin:** Manage users, promote mechanic tiers, release payments, view platform dashboard, sign out
+- **Customer:** Register/login, add vehicles by VIN + plate, request services, book detailing (4 packages), track jobs live, browse mechanics with reviews & favorites, pick a specific mechanic for a job, rate + review mechanics, report mechanics, view loyalty points + referral program
+- **Mechanic:** Register/login (pending approval → detailer tier), browse/accept jobs (tier-filtered + customer-requested filter), update status, share GPS, submit work logs, add certifications, rate + review customers after job, report customers, view profile with tier progression, access OBD2 + parts catalog
+- **Admin:** Manage users, promote mechanic tiers, release payments, review/resolve user reports (Reports tab), view platform dashboard
 
 ## User preferences
 

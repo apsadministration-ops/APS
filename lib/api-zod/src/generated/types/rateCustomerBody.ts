@@ -6,12 +6,11 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface RateJobBody {
+export interface RateCustomerBody {
   /**
    * @minimum 1
    * @maximum 5
    */
   rating: number;
-  note?: string;
   reviewText?: string;
 }

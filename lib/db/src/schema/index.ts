@@ -7,3 +7,5 @@ export * from "./payments";
 export * from "./messages";
 export * from "./loyalty";
 export * from "./referrals";
+export * from "./favorites";
+export * from "./flags";

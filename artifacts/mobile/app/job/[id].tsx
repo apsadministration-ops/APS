@@ -1,7 +1,7 @@
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from "react-native";
-import { confirm } from "@/utils/confirm";
+import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, TextInput } from "react-native";
+import { confirm, alertMessage } from "@/utils/confirm";
 import { useColors } from "@/hooks/useColors";
-import { useGetJob, useRateJob, useCancelJob } from "@workspace/api-client-react";
+import { useGetJob, useRateJob, useCancelJob, useRateCustomer, useCreateFlag } from "@workspace/api-client-react";
 import { useLocalSearchParams, useRouter, Stack } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -37,9 +37,14 @@ export default function JobDetailScreen() {
 
   const { data: job, isLoading, refetch } = useGetJob(jobId);
   const rateMutation = useRateJob();
+  const rateCustomerMutation = useRateCustomer();
   const cancelMutation = useCancelJob();
+  const flagMutation = useCreateFlag();
 
   const [rating, setRating] = useState(0);
+  const [reviewText, setReviewText] = useState("");
+  const [custRating, setCustRating] = useState(0);
+  const [custReviewText, setCustReviewText] = useState("");
 
   if (isLoading) {
     return (
@@ -63,7 +68,10 @@ export default function JobDetailScreen() {
     (isCustomer && ["REQUESTED", "OFFERED"].includes(job.status)) ||
     (isMechanic && job.mechanicId === user?.id && ["ACCEPTED", "EN_ROUTE"].includes(job.status));
   const canRate = isCustomer && (job.status === "COMPLETED" || job.status === "PAID") && !job.rating;
+  const canRateCustomer = isMechanic && job.mechanicId === user?.id && (job.status === "COMPLETED" || job.status === "PAID") && !job.customerRating;
   const canSubmitWorklog = isMechanic && job.status === "IN_PROGRESS" && job.mechanicId === user?.id;
+  const canFlagMechanic = isCustomer && job.mechanicId != null;
+  const canFlagCustomer = isMechanic && job.mechanicId === user?.id;
 
   const currentStep = STATUS_ORDER.indexOf(job.status);
   const visibleStatuses = job.status === "CANCELLED"
@@ -92,14 +100,54 @@ export default function JobDetailScreen() {
   const handleRate = () => {
     if (rating < 1) return;
     rateMutation.mutate(
-      { jobId, data: { rating } },
+      { jobId, data: { rating, reviewText: reviewText.trim() || undefined } },
       {
         onSuccess: () => {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          setReviewText("");
           refetch();
         },
       }
     );
+  };
+
+  const handleRateCustomer = () => {
+    if (custRating < 1) return;
+    rateCustomerMutation.mutate(
+      { jobId, data: { rating: custRating, reviewText: custReviewText.trim() || undefined } },
+      {
+        onSuccess: () => {
+          try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch { /* web */ }
+          setCustReviewText("");
+          refetch();
+        },
+      }
+    );
+  };
+
+  const handleFlag = async (kind: "mechanic" | "customer") => {
+    const targetId = kind === "mechanic" ? job.mechanicId : job.customerId;
+    if (!targetId) return;
+    const ok = await confirm({
+      title: kind === "mechanic" ? "Report this mechanic?" : "Report this customer?",
+      message: kind === "mechanic"
+        ? "Use for rude/no-show/unsafe/scam behavior. Admins will review."
+        : "Use for scam/no-show/unsafe behavior. Admins will review.",
+      confirmText: "Report",
+      destructive: true,
+    });
+    if (!ok) return;
+    flagMutation.mutate({
+      data: {
+        targetId,
+        jobId,
+        type: kind === "mechanic" ? "rude" : "scam",
+        reason: kind === "mechanic" ? "Reported from job detail" : "Reported from job detail",
+      },
+    }, {
+      onSuccess: () => void alertMessage("Report submitted", "Thanks — our team will review."),
+      onError: (e: any) => void alertMessage("Couldn't submit", e?.message ?? "Try again."),
+    });
   };
 
   return (
@@ -198,7 +246,7 @@ export default function JobDetailScreen() {
             </View>
           </View>
 
-          {/* Rate */}
+          {/* Customer rates mechanic */}
           {canRate && (
             <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <Text style={[styles.cardTitle, { color: colors.foreground }]}>Rate Mechanic</Text>
@@ -209,6 +257,15 @@ export default function JobDetailScreen() {
                   </Pressable>
                 ))}
               </View>
+              <TextInput
+                style={[styles.textarea, { backgroundColor: colors.background, color: colors.foreground, borderColor: colors.border }]}
+                placeholder="Write a review for this mechanic (visible to other customers)"
+                placeholderTextColor={colors.mutedForeground}
+                value={reviewText}
+                onChangeText={setReviewText}
+                multiline
+                textAlignVertical="top"
+              />
               <Pressable
                 style={[styles.primaryBtn, { backgroundColor: colors.primary }, rating < 1 && { opacity: 0.4 }]}
                 onPress={handleRate}
@@ -217,6 +274,63 @@ export default function JobDetailScreen() {
                 {rateMutation.isPending
                   ? <ActivityIndicator color="white" />
                   : <Text style={styles.primaryBtnText}>Submit Rating</Text>}
+              </Pressable>
+            </View>
+          )}
+
+          {/* Show customer's existing review (read-only) */}
+          {isCustomer && job.rating != null && job.mechanicReviewText ? (
+            <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Text style={[styles.cardTitle, { color: colors.foreground }]}>Your Review</Text>
+              <Text style={{ color: colors.foreground, fontSize: 14, lineHeight: 20 }}>{job.mechanicReviewText}</Text>
+            </View>
+          ) : null}
+
+          {/* Show mechanic's review of customer (visible to both) */}
+          {job.customerRating != null ? (
+            <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Text style={[styles.cardTitle, { color: colors.foreground }]}>
+                {isCustomer ? "Mechanic's Review of You" : "Your Review of Customer"}
+              </Text>
+              <View style={styles.ratingRow}>
+                {[1,2,3,4,5].map((s) => (
+                  <Feather key={s} name="star" size={16} color={s <= job.customerRating! ? colors.primary : colors.border} />
+                ))}
+              </View>
+              {job.customerReviewText ? (
+                <Text style={{ color: colors.foreground, fontSize: 14, lineHeight: 20 }}>{job.customerReviewText}</Text>
+              ) : null}
+            </View>
+          ) : null}
+
+          {/* Mechanic rates customer */}
+          {canRateCustomer && (
+            <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Text style={[styles.cardTitle, { color: colors.foreground }]}>Rate Customer</Text>
+              <View style={styles.ratingStars}>
+                {[1, 2, 3, 4, 5].map((s) => (
+                  <Pressable key={s} onPress={() => setCustRating(s)}>
+                    <Feather name="star" size={36} color={s <= custRating ? colors.primary : colors.border} />
+                  </Pressable>
+                ))}
+              </View>
+              <TextInput
+                style={[styles.textarea, { backgroundColor: colors.background, color: colors.foreground, borderColor: colors.border }]}
+                placeholder="Notes for other mechanics (clean site? fair to work with?)"
+                placeholderTextColor={colors.mutedForeground}
+                value={custReviewText}
+                onChangeText={setCustReviewText}
+                multiline
+                textAlignVertical="top"
+              />
+              <Pressable
+                style={[styles.primaryBtn, { backgroundColor: colors.primary }, custRating < 1 && { opacity: 0.4 }]}
+                onPress={handleRateCustomer}
+                disabled={custRating < 1 || rateCustomerMutation.isPending}
+              >
+                {rateCustomerMutation.isPending
+                  ? <ActivityIndicator color="white" />
+                  : <Text style={styles.primaryBtnText}>Submit Customer Rating</Text>}
               </Pressable>
             </View>
           )}
@@ -292,6 +406,19 @@ export default function JobDetailScreen() {
                 : <Text style={styles.primaryBtnText}>{isMechanic ? "Drop Job" : "Cancel Job"}</Text>}
             </Pressable>
           )}
+
+          {(canFlagMechanic || canFlagCustomer) && (
+            <Pressable
+              style={[styles.flagBtn, { borderColor: colors.border, backgroundColor: colors.card }]}
+              onPress={() => handleFlag(isMechanic ? "customer" : "mechanic")}
+              disabled={flagMutation.isPending}
+            >
+              <Feather name="flag" size={14} color="#EF4444" />
+              <Text style={styles.flagBtnText}>
+                Report {isMechanic ? "Customer" : "Mechanic"}
+              </Text>
+            </Pressable>
+          )}
         </ScrollView>
       </View>
     </>
@@ -364,4 +491,7 @@ const styles = StyleSheet.create({
   },
   toolBtnText: { fontSize: 13, fontWeight: "600" },
   liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#22C55E" },
+  textarea: { minHeight: 80, padding: 12, borderRadius: 10, borderWidth: 1, fontSize: 14 },
+  flagBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 12, borderRadius: 12, borderWidth: 1, marginTop: 12 },
+  flagBtnText: { color: "#EF4444", fontWeight: "600", fontSize: 13 },
 });

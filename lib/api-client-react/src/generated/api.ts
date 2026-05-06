@@ -17,26 +17,35 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  AddFavoriteBody,
   AdminDashboard,
   AssistantChatRequest,
   AssistantChatResponse,
   AuthResponse,
+  CreateFlagBody,
   CreateJobBody,
   CreateVehicleBody,
   CreateWorkLogBody,
   CustomerDashboard,
   ErrorResponse,
+  Favorite,
+  Flag,
   HealthStatus,
   Job,
   ListJobsParams,
+  ListMechanicsParams,
   ListUsersParams,
   LoginBody,
   MechanicDashboard,
   MechanicProfile,
+  MechanicSummary,
   OwnershipRecord,
   Payment,
+  RateCustomerBody,
   RateJobBody,
   RegisterBody,
+  RemoveFavorite200,
+  Review,
   TransferVehicleBody,
   UpdateJobStatusBody,
   UpdateUserBody,
@@ -1896,6 +1905,93 @@ export const useCancelJob = <
 };
 
 /**
+ * @summary Mechanic rates customer + optional review/flag (mechanic only, after COMPLETED)
+ */
+export const getRateCustomerUrl = (jobId: number) => {
+  return `/api/jobs/${jobId}/rate-customer`;
+};
+
+export const rateCustomer = async (
+  jobId: number,
+  rateCustomerBody: RateCustomerBody,
+  options?: RequestInit,
+): Promise<Job> => {
+  return customFetch<Job>(getRateCustomerUrl(jobId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(rateCustomerBody),
+  });
+};
+
+export const getRateCustomerMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof rateCustomer>>,
+    TError,
+    { jobId: number; data: BodyType<RateCustomerBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof rateCustomer>>,
+  TError,
+  { jobId: number; data: BodyType<RateCustomerBody> },
+  TContext
+> => {
+  const mutationKey = ["rateCustomer"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof rateCustomer>>,
+    { jobId: number; data: BodyType<RateCustomerBody> }
+  > = (props) => {
+    const { jobId, data } = props ?? {};
+
+    return rateCustomer(jobId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RateCustomerMutationResult = NonNullable<
+  Awaited<ReturnType<typeof rateCustomer>>
+>;
+export type RateCustomerMutationBody = BodyType<RateCustomerBody>;
+export type RateCustomerMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Mechanic rates customer + optional review/flag (mechanic only, after COMPLETED)
+ */
+export const useRateCustomer = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof rateCustomer>>,
+    TError,
+    { jobId: number; data: BodyType<RateCustomerBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof rateCustomer>>,
+  TError,
+  { jobId: number; data: BodyType<RateCustomerBody> },
+  TContext
+> => {
+  return useMutation(getRateCustomerMutationOptions(options));
+};
+
+/**
  * @summary Rate a completed job (customer only)
  */
 export const getRateJobUrl = (jobId: number) => {
@@ -2625,6 +2721,744 @@ export function useGetAdminDashboard<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Browse available mechanics with ratings, reviews, and favorite/flag info
+ */
+export const getListMechanicsUrl = (params?: ListMechanicsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/mechanics?${stringifiedParams}`
+    : `/api/mechanics`;
+};
+
+export const listMechanics = async (
+  params?: ListMechanicsParams,
+  options?: RequestInit,
+): Promise<MechanicSummary[]> => {
+  return customFetch<MechanicSummary[]>(getListMechanicsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListMechanicsQueryKey = (params?: ListMechanicsParams) => {
+  return [`/api/mechanics`, ...(params ? [params] : [])] as const;
+};
+
+export const getListMechanicsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listMechanics>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListMechanicsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listMechanics>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListMechanicsQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listMechanics>>> = ({
+    signal,
+  }) => listMechanics(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listMechanics>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListMechanicsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listMechanics>>
+>;
+export type ListMechanicsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Browse available mechanics with ratings, reviews, and favorite/flag info
+ */
+
+export function useListMechanics<
+  TData = Awaited<ReturnType<typeof listMechanics>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListMechanicsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listMechanics>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListMechanicsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get all reviews left for a mechanic by customers
+ */
+export const getGetMechanicReviewsUrl = (mechanicId: number) => {
+  return `/api/mechanics/${mechanicId}/reviews`;
+};
+
+export const getMechanicReviews = async (
+  mechanicId: number,
+  options?: RequestInit,
+): Promise<Review[]> => {
+  return customFetch<Review[]>(getGetMechanicReviewsUrl(mechanicId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetMechanicReviewsQueryKey = (mechanicId: number) => {
+  return [`/api/mechanics/${mechanicId}/reviews`] as const;
+};
+
+export const getGetMechanicReviewsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMechanicReviews>>,
+  TError = ErrorType<unknown>,
+>(
+  mechanicId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMechanicReviews>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetMechanicReviewsQueryKey(mechanicId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getMechanicReviews>>
+  > = ({ signal }) =>
+    getMechanicReviews(mechanicId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!mechanicId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMechanicReviews>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMechanicReviewsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMechanicReviews>>
+>;
+export type GetMechanicReviewsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get all reviews left for a mechanic by customers
+ */
+
+export function useGetMechanicReviews<
+  TData = Awaited<ReturnType<typeof getMechanicReviews>>,
+  TError = ErrorType<unknown>,
+>(
+  mechanicId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMechanicReviews>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMechanicReviewsQueryOptions(mechanicId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Reviews left for the current user (by the other party)
+ */
+export const getGetMyReviewsUrl = () => {
+  return `/api/me/reviews`;
+};
+
+export const getMyReviews = async (
+  options?: RequestInit,
+): Promise<Review[]> => {
+  return customFetch<Review[]>(getGetMyReviewsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetMyReviewsQueryKey = () => {
+  return [`/api/me/reviews`] as const;
+};
+
+export const getGetMyReviewsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMyReviews>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMyReviews>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetMyReviewsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getMyReviews>>> = ({
+    signal,
+  }) => getMyReviews({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMyReviews>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMyReviewsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMyReviews>>
+>;
+export type GetMyReviewsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Reviews left for the current user (by the other party)
+ */
+
+export function useGetMyReviews<
+  TData = Awaited<ReturnType<typeof getMyReviews>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMyReviews>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMyReviewsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Customer's favorite mechanics
+ */
+export const getListFavoritesUrl = () => {
+  return `/api/favorites`;
+};
+
+export const listFavorites = async (
+  options?: RequestInit,
+): Promise<Favorite[]> => {
+  return customFetch<Favorite[]>(getListFavoritesUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListFavoritesQueryKey = () => {
+  return [`/api/favorites`] as const;
+};
+
+export const getListFavoritesQueryOptions = <
+  TData = Awaited<ReturnType<typeof listFavorites>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listFavorites>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListFavoritesQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listFavorites>>> = ({
+    signal,
+  }) => listFavorites({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listFavorites>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListFavoritesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listFavorites>>
+>;
+export type ListFavoritesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Customer's favorite mechanics
+ */
+
+export function useListFavorites<
+  TData = Awaited<ReturnType<typeof listFavorites>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listFavorites>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListFavoritesQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Add a mechanic to favorites (customer only)
+ */
+export const getAddFavoriteUrl = () => {
+  return `/api/favorites`;
+};
+
+export const addFavorite = async (
+  addFavoriteBody: AddFavoriteBody,
+  options?: RequestInit,
+): Promise<Favorite> => {
+  return customFetch<Favorite>(getAddFavoriteUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(addFavoriteBody),
+  });
+};
+
+export const getAddFavoriteMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addFavorite>>,
+    TError,
+    { data: BodyType<AddFavoriteBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof addFavorite>>,
+  TError,
+  { data: BodyType<AddFavoriteBody> },
+  TContext
+> => {
+  const mutationKey = ["addFavorite"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof addFavorite>>,
+    { data: BodyType<AddFavoriteBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return addFavorite(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AddFavoriteMutationResult = NonNullable<
+  Awaited<ReturnType<typeof addFavorite>>
+>;
+export type AddFavoriteMutationBody = BodyType<AddFavoriteBody>;
+export type AddFavoriteMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Add a mechanic to favorites (customer only)
+ */
+export const useAddFavorite = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addFavorite>>,
+    TError,
+    { data: BodyType<AddFavoriteBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof addFavorite>>,
+  TError,
+  { data: BodyType<AddFavoriteBody> },
+  TContext
+> => {
+  return useMutation(getAddFavoriteMutationOptions(options));
+};
+
+/**
+ * @summary Remove a mechanic from favorites (customer only)
+ */
+export const getRemoveFavoriteUrl = (mechanicId: number) => {
+  return `/api/favorites/${mechanicId}`;
+};
+
+export const removeFavorite = async (
+  mechanicId: number,
+  options?: RequestInit,
+): Promise<RemoveFavorite200> => {
+  return customFetch<RemoveFavorite200>(getRemoveFavoriteUrl(mechanicId), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getRemoveFavoriteMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof removeFavorite>>,
+    TError,
+    { mechanicId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof removeFavorite>>,
+  TError,
+  { mechanicId: number },
+  TContext
+> => {
+  const mutationKey = ["removeFavorite"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof removeFavorite>>,
+    { mechanicId: number }
+  > = (props) => {
+    const { mechanicId } = props ?? {};
+
+    return removeFavorite(mechanicId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RemoveFavoriteMutationResult = NonNullable<
+  Awaited<ReturnType<typeof removeFavorite>>
+>;
+
+export type RemoveFavoriteMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Remove a mechanic from favorites (customer only)
+ */
+export const useRemoveFavorite = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof removeFavorite>>,
+    TError,
+    { mechanicId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof removeFavorite>>,
+  TError,
+  { mechanicId: number },
+  TContext
+> => {
+  return useMutation(getRemoveFavoriteMutationOptions(options));
+};
+
+/**
+ * @summary List flags. Admin sees all; users see flags they have filed.
+ */
+export const getListFlagsUrl = () => {
+  return `/api/flags`;
+};
+
+export const listFlags = async (options?: RequestInit): Promise<Flag[]> => {
+  return customFetch<Flag[]>(getListFlagsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListFlagsQueryKey = () => {
+  return [`/api/flags`] as const;
+};
+
+export const getListFlagsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listFlags>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof listFlags>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListFlagsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listFlags>>> = ({
+    signal,
+  }) => listFlags({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listFlags>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListFlagsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listFlags>>
+>;
+export type ListFlagsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List flags. Admin sees all; users see flags they have filed.
+ */
+
+export function useListFlags<
+  TData = Awaited<ReturnType<typeof listFlags>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof listFlags>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListFlagsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Report a customer or mechanic
+ */
+export const getCreateFlagUrl = () => {
+  return `/api/flags`;
+};
+
+export const createFlag = async (
+  createFlagBody: CreateFlagBody,
+  options?: RequestInit,
+): Promise<Flag> => {
+  return customFetch<Flag>(getCreateFlagUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createFlagBody),
+  });
+};
+
+export const getCreateFlagMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createFlag>>,
+    TError,
+    { data: BodyType<CreateFlagBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createFlag>>,
+  TError,
+  { data: BodyType<CreateFlagBody> },
+  TContext
+> => {
+  const mutationKey = ["createFlag"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createFlag>>,
+    { data: BodyType<CreateFlagBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createFlag(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateFlagMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createFlag>>
+>;
+export type CreateFlagMutationBody = BodyType<CreateFlagBody>;
+export type CreateFlagMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Report a customer or mechanic
+ */
+export const useCreateFlag = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createFlag>>,
+    TError,
+    { data: BodyType<CreateFlagBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createFlag>>,
+  TError,
+  { data: BodyType<CreateFlagBody> },
+  TContext
+> => {
+  return useMutation(getCreateFlagMutationOptions(options));
+};
+
+/**
+ * @summary Mark a flag resolved (admin only)
+ */
+export const getResolveFlagUrl = (flagId: number) => {
+  return `/api/flags/${flagId}/resolve`;
+};
+
+export const resolveFlag = async (
+  flagId: number,
+  options?: RequestInit,
+): Promise<Flag> => {
+  return customFetch<Flag>(getResolveFlagUrl(flagId), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getResolveFlagMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof resolveFlag>>,
+    TError,
+    { flagId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof resolveFlag>>,
+  TError,
+  { flagId: number },
+  TContext
+> => {
+  const mutationKey = ["resolveFlag"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof resolveFlag>>,
+    { flagId: number }
+  > = (props) => {
+    const { flagId } = props ?? {};
+
+    return resolveFlag(flagId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ResolveFlagMutationResult = NonNullable<
+  Awaited<ReturnType<typeof resolveFlag>>
+>;
+
+export type ResolveFlagMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Mark a flag resolved (admin only)
+ */
+export const useResolveFlag = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof resolveFlag>>,
+    TError,
+    { flagId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof resolveFlag>>,
+  TError,
+  { flagId: number },
+  TContext
+> => {
+  return useMutation(getResolveFlagMutationOptions(options));
+};
 
 /**
  * @summary Send a message to the AI Assistant

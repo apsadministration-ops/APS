@@ -231,6 +231,10 @@ export interface Job {
   createdAt: string;
   acceptedAt?: string | null;
   completedAt?: string | null;
+  mechanicReviewText?: string | null;
+  customerRating?: number | null;
+  customerReviewText?: string | null;
+  requestedMechanicId?: number | null;
 }
 
 export type CreateJobBodyJobType =
@@ -251,6 +255,8 @@ export interface CreateJobBody {
   locationLng?: number;
   locationAddress?: string;
   estimatedPrice?: number;
+  /** If set, only this mechanic sees the job in Available. */
+  requestedMechanicId?: number;
 }
 
 export type UpdateJobStatusBodyStatus =
@@ -279,6 +285,103 @@ export interface RateJobBody {
    */
   rating: number;
   note?: string;
+  reviewText?: string;
+}
+
+export interface RateCustomerBody {
+  /**
+   * @minimum 1
+   * @maximum 5
+   */
+  rating: number;
+  reviewText?: string;
+}
+
+export interface Favorite {
+  id: number;
+  mechanicId: number;
+  mechanicName: string;
+  mechanicTier?: string | null;
+  averageRating?: number | null;
+  completedJobs: number;
+  createdAt: string;
+}
+
+export interface AddFavoriteBody {
+  mechanicId: number;
+}
+
+export type FlagTargetRole =
+  (typeof FlagTargetRole)[keyof typeof FlagTargetRole];
+
+export const FlagTargetRole = {
+  customer: "customer",
+  mechanic: "mechanic",
+} as const;
+
+export type FlagType = (typeof FlagType)[keyof typeof FlagType];
+
+export const FlagType = {
+  scam: "scam",
+  rude: "rude",
+  no_show: "no_show",
+  unsafe: "unsafe",
+  other: "other",
+} as const;
+
+export interface Flag {
+  id: number;
+  reporterId: number;
+  reporterName: string;
+  targetId: number;
+  targetName: string;
+  targetRole: FlagTargetRole;
+  jobId?: number | null;
+  type: FlagType;
+  reason?: string | null;
+  resolved: boolean;
+  createdAt: string;
+}
+
+export type CreateFlagBodyType =
+  (typeof CreateFlagBodyType)[keyof typeof CreateFlagBodyType];
+
+export const CreateFlagBodyType = {
+  scam: "scam",
+  rude: "rude",
+  no_show: "no_show",
+  unsafe: "unsafe",
+  other: "other",
+} as const;
+
+export interface CreateFlagBody {
+  targetId: number;
+  jobId?: number;
+  type: CreateFlagBodyType;
+  reason?: string;
+}
+
+export interface Review {
+  jobId: number;
+  rating: number;
+  text?: string | null;
+  reviewerId: number;
+  reviewerName: string;
+  createdAt: string;
+}
+
+export interface MechanicSummary {
+  id: number;
+  name: string;
+  mechanicTier?: string | null;
+  certifications?: string | null;
+  city?: string | null;
+  region?: string | null;
+  averageRating?: number | null;
+  reviewCount: number;
+  completedJobs: number;
+  isFavorite: boolean;
+  flagCount: number;
 }
 
 export type WorkLogServiceCategory =
@@ -476,3 +579,21 @@ export const ListJobsStatus = {
   PAID: "PAID",
   CANCELLED: "CANCELLED",
 } as const;
+
+export type ListMechanicsParams = {
+  jobType?: ListMechanicsJobType;
+};
+
+export type ListMechanicsJobType =
+  (typeof ListMechanicsJobType)[keyof typeof ListMechanicsJobType];
+
+export const ListMechanicsJobType = {
+  repair: "repair",
+  diagnostic: "diagnostic",
+  maintenance: "maintenance",
+  detailing: "detailing",
+} as const;
+
+export type RemoveFavorite200 = {
+  ok: boolean;
+};

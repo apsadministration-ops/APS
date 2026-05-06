@@ -6,12 +6,6 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface RateJobBody {
-  /**
-   * @minimum 1
-   * @maximum 5
-   */
-  rating: number;
-  note?: string;
-  reviewText?: string;
-}
+export type RemoveFavorite200 = {
+  ok: boolean;
+};

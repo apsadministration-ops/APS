@@ -5,13 +5,8 @@
  * APS - Automotive Platform System API
  * OpenAPI spec version: 0.1.0
  */
+import type { ListMechanicsJobType } from "./listMechanicsJobType";
 
-export interface RateJobBody {
-  /**
-   * @minimum 1
-   * @maximum 5
-   */
-  rating: number;
-  note?: string;
-  reviewText?: string;
-}
+export type ListMechanicsParams = {
+  jobType?: ListMechanicsJobType;
+};

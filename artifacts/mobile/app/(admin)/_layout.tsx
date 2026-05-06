@@ -75,6 +75,13 @@ export default function AdminTabLayout() {
           tabBarIcon: ({ color }) => <Feather name="briefcase" size={22} color={color} />,
         }}
       />
+      <Tabs.Screen
+        name="flags"
+        options={{
+          title: "Reports",
+          tabBarIcon: ({ color }) => <Feather name="flag" size={22} color={color} />,
+        }}
+      />
     </Tabs>
   );
 }

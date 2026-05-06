@@ -33,6 +33,10 @@ async function formatJob(job: typeof jobsTable.$inferSelect) {
     finalPrice: job.finalPrice ?? null,
     rating: job.rating ?? null,
     ratingNote: job.ratingNote ?? null,
+    mechanicReviewText: job.mechanicReviewText ?? null,
+    customerRating: job.customerRating ?? null,
+    customerReviewText: job.customerReviewText ?? null,
+    requestedMechanicId: job.requestedMechanicId ?? null,
     vehicle: vehicle ? {
       id: vehicle.id, vin: vehicle.vin, make: vehicle.make, model: vehicle.model,
       year: vehicle.year, trim: vehicle.trim ?? null, color: vehicle.color ?? null, createdAt: vehicle.createdAt,
@@ -47,7 +51,12 @@ router.get("/jobs", authenticate, async (req: AuthRequest, res): Promise<void> =
   const { status, vehicleId, mechanicId } = req.query as { status?: string; vehicleId?: string; mechanicId?: string };
   let allJobs = await db.select().from(jobsTable).orderBy(jobsTable.createdAt);
   if (req.userRole === "customer") allJobs = allJobs.filter((j) => j.customerId === req.userId);
-  else if (req.userRole === "mechanic") allJobs = allJobs.filter((j) => j.mechanicId === req.userId || j.status === "REQUESTED");
+  else if (req.userRole === "mechanic") {
+    allJobs = allJobs.filter((j) =>
+      j.mechanicId === req.userId ||
+      (j.status === "REQUESTED" && (j.requestedMechanicId == null || j.requestedMechanicId === req.userId))
+    );
+  }
   if (status) allJobs = allJobs.filter((j) => j.status === status);
   if (vehicleId) allJobs = allJobs.filter((j) => j.vehicleId === parseInt(vehicleId, 10));
   if (mechanicId) allJobs = allJobs.filter((j) => j.mechanicId === parseInt(mechanicId, 10));
@@ -57,8 +66,9 @@ router.get("/jobs", authenticate, async (req: AuthRequest, res): Promise<void> =
 router.get("/jobs/available", authenticate, async (req: AuthRequest, res): Promise<void> => {
   let jobs = await db.select().from(jobsTable).where(eq(jobsTable.status, "REQUESTED")).orderBy(jobsTable.createdAt);
 
-  // Detailers can only see detailing jobs
+  // If a job is requested for a specific mechanic, only that mechanic sees it.
   if (req.userRole === "mechanic") {
+    jobs = jobs.filter((j) => j.requestedMechanicId == null || j.requestedMechanicId === req.userId);
     const [mechanic] = await db.select({ mechanicTier: usersTable.mechanicTier }).from(usersTable).where(eq(usersTable.id, req.userId!));
     if (mechanic?.mechanicTier === "detailer") {
       jobs = jobs.filter((j) => j.jobType === "detailing");
@@ -72,9 +82,10 @@ router.post("/jobs", authenticate, async (req: AuthRequest, res): Promise<void> 
   if (req.userRole !== "customer" && req.userRole !== "admin") {
     res.status(403).json({ error: "Only customers can create jobs" }); return;
   }
-  const { vehicleId, jobType, description, locationLat, locationLng, locationAddress, estimatedPrice } = req.body as {
+  const { vehicleId, jobType, description, locationLat, locationLng, locationAddress, estimatedPrice, requestedMechanicId } = req.body as {
     vehicleId: number; jobType: string; description: string;
     locationLat?: number; locationLng?: number; locationAddress?: string; estimatedPrice?: number;
+    requestedMechanicId?: number;
   };
   if (!vehicleId || !jobType || !description) {
     res.status(400).json({ error: "vehicleId, jobType, and description are required" }); return;
@@ -82,17 +93,28 @@ router.post("/jobs", authenticate, async (req: AuthRequest, res): Promise<void> 
   const [vehicle] = await db.select().from(vehiclesTable).where(eq(vehiclesTable.id, vehicleId));
   if (!vehicle) { res.status(404).json({ error: "Vehicle not found" }); return; }
 
+  let validatedReqMech: number | null = null;
+  if (requestedMechanicId) {
+    const [m] = await db.select().from(usersTable).where(eq(usersTable.id, requestedMechanicId));
+    if (!m || m.role !== "mechanic" || m.status !== "active") {
+      res.status(400).json({ error: "Requested mechanic is not available" }); return;
+    }
+    validatedReqMech = requestedMechanicId;
+  }
+
   const [job] = await db.insert(jobsTable).values({
     vehicleId, vin: vehicle.vin, customerId: req.userId!,
     jobType: jobType as "repair" | "diagnostic" | "maintenance" | "detailing",
     description, locationLat: locationLat ?? null, locationLng: locationLng ?? null,
-    locationAddress: locationAddress ?? null, estimatedPrice: estimatedPrice ?? null, status: "REQUESTED",
+    locationAddress: locationAddress ?? null, estimatedPrice: estimatedPrice ?? null,
+    requestedMechanicId: validatedReqMech, status: "REQUESTED",
   }).returning();
 
-  // Notify all active mechanics with push tokens (fire-and-forget)
-  db.select({ pushToken: usersTable.pushToken })
-    .from(usersTable)
-    .where(eq(usersTable.role, "mechanic"))
+  // Notify mechanics: if requested-specific, only that mechanic; else all active mechanics.
+  const mechWhere = validatedReqMech
+    ? and(eq(usersTable.role, "mechanic"), eq(usersTable.id, validatedReqMech))
+    : eq(usersTable.role, "mechanic");
+  db.select({ pushToken: usersTable.pushToken }).from(usersTable).where(mechWhere)
     .then((mechanics) => {
       const tokens = mechanics.map((m) => m.pushToken).filter(Boolean) as string[];
       notifyMechanics(tokens, jobType, description, job.id).catch(() => {});
@@ -233,9 +255,30 @@ router.post("/jobs/:jobId/rate", authenticate, async (req: AuthRequest, res): Pr
   if (job.status !== "COMPLETED" && job.status !== "PAID") {
     res.status(400).json({ error: "Job must be completed before rating" }); return;
   }
-  const { rating, note } = req.body as { rating: number; note?: string };
+  if (job.rating != null) { res.status(409).json({ error: "Already rated" }); return; }
+  const { rating, note, reviewText } = req.body as { rating: number; note?: string; reviewText?: string };
   if (!rating || rating < 1 || rating > 5) { res.status(400).json({ error: "Rating must be between 1 and 5" }); return; }
-  const [updated] = await db.update(jobsTable).set({ rating, ratingNote: note ?? null }).where(eq(jobsTable.id, jobId)).returning();
+  const [updated] = await db.update(jobsTable)
+    .set({ rating, ratingNote: note ?? null, mechanicReviewText: reviewText ?? note ?? null })
+    .where(eq(jobsTable.id, jobId)).returning();
+  res.json(await formatJob(updated));
+});
+
+router.post("/jobs/:jobId/rate-customer", authenticate, async (req: AuthRequest, res): Promise<void> => {
+  if (req.userRole !== "mechanic") { res.status(403).json({ error: "Only mechanics can rate customers" }); return; }
+  const jobId = parseInt(String(req.params.jobId), 10);
+  const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, jobId));
+  if (!job) { res.status(404).json({ error: "Job not found" }); return; }
+  if (job.mechanicId !== req.userId) { res.status(403).json({ error: "Forbidden" }); return; }
+  if (job.status !== "COMPLETED" && job.status !== "PAID") {
+    res.status(400).json({ error: "Job must be completed before rating" }); return;
+  }
+  if (job.customerRating != null) { res.status(409).json({ error: "Already rated" }); return; }
+  const { rating, reviewText } = req.body as { rating: number; reviewText?: string };
+  if (!rating || rating < 1 || rating > 5) { res.status(400).json({ error: "Rating must be between 1 and 5" }); return; }
+  const [updated] = await db.update(jobsTable)
+    .set({ customerRating: rating, customerReviewText: reviewText ?? null })
+    .where(eq(jobsTable.id, jobId)).returning();
   res.json(await formatJob(updated));
 });
 

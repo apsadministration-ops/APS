@@ -2,7 +2,7 @@ import { View, Text, StyleSheet, Pressable, ActivityIndicator, ScrollView, TextI
 import { alertMessage } from "@/utils/confirm";
 import { useColors } from "@/hooks/useColors";
 import { useListVehicles, useCreateJob } from "@workspace/api-client-react";
-import { useRouter, Stack } from "expo-router";
+import { useRouter, Stack, useLocalSearchParams } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { useState } from "react";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
@@ -16,6 +16,9 @@ export default function RequestServiceScreen() {
   const router = useRouter();
   const { data: vehicles } = useListVehicles();
   const createMutation = useCreateJob();
+  const params = useLocalSearchParams<{ mechanicId?: string; mechanicName?: string }>();
+  const requestedMechanicId = params.mechanicId ? parseInt(params.mechanicId, 10) : null;
+  const requestedMechanicName = params.mechanicName ?? null;
 
   const [selectedVehicleId, setSelectedVehicleId] = useState<number | null>(null);
   const [jobType, setJobType] = useState<string>("repair");
@@ -150,6 +153,7 @@ export default function RequestServiceScreen() {
           locationAddress: finalAddress || undefined,
           locationLat: locationLat ?? undefined,
           locationLng: locationLng ?? undefined,
+          requestedMechanicId: requestedMechanicId ?? undefined,
         },
       },
       {
@@ -180,6 +184,18 @@ export default function RequestServiceScreen() {
           contentContainerStyle={{ padding: 16, paddingBottom: 120 }}
           bottomOffset={20}
         >
+          {requestedMechanicId && requestedMechanicName ? (
+            <View style={[styles.locBadge, { backgroundColor: colors.primary + "20", borderColor: colors.primary, marginTop: 0, marginBottom: 16 }]}>
+              <Feather name="user-check" size={14} color={colors.primary} />
+              <Text style={[styles.locBadgeText, { color: colors.foreground }]}>
+                Requesting <Text style={{ fontWeight: "800" }}>{requestedMechanicName}</Text> directly
+              </Text>
+              <Pressable onPress={() => router.replace("/request-service")} hitSlop={8} style={{ marginLeft: "auto" }}>
+                <Feather name="x" size={14} color={colors.mutedForeground} />
+              </Pressable>
+            </View>
+          ) : null}
+
           <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>VEHICLE</Text>
           {!vehicles || vehicles.length === 0 ? (
             <View style={[styles.emptyVehicles, { backgroundColor: colors.card, borderColor: colors.border }]}>

@@ -558,6 +558,10 @@ export const ListJobsResponseItem = zod.object({
   createdAt: zod.coerce.date(),
   acceptedAt: zod.coerce.date().nullish(),
   completedAt: zod.coerce.date().nullish(),
+  mechanicReviewText: zod.string().nullish(),
+  customerRating: zod.number().nullish(),
+  customerReviewText: zod.string().nullish(),
+  requestedMechanicId: zod.number().nullish(),
 });
 export const ListJobsResponse = zod.array(ListJobsResponseItem);
 
@@ -572,6 +576,10 @@ export const CreateJobBody = zod.object({
   locationLng: zod.number().optional(),
   locationAddress: zod.string().optional(),
   estimatedPrice: zod.number().optional(),
+  requestedMechanicId: zod
+    .number()
+    .optional()
+    .describe("If set, only this mechanic sees the job in Available."),
 });
 
 /**
@@ -624,6 +632,10 @@ export const ListAvailableJobsResponseItem = zod.object({
   createdAt: zod.coerce.date(),
   acceptedAt: zod.coerce.date().nullish(),
   completedAt: zod.coerce.date().nullish(),
+  mechanicReviewText: zod.string().nullish(),
+  customerRating: zod.number().nullish(),
+  customerReviewText: zod.string().nullish(),
+  requestedMechanicId: zod.number().nullish(),
 });
 export const ListAvailableJobsResponse = zod.array(
   ListAvailableJobsResponseItem,
@@ -683,6 +695,10 @@ export const GetJobResponse = zod.object({
   createdAt: zod.coerce.date(),
   acceptedAt: zod.coerce.date().nullish(),
   completedAt: zod.coerce.date().nullish(),
+  mechanicReviewText: zod.string().nullish(),
+  customerRating: zod.number().nullish(),
+  customerReviewText: zod.string().nullish(),
+  requestedMechanicId: zod.number().nullish(),
 });
 
 /**
@@ -753,6 +769,10 @@ export const UpdateJobStatusResponse = zod.object({
   createdAt: zod.coerce.date(),
   acceptedAt: zod.coerce.date().nullish(),
   completedAt: zod.coerce.date().nullish(),
+  mechanicReviewText: zod.string().nullish(),
+  customerRating: zod.number().nullish(),
+  customerReviewText: zod.string().nullish(),
+  requestedMechanicId: zod.number().nullish(),
 });
 
 /**
@@ -809,6 +829,10 @@ export const AcceptJobResponse = zod.object({
   createdAt: zod.coerce.date(),
   acceptedAt: zod.coerce.date().nullish(),
   completedAt: zod.coerce.date().nullish(),
+  mechanicReviewText: zod.string().nullish(),
+  customerRating: zod.number().nullish(),
+  customerReviewText: zod.string().nullish(),
+  requestedMechanicId: zod.number().nullish(),
 });
 
 /**
@@ -865,6 +889,77 @@ export const CancelJobResponse = zod.object({
   createdAt: zod.coerce.date(),
   acceptedAt: zod.coerce.date().nullish(),
   completedAt: zod.coerce.date().nullish(),
+  mechanicReviewText: zod.string().nullish(),
+  customerRating: zod.number().nullish(),
+  customerReviewText: zod.string().nullish(),
+  requestedMechanicId: zod.number().nullish(),
+});
+
+/**
+ * @summary Mechanic rates customer + optional review/flag (mechanic only, after COMPLETED)
+ */
+export const RateCustomerParams = zod.object({
+  jobId: zod.coerce.number(),
+});
+
+export const rateCustomerBodyRatingMax = 5;
+
+export const RateCustomerBody = zod.object({
+  rating: zod.number().min(1).max(rateCustomerBodyRatingMax),
+  reviewText: zod.string().optional(),
+});
+
+export const RateCustomerResponse = zod.object({
+  id: zod.number(),
+  vehicleId: zod.number(),
+  vin: zod.string(),
+  customerId: zod.number(),
+  customerName: zod.string(),
+  mechanicId: zod.number().nullish(),
+  mechanicName: zod.string().nullish(),
+  jobType: zod.enum(["repair", "diagnostic", "maintenance", "detailing"]),
+  description: zod.string(),
+  locationLat: zod.number().nullish(),
+  locationLng: zod.number().nullish(),
+  locationAddress: zod.string().nullish(),
+  status: zod.enum([
+    "REQUESTED",
+    "OFFERED",
+    "ACCEPTED",
+    "EN_ROUTE",
+    "IN_PROGRESS",
+    "COMPLETED",
+    "PAID",
+    "CANCELLED",
+  ]),
+  estimatedPrice: zod.number().nullish(),
+  finalPrice: zod.number().nullish(),
+  rating: zod.number().nullish(),
+  ratingNote: zod.string().nullish(),
+  mechanicLat: zod.number().nullish(),
+  mechanicLng: zod.number().nullish(),
+  mechanicLocationUpdatedAt: zod.coerce.date().nullish(),
+  vehicle: zod
+    .object({
+      id: zod.number(),
+      vin: zod.string(),
+      plateNumber: zod.string().nullish(),
+      make: zod.string(),
+      model: zod.string(),
+      year: zod.number(),
+      trim: zod.string().nullish(),
+      color: zod.string().nullish(),
+      mileage: zod.number(),
+      createdAt: zod.coerce.date(),
+    })
+    .nullish(),
+  createdAt: zod.coerce.date(),
+  acceptedAt: zod.coerce.date().nullish(),
+  completedAt: zod.coerce.date().nullish(),
+  mechanicReviewText: zod.string().nullish(),
+  customerRating: zod.number().nullish(),
+  customerReviewText: zod.string().nullish(),
+  requestedMechanicId: zod.number().nullish(),
 });
 
 /**
@@ -879,6 +974,7 @@ export const rateJobBodyRatingMax = 5;
 export const RateJobBody = zod.object({
   rating: zod.number().min(1).max(rateJobBodyRatingMax),
   note: zod.string().optional(),
+  reviewText: zod.string().optional(),
 });
 
 export const RateJobResponse = zod.object({
@@ -928,6 +1024,10 @@ export const RateJobResponse = zod.object({
   createdAt: zod.coerce.date(),
   acceptedAt: zod.coerce.date().nullish(),
   completedAt: zod.coerce.date().nullish(),
+  mechanicReviewText: zod.string().nullish(),
+  customerRating: zod.number().nullish(),
+  customerReviewText: zod.string().nullish(),
+  requestedMechanicId: zod.number().nullish(),
 });
 
 /**
@@ -1111,6 +1211,10 @@ export const GetCustomerDashboardResponse = zod.object({
       createdAt: zod.coerce.date(),
       acceptedAt: zod.coerce.date().nullish(),
       completedAt: zod.coerce.date().nullish(),
+      mechanicReviewText: zod.string().nullish(),
+      customerRating: zod.number().nullish(),
+      customerReviewText: zod.string().nullish(),
+      requestedMechanicId: zod.number().nullish(),
     }),
   ),
   totalSpent: zod.number(),
@@ -1174,6 +1278,10 @@ export const GetMechanicDashboardResponse = zod.object({
       createdAt: zod.coerce.date(),
       acceptedAt: zod.coerce.date().nullish(),
       completedAt: zod.coerce.date().nullish(),
+      mechanicReviewText: zod.string().nullish(),
+      customerRating: zod.number().nullish(),
+      customerReviewText: zod.string().nullish(),
+      requestedMechanicId: zod.number().nullish(),
     }),
   ),
 });
@@ -1237,8 +1345,149 @@ export const GetAdminDashboardResponse = zod.object({
       createdAt: zod.coerce.date(),
       acceptedAt: zod.coerce.date().nullish(),
       completedAt: zod.coerce.date().nullish(),
+      mechanicReviewText: zod.string().nullish(),
+      customerRating: zod.number().nullish(),
+      customerReviewText: zod.string().nullish(),
+      requestedMechanicId: zod.number().nullish(),
     }),
   ),
+});
+
+/**
+ * @summary Browse available mechanics with ratings, reviews, and favorite/flag info
+ */
+export const ListMechanicsQueryParams = zod.object({
+  jobType: zod
+    .enum(["repair", "diagnostic", "maintenance", "detailing"])
+    .optional(),
+});
+
+export const ListMechanicsResponseItem = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  mechanicTier: zod.string().nullish(),
+  certifications: zod.string().nullish(),
+  city: zod.string().nullish(),
+  region: zod.string().nullish(),
+  averageRating: zod.number().nullish(),
+  reviewCount: zod.number(),
+  completedJobs: zod.number(),
+  isFavorite: zod.boolean(),
+  flagCount: zod.number(),
+});
+export const ListMechanicsResponse = zod.array(ListMechanicsResponseItem);
+
+/**
+ * @summary Get all reviews left for a mechanic by customers
+ */
+export const GetMechanicReviewsParams = zod.object({
+  mechanicId: zod.coerce.number(),
+});
+
+export const GetMechanicReviewsResponseItem = zod.object({
+  jobId: zod.number(),
+  rating: zod.number(),
+  text: zod.string().nullish(),
+  reviewerId: zod.number(),
+  reviewerName: zod.string(),
+  createdAt: zod.coerce.date(),
+});
+export const GetMechanicReviewsResponse = zod.array(
+  GetMechanicReviewsResponseItem,
+);
+
+/**
+ * @summary Reviews left for the current user (by the other party)
+ */
+export const GetMyReviewsResponseItem = zod.object({
+  jobId: zod.number(),
+  rating: zod.number(),
+  text: zod.string().nullish(),
+  reviewerId: zod.number(),
+  reviewerName: zod.string(),
+  createdAt: zod.coerce.date(),
+});
+export const GetMyReviewsResponse = zod.array(GetMyReviewsResponseItem);
+
+/**
+ * @summary Customer's favorite mechanics
+ */
+export const ListFavoritesResponseItem = zod.object({
+  id: zod.number(),
+  mechanicId: zod.number(),
+  mechanicName: zod.string(),
+  mechanicTier: zod.string().nullish(),
+  averageRating: zod.number().nullish(),
+  completedJobs: zod.number(),
+  createdAt: zod.coerce.date(),
+});
+export const ListFavoritesResponse = zod.array(ListFavoritesResponseItem);
+
+/**
+ * @summary Add a mechanic to favorites (customer only)
+ */
+export const AddFavoriteBody = zod.object({
+  mechanicId: zod.number(),
+});
+
+/**
+ * @summary Remove a mechanic from favorites (customer only)
+ */
+export const RemoveFavoriteParams = zod.object({
+  mechanicId: zod.coerce.number(),
+});
+
+export const RemoveFavoriteResponse = zod.object({
+  ok: zod.boolean(),
+});
+
+/**
+ * @summary List flags. Admin sees all; users see flags they have filed.
+ */
+export const ListFlagsResponseItem = zod.object({
+  id: zod.number(),
+  reporterId: zod.number(),
+  reporterName: zod.string(),
+  targetId: zod.number(),
+  targetName: zod.string(),
+  targetRole: zod.enum(["customer", "mechanic"]),
+  jobId: zod.number().nullish(),
+  type: zod.enum(["scam", "rude", "no_show", "unsafe", "other"]),
+  reason: zod.string().nullish(),
+  resolved: zod.boolean(),
+  createdAt: zod.coerce.date(),
+});
+export const ListFlagsResponse = zod.array(ListFlagsResponseItem);
+
+/**
+ * @summary Report a customer or mechanic
+ */
+export const CreateFlagBody = zod.object({
+  targetId: zod.number(),
+  jobId: zod.number().optional(),
+  type: zod.enum(["scam", "rude", "no_show", "unsafe", "other"]),
+  reason: zod.string().optional(),
+});
+
+/**
+ * @summary Mark a flag resolved (admin only)
+ */
+export const ResolveFlagParams = zod.object({
+  flagId: zod.coerce.number(),
+});
+
+export const ResolveFlagResponse = zod.object({
+  id: zod.number(),
+  reporterId: zod.number(),
+  reporterName: zod.string(),
+  targetId: zod.number(),
+  targetName: zod.string(),
+  targetRole: zod.enum(["customer", "mechanic"]),
+  jobId: zod.number().nullish(),
+  type: zod.enum(["scam", "rude", "no_show", "unsafe", "other"]),
+  reason: zod.string().nullish(),
+  resolved: zod.boolean(),
+  createdAt: zod.coerce.date(),
 });
 
 /**
