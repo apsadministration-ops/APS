@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq, and, sql } from "drizzle-orm";
 import { db, jobsTable, vehiclesTable, usersTable, workLogsTable, paymentsTable, messagesTable } from "@workspace/db";
-import { authenticate, type AuthRequest } from "../middlewares/authenticate";
+import { authenticate, requireActiveMechanic, type AuthRequest } from "../middlewares/authenticate";
 import { notifyMechanics, notifyCustomerJobAccepted } from "../lib/notifications";
 import { getUncachableStripeClient } from "../lib/stripeClient";
 import { awardCustomerPoints, awardMechanicPoints, RULES } from "../lib/loyaltyEngine";
@@ -110,6 +110,12 @@ router.get("/jobs", authenticate, async (req: AuthRequest, res): Promise<void> =
 });
 
 router.get("/jobs/available", authenticate, async (req: AuthRequest, res): Promise<void> => {
+  // Only approved mechanics (and admins) may browse the open bid pool —
+  // pending mechanics shouldn't be able to scrape customer addresses while
+  // their account is awaiting review.
+  if (req.userRole === "mechanic" && req.user?.status !== "active") {
+    res.status(403).json({ error: "Your mechanic account is pending admin approval." }); return;
+  }
   let jobs = await db.select().from(jobsTable).where(eq(jobsTable.status, "REQUESTED")).orderBy(jobsTable.createdAt);
 
   // If a job is requested for a specific mechanic, only that mechanic sees it.
@@ -175,6 +181,21 @@ router.get("/jobs/:jobId", authenticate, async (req: AuthRequest, res): Promise<
   if (isNaN(jobId)) { res.status(400).json({ error: "Invalid job ID" }); return; }
   const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, jobId));
   if (!job) { res.status(404).json({ error: "Job not found" }); return; }
+  // IDOR guard: only the customer who created the job, the assigned mechanic,
+  // an admin, or — while still REQUESTED — a mechanic eligible to bid (no
+  // requested-mechanic restriction, or matching the requested-mechanic-id)
+  // may view a job.
+  const isCustomer = req.userRole === "customer" && job.customerId === req.userId;
+  const isAssignedMechanic = req.userRole === "mechanic" && job.mechanicId === req.userId;
+  // Pending/suspended mechanics must not see job details (location, customer
+  // info) — only approved (active) mechanics can browse the bid pool.
+  const isEligibleBidder = req.userRole === "mechanic" && req.user?.status === "active"
+    && job.status === "REQUESTED"
+    && (job.requestedMechanicId == null || job.requestedMechanicId === req.userId);
+  const isAdmin = req.userRole === "admin";
+  if (!isCustomer && !isAssignedMechanic && !isEligibleBidder && !isAdmin) {
+    res.status(403).json({ error: "Forbidden" }); return;
+  }
   res.json(await formatJob(job));
 });
 
@@ -184,6 +205,14 @@ router.patch("/jobs/:jobId/status", authenticate, async (req: AuthRequest, res):
   const { status, estimatedPrice } = req.body as { status: string; estimatedPrice?: number };
   const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, jobId));
   if (!job) { res.status(404).json({ error: "Job not found" }); return; }
+  // IDOR guard: only the assigned mechanic (for in-progress status updates)
+  // or admin may patch job status. Customers cannot move job state directly —
+  // they cancel via /cancel and pay via /payments.
+  const isAssignedMechanic = req.userRole === "mechanic" && job.mechanicId === req.userId
+    && req.user?.status === "active";
+  if (!(req.userRole === "admin" || isAssignedMechanic)) {
+    res.status(403).json({ error: "Forbidden" }); return;
+  }
   const updates: Partial<typeof jobsTable.$inferInsert> = { status: status as typeof job.status };
   if (estimatedPrice !== undefined) updates.estimatedPrice = estimatedPrice;
   if (status === "COMPLETED") updates.completedAt = new Date();
@@ -192,8 +221,7 @@ router.patch("/jobs/:jobId/status", authenticate, async (req: AuthRequest, res):
   res.json(await formatJob(updated));
 });
 
-router.post("/jobs/:jobId/accept", authenticate, async (req: AuthRequest, res): Promise<void> => {
-  if (req.userRole !== "mechanic") { res.status(403).json({ error: "Only mechanics can accept jobs" }); return; }
+router.post("/jobs/:jobId/accept", authenticate, requireActiveMechanic, async (req: AuthRequest, res): Promise<void> => {
   const jobId = parseInt(String(req.params.jobId), 10);
   const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, jobId));
   if (!job) { res.status(404).json({ error: "Job not found" }); return; }
@@ -264,8 +292,7 @@ router.post("/jobs/:jobId/cancel", authenticate, async (req: AuthRequest, res): 
 });
 
 // Mechanic updates their live GPS location for a job
-router.put("/jobs/:jobId/mechanic-location", authenticate, async (req: AuthRequest, res): Promise<void> => {
-  if (req.userRole !== "mechanic") { res.status(403).json({ error: "Only mechanics can update location" }); return; }
+router.put("/jobs/:jobId/mechanic-location", authenticate, requireActiveMechanic, async (req: AuthRequest, res): Promise<void> => {
   const jobId = parseInt(String(req.params.jobId), 10);
   if (isNaN(jobId)) { res.status(400).json({ error: "Invalid job ID" }); return; }
   const { lat, lng } = req.body as { lat: number; lng: number };

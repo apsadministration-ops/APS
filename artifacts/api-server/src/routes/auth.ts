@@ -126,6 +126,14 @@ router.post("/auth/login", async (req, res): Promise<void> => {
     return;
   }
 
+  // Suspended accounts cannot obtain a fresh token. Pending mechanics CAN
+  // log in (so they see the "awaiting approval" UI) but the
+  // `requireActiveMechanic` gate blocks them from sensitive actions.
+  if (user.status === "suspended") {
+    res.status(403).json({ error: "Account suspended. Contact support." });
+    return;
+  }
+
   const token = signToken({ userId: user.id, role: user.role });
   res.json({ token, user: formatUser(user) });
 });

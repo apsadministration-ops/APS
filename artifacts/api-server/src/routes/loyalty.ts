@@ -8,7 +8,7 @@ import {
   mechanicRewardsTable,
   usersTable,
 } from "@workspace/db";
-import { authenticate, type AuthRequest } from "../middlewares/authenticate";
+import { authenticate, requireActiveMechanic, type AuthRequest } from "../middlewares/authenticate";
 import {
   CUSTOMER_REWARDS,
   MECHANIC_REWARDS,
@@ -74,8 +74,7 @@ router.get("/loyalty/rewards/mechanic", authenticate, async (req: AuthRequest, r
   res.json(MECHANIC_REWARDS);
 });
 
-router.post("/loyalty/mechanic/redeem", authenticate, async (req: AuthRequest, res): Promise<void> => {
-  if (req.userRole !== "mechanic") { res.status(403).json({ error: "Mechanics only" }); return; }
+router.post("/loyalty/mechanic/redeem", authenticate, requireActiveMechanic, async (req: AuthRequest, res): Promise<void> => {
   const { rewardKey } = req.body as { rewardKey: string };
   if (!rewardKey) { res.status(400).json({ error: "rewardKey required" }); return; }
   try {

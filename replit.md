@@ -43,6 +43,14 @@ lib/db/src/schema/referrals.ts     — referrals + referral_events tables
 lib/integrations-anthropic-ai/    — Replit AI Integrations Anthropic client
 ```
 
+## Auth & access control
+
+- **JWT + bcrypt**, 7-day token TTL. `SESSION_SECRET` is required and must be ≥32 chars in production (`lib/auth.ts` throws on startup otherwise); a dev-only fallback applies when `NODE_ENV !== "production"`.
+- **`authenticate` middleware** (`middlewares/authenticate.ts`) verifies the JWT THEN reloads the user from the DB on every request, attaches `req.user` (`{id, role, status, email, name}`), and rejects suspended accounts with 403. Status/role changes therefore take effect on the next request.
+- **`requireActiveMechanic`** is the single chokepoint for sensitive mechanic actions (accept job, GPS push, submit work log, Stripe Connect onboarding/status, mechanic loyalty redemption, browse `/jobs/available`, view REQUESTED job details). Pending mechanics can still log in and hit `/auth/me` so the mobile app shows the "awaiting approval" screen.
+- **IDOR guards** on all per-resource GET/PATCH endpoints. `vehicles.ts` uses a shared `canAccessVehicle()` helper: admin OR current/past owner OR mechanic with a job whose status is in `{ACCEPTED, EN_ROUTE, IN_PROGRESS, COMPLETED, PAID}` (cancelled/refused jobs do NOT grant access). `worklogs/:id`, `worklogs/vin/:vin`, `jobs/:id`, `jobs/:id/status`, `ownership/:vehicleId` all enforce role-scoped access.
+- **Login** rejects suspended users with 403; pending mechanics are allowed through.
+
 ## Architecture decisions
 
 - **VIN permanence:** Service history (`work_logs`) is immutable and persists across ownership transfers.

@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
 import { db, paymentsTable, jobsTable, usersTable } from "@workspace/db";
 import { tryConvertReferral } from "../lib/referralEngine";
-import { authenticate, requireRole, type AuthRequest } from "../middlewares/authenticate";
+import { authenticate, requireRole, requireActiveMechanic, type AuthRequest } from "../middlewares/authenticate";
 import { awardCustomerPoints } from "../lib/loyaltyEngine";
 import { getStripePublishableKey, getUncachableStripeClient } from "../lib/stripeClient";
 
@@ -192,7 +192,7 @@ router.get("/payments/checkout/return", async (req, res): Promise<void> => {
 /* CONNECT — mechanic payout onboarding                                       */
 /* -------------------------------------------------------------------------- */
 
-router.post("/payments/connect/onboarding", authenticate, requireRole("mechanic"), async (req: AuthRequest, res): Promise<void> => {
+router.post("/payments/connect/onboarding", authenticate, requireActiveMechanic, async (req: AuthRequest, res): Promise<void> => {
   const stripe = await getUncachableStripeClient();
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.userId!));
   if (!user) { res.status(404).json({ error: "User not found" }); return; }
@@ -219,7 +219,7 @@ router.post("/payments/connect/onboarding", authenticate, requireRole("mechanic"
   res.json({ url: link.url });
 });
 
-router.get("/payments/connect/status", authenticate, requireRole("mechanic"), async (req: AuthRequest, res): Promise<void> => {
+router.get("/payments/connect/status", authenticate, requireActiveMechanic, async (req: AuthRequest, res): Promise<void> => {
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.userId!));
   if (!user) { res.status(404).json({ error: "User not found" }); return; }
   if (!user.stripeAccountId) {

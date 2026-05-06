@@ -1,7 +1,35 @@
 import { Router, type IRouter } from "express";
-import { eq, and, isNull, count } from "drizzle-orm";
-import { db, vehiclesTable, ownershipTable, usersTable, workLogsTable } from "@workspace/db";
+import { eq, and, isNull, count, inArray } from "drizzle-orm";
+import { db, vehiclesTable, ownershipTable, usersTable, workLogsTable, jobsTable } from "@workspace/db";
 import { authenticate, type AuthRequest } from "../middlewares/authenticate";
+
+/**
+ * Returns true if `userId` may view the given vehicle's data:
+ *  - admins always
+ *  - the current OR a past owner (VIN history is preserved across transfer)
+ *  - a mechanic with a non-cancelled job assigned for this vehicle (so they
+ *    can see the car they're servicing). Cancelled/refused jobs do NOT grant
+ *    access.
+ */
+async function canAccessVehicle(userId: number, role: string, vehicleId: number): Promise<boolean> {
+  if (role === "admin") return true;
+  const [own] = await db.select().from(ownershipTable)
+    .where(and(eq(ownershipTable.vehicleId, vehicleId), eq(ownershipTable.userId, userId)));
+  if (own) return true;
+  if (role === "mechanic") {
+    // Only an ACTIVE working relationship grants access. Cancelled/refused
+    // jobs do NOT — otherwise a mechanic who briefly held a job (or was
+    // requested then cancelled) would retain VIN/history access forever.
+    const [job] = await db.select({ id: jobsTable.id }).from(jobsTable)
+      .where(and(
+        eq(jobsTable.vehicleId, vehicleId),
+        eq(jobsTable.mechanicId, userId),
+        inArray(jobsTable.status, ["ACCEPTED", "EN_ROUTE", "IN_PROGRESS", "COMPLETED", "PAID"]),
+      ));
+    if (job) return true;
+  }
+  return false;
+}
 
 const router: IRouter = Router();
 
@@ -162,6 +190,9 @@ router.get("/vehicles/vin/:vin", authenticate, async (req: AuthRequest, res): Pr
   const vin = (Array.isArray(req.params.vin) ? req.params.vin[0] : req.params.vin).toUpperCase();
   const [vehicle] = await db.select().from(vehiclesTable).where(eq(vehiclesTable.vin, vin));
   if (!vehicle) { res.status(404).json({ error: "Vehicle not found" }); return; }
+  if (!(await canAccessVehicle(req.userId!, req.userRole ?? "", vehicle.id))) {
+    res.status(403).json({ error: "Forbidden" }); return;
+  }
 
   const [activeOwnership] = await db.select().from(ownershipTable)
     .where(and(eq(ownershipTable.vehicleId, vehicle.id), isNull(ownershipTable.endDate)));
@@ -179,6 +210,9 @@ router.get("/vehicles/:vehicleId", authenticate, async (req: AuthRequest, res): 
 
   const [vehicle] = await db.select().from(vehiclesTable).where(eq(vehiclesTable.id, vehicleId));
   if (!vehicle) { res.status(404).json({ error: "Vehicle not found" }); return; }
+  if (!(await canAccessVehicle(req.userId!, req.userRole ?? "", vehicleId))) {
+    res.status(403).json({ error: "Forbidden" }); return;
+  }
 
   const [activeOwnership] = await db.select().from(ownershipTable)
     .where(and(eq(ownershipTable.vehicleId, vehicleId), isNull(ownershipTable.endDate)));
@@ -193,6 +227,9 @@ router.get("/vehicles/:vehicleId/history", authenticate, async (req: AuthRequest
   const rawId = Array.isArray(req.params.vehicleId) ? req.params.vehicleId[0] : req.params.vehicleId;
   const vehicleId = parseInt(rawId, 10);
   if (isNaN(vehicleId)) { res.status(400).json({ error: "Invalid vehicle ID" }); return; }
+  if (!(await canAccessVehicle(req.userId!, req.userRole ?? "", vehicleId))) {
+    res.status(403).json({ error: "Forbidden" }); return;
+  }
 
   const logs = await db.select().from(workLogsTable).where(eq(workLogsTable.vehicleId, vehicleId)).orderBy(workLogsTable.createdAt);
   const result = await Promise.all(logs.map(async (log) => {

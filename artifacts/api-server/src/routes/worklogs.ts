@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
-import { db, workLogsTable, jobsTable, usersTable, paymentsTable, vehiclesTable } from "@workspace/db";
-import { authenticate, type AuthRequest } from "../middlewares/authenticate";
+import { eq, and } from "drizzle-orm";
+import { db, workLogsTable, jobsTable, usersTable, paymentsTable, vehiclesTable, ownershipTable } from "@workspace/db";
+import { authenticate, requireActiveMechanic, type AuthRequest } from "../middlewares/authenticate";
 import { notifyCustomerJobComplete } from "../lib/notifications";
 import { getUncachableStripeClient } from "../lib/stripeClient";
 import { awardMechanicPoints, RULES } from "../lib/loyaltyEngine";
@@ -23,8 +23,7 @@ async function formatWorkLog(log: typeof workLogsTable.$inferSelect) {
   };
 }
 
-router.post("/worklogs", authenticate, async (req: AuthRequest, res): Promise<void> => {
-  if (req.userRole !== "mechanic") { res.status(403).json({ error: "Only mechanics can submit work logs" }); return; }
+router.post("/worklogs", authenticate, requireActiveMechanic, async (req: AuthRequest, res): Promise<void> => {
   const { jobId, serviceCategory, serviceDescription, mileageAtService, laborCost, partsCost, partsUsed, notes, beforeImages, afterImages, upsells } = req.body as {
     jobId: number; serviceCategory: string; serviceDescription: string;
     mileageAtService: number;
@@ -186,6 +185,19 @@ router.post("/worklogs", authenticate, async (req: AuthRequest, res): Promise<vo
 
 router.get("/worklogs/vin/:vin", authenticate, async (req: AuthRequest, res): Promise<void> => {
   const vin = String(req.params.vin).toUpperCase();
+  // IDOR guard: VIN history can be viewed by an admin, by the current/past
+  // owner of the VIN, or by a mechanic who actually serviced this VIN.
+  if (req.userRole !== "admin") {
+    const [own] = await db.select({ id: ownershipTable.id }).from(ownershipTable)
+      .where(and(eq(ownershipTable.vin, vin), eq(ownershipTable.userId, req.userId!)));
+    let allowed = !!own;
+    if (!allowed && req.userRole === "mechanic") {
+      const [serviced] = await db.select({ id: workLogsTable.id }).from(workLogsTable)
+        .where(and(eq(workLogsTable.vin, vin), eq(workLogsTable.mechanicId, req.userId!)));
+      allowed = !!serviced;
+    }
+    if (!allowed) { res.status(403).json({ error: "Forbidden" }); return; }
+  }
   const logs = await db.select().from(workLogsTable).where(eq(workLogsTable.vin, vin)).orderBy(workLogsTable.createdAt);
   res.json(await Promise.all(logs.map(formatWorkLog)));
 });
@@ -195,6 +207,13 @@ router.get("/worklogs/:worklogId", authenticate, async (req: AuthRequest, res): 
   if (isNaN(worklogId)) { res.status(400).json({ error: "Invalid worklog ID" }); return; }
   const [log] = await db.select().from(workLogsTable).where(eq(workLogsTable.id, worklogId));
   if (!log) { res.status(404).json({ error: "Work log not found" }); return; }
+  // IDOR guard: only the customer the log belongs to, the mechanic who wrote
+  // it, or an admin can view a single work log.
+  const isOwner = log.customerId === req.userId;
+  const isMechanic = log.mechanicId === req.userId;
+  if (!(req.userRole === "admin" || isOwner || isMechanic)) {
+    res.status(403).json({ error: "Forbidden" }); return;
+  }
   res.json(await formatWorkLog(log));
 });
 
