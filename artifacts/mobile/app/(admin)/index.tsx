@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, RefreshControl, Pressable, Alert } from "react-native";
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, RefreshControl, Pressable, Alert, Platform } from "react-native";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { Feather } from "@expo/vector-icons";
@@ -96,17 +96,23 @@ export default function AdminDashboard() {
         </View>
         <Pressable
           style={[styles.signOutBtn, { backgroundColor: colors.destructive + "18" }]}
-          onPress={() => {
-            Alert.alert("Sign Out", "Sign out of admin console?", [
-              { text: "Cancel", style: "cancel" },
-              {
-                text: "Sign Out", style: "destructive",
-                onPress: async () => {
-                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-                  await logout();
-                },
-              },
-            ]);
+          onPress={async () => {
+            const doLogout = async () => {
+              try {
+                await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+              } catch { /* haptics not supported on web */ }
+              await logout();
+            };
+            if (Platform.OS === "web") {
+              if (typeof window !== "undefined" && window.confirm("Sign out of admin console?")) {
+                await doLogout();
+              }
+            } else {
+              Alert.alert("Sign Out", "Sign out of admin console?", [
+                { text: "Cancel", style: "cancel" },
+                { text: "Sign Out", style: "destructive", onPress: doLogout },
+              ]);
+            }
           }}
         >
           <Feather name="log-out" size={18} color={colors.destructive} />
