@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { db, jobsTable, vehiclesTable, usersTable, workLogsTable, paymentsTable, messagesTable } from "@workspace/db";
 import { authenticate, type AuthRequest } from "../middlewares/authenticate";
 import { notifyMechanics, notifyCustomerJobAccepted } from "../lib/notifications";
@@ -241,6 +241,8 @@ router.delete("/jobs/:jobId", authenticate, async (req: AuthRequest, res): Promi
     await tx.delete(messagesTable).where(eq(messagesTable.jobId, jobId));
     await tx.delete(paymentsTable).where(eq(paymentsTable.jobId, jobId));
     await tx.delete(workLogsTable).where(eq(workLogsTable.jobId, jobId));
+    await tx.execute(sql`DELETE FROM flags WHERE job_id = ${jobId}`);
+    await tx.execute(sql`DELETE FROM loyalty_points WHERE job_id = ${jobId}`);
     await tx.delete(jobsTable).where(eq(jobsTable.id, jobId));
   });
   res.json({ ok: true });
