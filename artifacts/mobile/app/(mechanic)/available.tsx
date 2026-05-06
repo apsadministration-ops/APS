@@ -6,6 +6,7 @@ import { Feather } from "@expo/vector-icons";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
+import { useAuth } from "@/context/AuthContext";
 
 function AvailableJobCard({ job, onAccept, isPending }: { job: Job; onAccept: () => void; isPending: boolean }) {
   const colors = useColors();
@@ -68,9 +69,11 @@ function AvailableJobCard({ job, onAccept, isPending }: { job: Job; onAccept: ()
 
 export default function AvailableJobsScreen() {
   const colors = useColors();
+  const { user } = useAuth();
   const { data: jobs, isLoading, refetch } = useListAvailableJobs();
   const acceptMutation = useAcceptJob();
   const router = useRouter();
+  const isDetailer = user?.mechanicTier === "detailer";
 
   const handleAccept = async (job: Job) => {
     const ok = await confirm({
@@ -112,10 +115,14 @@ export default function AvailableJobsScreen() {
         refreshing={isLoading}
         ListEmptyComponent={
           <View style={[styles.emptyState, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Feather name="inbox" size={48} color={colors.mutedForeground} />
-            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No available jobs</Text>
+            <Feather name={isDetailer ? "lock" : "inbox"} size={48} color={colors.mutedForeground} />
+            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
+              {isDetailer ? "No detailing jobs available" : "No available jobs"}
+            </Text>
             <Text style={[styles.emptyDesc, { color: colors.mutedForeground }]}>
-              Check back later for new service requests.
+              {isDetailer
+                ? "Your account is at the Detailer tier, so you only see Detailing jobs. Ask an admin to promote you to Technician or higher to access repair, diagnostic, and maintenance jobs."
+                : "Check back later for new service requests."}
             </Text>
           </View>
         }
