@@ -157,8 +157,31 @@ router.post("/jobs/:jobId/cancel", authenticate, async (req: AuthRequest, res): 
   const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, jobId));
   if (!job) { res.status(404).json({ error: "Job not found" }); return; }
   if (req.userRole === "customer" && job.customerId !== req.userId) { res.status(403).json({ error: "Forbidden" }); return; }
-  if (!["REQUESTED", "OFFERED"].includes(job.status) && req.userRole !== "admin") {
-    res.status(400).json({ error: "Job cannot be cancelled after it has been accepted" }); return;
+  if (req.userRole === "mechanic" && job.mechanicId !== req.userId) { res.status(403).json({ error: "Forbidden" }); return; }
+
+  // Customers can only cancel before the job is accepted.
+  // Mechanics may cancel an assigned job up through EN_ROUTE (before work has started).
+  // Admins can cancel at any time.
+  const customerCancellable = ["REQUESTED", "OFFERED"];
+  const mechanicCancellable = ["ACCEPTED", "EN_ROUTE"];
+  const allowed =
+    req.userRole === "admin" ||
+    (req.userRole === "customer" && customerCancellable.includes(job.status)) ||
+    (req.userRole === "mechanic" && mechanicCancellable.includes(job.status));
+  if (!allowed) {
+    const msg = req.userRole === "mechanic"
+      ? "You can only cancel a job before work has started (up through En Route)."
+      : "Job cannot be cancelled after it has been accepted.";
+    res.status(400).json({ error: msg }); return;
+  }
+
+  // If a mechanic cancels, free the job back up so other mechanics can pick it up.
+  if (req.userRole === "mechanic") {
+    const [reopened] = await db.update(jobsTable)
+      .set({ status: "REQUESTED", mechanicId: null, mechanicLat: null, mechanicLng: null, mechanicLocationUpdatedAt: null })
+      .where(eq(jobsTable.id, jobId)).returning();
+    res.json(await formatJob(reopened));
+    return;
   }
   const [updated] = await db.update(jobsTable).set({ status: "CANCELLED" }).where(eq(jobsTable.id, jobId)).returning();
   res.json(await formatJob(updated));

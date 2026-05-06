@@ -59,7 +59,9 @@ export default function JobDetailScreen() {
 
   const isCustomer = user?.role === "customer";
   const isMechanic = user?.role === "mechanic";
-  const canCancel = isCustomer && ["REQUESTED", "OFFERED"].includes(job.status);
+  const canCancel =
+    (isCustomer && ["REQUESTED", "OFFERED"].includes(job.status)) ||
+    (isMechanic && job.mechanicId === user?.id && ["ACCEPTED", "EN_ROUTE"].includes(job.status));
   const canRate = isCustomer && (job.status === "COMPLETED" || job.status === "PAID") && !job.rating;
   const canSubmitWorklog = isMechanic && job.status === "IN_PROGRESS" && job.mechanicId === user?.id;
 
@@ -71,8 +73,10 @@ export default function JobDetailScreen() {
   const handleCancel = async () => {
     const ok = await confirm({
       title: "Cancel Job",
-      message: "Are you sure you want to cancel this job?",
-      confirmText: "Yes, Cancel",
+      message: isMechanic
+        ? "Drop this job? It will be released back to other mechanics."
+        : "Are you sure you want to cancel this job?",
+      confirmText: isMechanic ? "Drop Job" : "Yes, Cancel",
       cancelText: "No",
       destructive: true,
     });
@@ -285,7 +289,7 @@ export default function JobDetailScreen() {
             >
               {cancelMutation.isPending
                 ? <ActivityIndicator color="white" />
-                : <Text style={styles.primaryBtnText}>Cancel Job</Text>}
+                : <Text style={styles.primaryBtnText}>{isMechanic ? "Drop Job" : "Cancel Job"}</Text>}
             </Pressable>
           )}
         </ScrollView>
