@@ -236,6 +236,12 @@ router.post("/payments/:jobId/release", authenticate, requireRole("admin"), asyn
   if (isNaN(jobId)) { res.status(400).json({ error: "Invalid job ID" }); return; }
   const [payment] = await db.select().from(paymentsTable).where(eq(paymentsTable.jobId, jobId));
   if (!payment) { res.status(404).json({ error: "Payment not found" }); return; }
+  if (payment.providerSessionId) {
+    res.status(400).json({
+      error: "This is a Stripe-managed payment — funds are captured automatically when the work log is submitted. Manual release is not required.",
+    });
+    return;
+  }
   if (["captured", "released"].includes(payment.status)) {
     res.status(400).json({ error: "Payment already released" });
     return;

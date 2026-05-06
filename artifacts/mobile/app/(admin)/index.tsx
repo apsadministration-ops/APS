@@ -68,9 +68,15 @@ export default function AdminDashboard() {
         totalJobs: jobsArr.length,
         activeJobs: jobsArr.filter((j: any) => ["ACCEPTED", "EN_ROUTE", "IN_PROGRESS"].includes(j.status)).length,
         completedJobs: jobsArr.filter((j: any) => ["COMPLETED", "PAID"].includes(j.status)).length,
-        totalRevenue: paymentsArr.filter((p: any) => p.status === "released").reduce((s: number, p: any) => s + (p.amount ?? 0), 0),
-        heldPayments: paymentsArr.filter((p: any) => p.status === "held").length,
-        heldAmount: paymentsArr.filter((p: any) => p.status === "held").reduce((s: number, p: any) => s + (p.amount ?? 0), 0),
+        // "released" = legacy admin-released; "captured" = Stripe-captured (final).
+        totalRevenue: paymentsArr
+          .filter((p: any) => p.status === "released" || p.status === "captured")
+          .reduce((s: number, p: any) => s + (p.amount ?? 0), 0),
+        // "held" = legacy escrow awaiting admin release; "authorized" = Stripe funds on hold.
+        heldPayments: paymentsArr.filter((p: any) => p.status === "held" || p.status === "authorized").length,
+        heldAmount: paymentsArr
+          .filter((p: any) => p.status === "held" || p.status === "authorized")
+          .reduce((s: number, p: any) => s + (p.amount ?? 0), 0),
       });
     } catch { /* non-fatal */ }
     finally { setLoading(false); setRefreshing(false); }

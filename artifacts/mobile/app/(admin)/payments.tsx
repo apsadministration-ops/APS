@@ -14,6 +14,7 @@ interface Payment {
   platformFee: number;
   mechanicPayout: number;
   status: string;
+  providerSessionId?: string | null;
   createdAt: string;
   releasedAt?: string;
   job?: {
@@ -25,8 +26,15 @@ interface Payment {
 }
 
 const STATUS_COLOR: Record<string, string> = {
+  // Legacy escrow flow
   held: "#F59E0B",
   released: "#22C55E",
+  // Stripe flow
+  pending: "#94A3B8",
+  authorized: "#F59E0B",
+  captured: "#22C55E",
+  failed: "#EF4444",
+  canceled: "#6B7280",
   refunded: "#EF4444",
 };
 
@@ -36,7 +44,7 @@ export default function AdminPaymentsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [releasing, setReleasing] = useState<number | null>(null);
-  const [filter, setFilter] = useState<"all" | "held" | "released">("held");
+  const [filter, setFilter] = useState<"all" | "open" | "completed">("open");
   const domain = process.env.EXPO_PUBLIC_DOMAIN;
 
   const fetchPayments = useCallback(async () => {
@@ -52,7 +60,7 @@ export default function AdminPaymentsScreen() {
 
   useEffect(() => { fetchPayments(); }, [fetchPayments]);
 
-  const handleRelease = async (paymentId: number, amount: number) => {
+  const handleRelease = async (paymentId: number, jobId: number, amount: number) => {
     const ok = await confirm({
       title: "Release Payment",
       message: `Release $${amount.toFixed(2)} to the mechanic? This cannot be undone.`,
@@ -62,7 +70,8 @@ export default function AdminPaymentsScreen() {
     setReleasing(paymentId);
     try {
       const token = await AsyncStorage.getItem("auth_token");
-      const res = await fetch(`https://${domain}/api/payments/${paymentId}/release`, {
+      // Server route is keyed by jobId, not the payment row id.
+      const res = await fetch(`https://${domain}/api/payments/${jobId}/release`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -73,9 +82,15 @@ export default function AdminPaymentsScreen() {
 
   const onRefresh = () => { setRefreshing(true); fetchPayments(); };
 
-  const filtered = payments.filter((p) => filter === "all" || p.status === filter);
-  const totalHeld = payments.filter((p) => p.status === "held").reduce((s, p) => s + p.mechanicPayout, 0);
-  const totalReleased = payments.filter((p) => p.status === "released").reduce((s, p) => s + p.amount, 0);
+  // "open" = needs attention (legacy held OR Stripe authorized waiting for capture)
+  // "completed" = settled (legacy released OR Stripe captured)
+  const isOpen = (p: Payment) => p.status === "held" || p.status === "authorized";
+  const isDone = (p: Payment) => p.status === "released" || p.status === "captured";
+  const filtered = payments.filter((p) =>
+    filter === "all" ? true : filter === "open" ? isOpen(p) : isDone(p),
+  );
+  const totalHeld = payments.filter(isOpen).reduce((s, p) => s + p.mechanicPayout, 0);
+  const totalReleased = payments.filter(isDone).reduce((s, p) => s + p.amount, 0);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -94,14 +109,18 @@ export default function AdminPaymentsScreen() {
 
       {/* Filter */}
       <View style={[styles.filterBar, { borderBottomColor: colors.border }]}>
-        {(["held", "released", "all"] as const).map((f) => (
+        {([
+          { k: "open", label: "Open" },
+          { k: "completed", label: "Completed" },
+          { k: "all", label: "All" },
+        ] as const).map(({ k, label }) => (
           <Pressable
-            key={f}
-            style={[styles.filterBtn, { borderBottomWidth: filter === f ? 2 : 0, borderBottomColor: colors.primary }]}
-            onPress={() => setFilter(f)}
+            key={k}
+            style={[styles.filterBtn, { borderBottomWidth: filter === k ? 2 : 0, borderBottomColor: colors.primary }]}
+            onPress={() => setFilter(k)}
           >
-            <Text style={[styles.filterBtnText, { color: filter === f ? colors.primary : colors.mutedForeground }]}>
-              {f.charAt(0).toUpperCase() + f.slice(1)}
+            <Text style={[styles.filterBtnText, { color: filter === k ? colors.primary : colors.mutedForeground }]}>
+              {label}
             </Text>
           </Pressable>
         ))}
@@ -118,7 +137,7 @@ export default function AdminPaymentsScreen() {
             <View style={[styles.empty, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <Feather name="check-circle" size={36} color="#22C55E" />
               <Text style={[styles.emptyText, { color: colors.foreground }]}>
-                {filter === "held" ? "No held payments" : "No payments found"}
+                {filter === "open" ? "No open payments" : "No payments found"}
               </Text>
             </View>
           ) : (
@@ -155,10 +174,11 @@ export default function AdminPaymentsScreen() {
                     </View>
                   </View>
 
-                  {payment.status === "held" && (
+                  {/* Legacy held → admin manual release */}
+                  {payment.status === "held" && !payment.providerSessionId && (
                     <Pressable
                       style={[styles.releaseBtn, { backgroundColor: colors.primary, opacity: releasing === payment.id ? 0.6 : 1 }]}
-                      onPress={() => { void handleRelease(payment.id, payment.mechanicPayout); }}
+                      onPress={() => { void handleRelease(payment.id, payment.jobId, payment.mechanicPayout); }}
                       disabled={releasing === payment.id}
                     >
                       {releasing === payment.id
@@ -168,6 +188,20 @@ export default function AdminPaymentsScreen() {
                           <Text style={styles.releaseBtnText}>Release ${payment.mechanicPayout.toFixed(2)} to Mechanic</Text>
                         </>}
                     </Pressable>
+                  )}
+                  {/* Stripe authorized → captured automatically on work log submission */}
+                  {payment.status === "authorized" && (
+                    <View style={[styles.stripeNote, { backgroundColor: "#F59E0B18", borderColor: "#F59E0B40" }]}>
+                      <Feather name="lock" size={14} color="#F59E0B" />
+                      <Text style={[styles.stripeNoteText, { color: "#F59E0B" }]}>
+                        Funds on hold via Stripe — captured automatically when the mechanic submits work log.
+                      </Text>
+                    </View>
+                  )}
+                  {payment.status === "captured" && payment.releasedAt && (
+                    <Text style={[styles.releasedNote, { color: "#22C55E" }]}>
+                      Captured {new Date(payment.releasedAt).toLocaleDateString()} via Stripe
+                    </Text>
                   )}
                   {payment.status === "released" && payment.releasedAt && (
                     <Text style={[styles.releasedNote, { color: "#22C55E" }]}>
@@ -224,6 +258,8 @@ const styles = StyleSheet.create({
   },
   releaseBtnText: { color: "white", fontWeight: "700", fontSize: 14 },
   releasedNote: { fontSize: 13, textAlign: "center", fontWeight: "600" },
+  stripeNote: { flexDirection: "row", alignItems: "center", gap: 8, padding: 10, borderRadius: 10, borderWidth: 1 },
+  stripeNoteText: { flex: 1, fontSize: 12, fontWeight: "500", lineHeight: 16 },
   empty: { padding: 40, borderRadius: 16, borderWidth: 1, alignItems: "center", gap: 10 },
   emptyText: { fontSize: 16, fontWeight: "600" },
 });
