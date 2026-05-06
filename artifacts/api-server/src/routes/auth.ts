@@ -44,7 +44,8 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const { name, email, phone, password, role } = parsed.data;
+  const { name, phone, password, role } = parsed.data;
+  const email = parsed.data.email.trim().toLowerCase();
   const { referredBy } = req.body as { referredBy?: string };
 
   const [existing] = await db.select().from(usersTable).where(eq(usersTable.email, email));
@@ -87,7 +88,8 @@ router.post("/auth/login", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const { email, password } = parsed.data;
+  const { password } = parsed.data;
+  const email = parsed.data.email.trim().toLowerCase();
 
   const [user] = await db.select().from(usersTable).where(eq(usersTable.email, email));
   if (!user) {
@@ -122,11 +124,12 @@ router.post("/auth/admin-setup", async (req, res): Promise<void> => {
     return;
   }
 
-  const { name, email, password } = req.body as { name?: string; email?: string; password?: string };
-  if (!name || !email || !password) {
+  const { name, email: rawEmail, password } = req.body as { name?: string; email?: string; password?: string };
+  if (!name || !rawEmail || !password) {
     res.status(400).json({ error: "name, email, and password are required" });
     return;
   }
+  const email = rawEmail.trim().toLowerCase();
 
   const [existing] = await db.select().from(usersTable).where(eq(usersTable.email, email));
   if (existing) {
