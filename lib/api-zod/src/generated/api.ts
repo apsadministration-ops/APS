@@ -43,6 +43,12 @@ export const LoginResponse = zod.object({
     role: zod.enum(["customer", "mechanic", "admin"]),
     status: zod.enum(["active", "suspended", "pending"]),
     avatarUrl: zod.string().nullish(),
+    referralCode: zod.string().nullish(),
+    mechanicTier: zod
+      .enum(["detailer", "technician", "senior", "master"])
+      .nullish(),
+    certifications: zod.string().nullish(),
+    loyaltyPoints: zod.number().optional(),
     createdAt: zod.coerce.date(),
   }),
 });
@@ -58,6 +64,12 @@ export const GetMeResponse = zod.object({
   role: zod.enum(["customer", "mechanic", "admin"]),
   status: zod.enum(["active", "suspended", "pending"]),
   avatarUrl: zod.string().nullish(),
+  referralCode: zod.string().nullish(),
+  mechanicTier: zod
+    .enum(["detailer", "technician", "senior", "master"])
+    .nullish(),
+  certifications: zod.string().nullish(),
+  loyaltyPoints: zod.number().optional(),
   createdAt: zod.coerce.date(),
 });
 
@@ -77,6 +89,12 @@ export const ListUsersResponseItem = zod.object({
   role: zod.enum(["customer", "mechanic", "admin"]),
   status: zod.enum(["active", "suspended", "pending"]),
   avatarUrl: zod.string().nullish(),
+  referralCode: zod.string().nullish(),
+  mechanicTier: zod
+    .enum(["detailer", "technician", "senior", "master"])
+    .nullish(),
+  certifications: zod.string().nullish(),
+  loyaltyPoints: zod.number().optional(),
   createdAt: zod.coerce.date(),
 });
 export const ListUsersResponse = zod.array(ListUsersResponseItem);
@@ -96,6 +114,12 @@ export const GetUserResponse = zod.object({
   role: zod.enum(["customer", "mechanic", "admin"]),
   status: zod.enum(["active", "suspended", "pending"]),
   avatarUrl: zod.string().nullish(),
+  referralCode: zod.string().nullish(),
+  mechanicTier: zod
+    .enum(["detailer", "technician", "senior", "master"])
+    .nullish(),
+  certifications: zod.string().nullish(),
+  loyaltyPoints: zod.number().optional(),
   createdAt: zod.coerce.date(),
 });
 
@@ -110,6 +134,10 @@ export const UpdateUserBody = zod.object({
   status: zod.enum(["active", "suspended", "pending"]).optional(),
   name: zod.string().optional(),
   phone: zod.string().optional(),
+  mechanicTier: zod
+    .enum(["detailer", "technician", "senior", "master"])
+    .optional(),
+  certifications: zod.string().optional(),
 });
 
 export const UpdateUserResponse = zod.object({
@@ -120,6 +148,12 @@ export const UpdateUserResponse = zod.object({
   role: zod.enum(["customer", "mechanic", "admin"]),
   status: zod.enum(["active", "suspended", "pending"]),
   avatarUrl: zod.string().nullish(),
+  referralCode: zod.string().nullish(),
+  mechanicTier: zod
+    .enum(["detailer", "technician", "senior", "master"])
+    .nullish(),
+  certifications: zod.string().nullish(),
+  loyaltyPoints: zod.number().optional(),
   createdAt: zod.coerce.date(),
 });
 
@@ -139,6 +173,12 @@ export const GetMechanicProfileResponse = zod.object({
     role: zod.enum(["customer", "mechanic", "admin"]),
     status: zod.enum(["active", "suspended", "pending"]),
     avatarUrl: zod.string().nullish(),
+    referralCode: zod.string().nullish(),
+    mechanicTier: zod
+      .enum(["detailer", "technician", "senior", "master"])
+      .nullish(),
+    certifications: zod.string().nullish(),
+    loyaltyPoints: zod.number().optional(),
     createdAt: zod.coerce.date(),
   }),
   totalJobs: zod.number(),
@@ -154,6 +194,7 @@ export const ListVehiclesResponseItem = zod
   .object({
     id: zod.number(),
     vin: zod.string(),
+    plateNumber: zod.string().nullish(),
     make: zod.string(),
     model: zod.string(),
     year: zod.number(),
@@ -172,6 +213,12 @@ export const ListVehiclesResponseItem = zod
           role: zod.enum(["customer", "mechanic", "admin"]),
           status: zod.enum(["active", "suspended", "pending"]),
           avatarUrl: zod.string().nullish(),
+          referralCode: zod.string().nullish(),
+          mechanicTier: zod
+            .enum(["detailer", "technician", "senior", "master"])
+            .nullish(),
+          certifications: zod.string().nullish(),
+          loyaltyPoints: zod.number().optional(),
           createdAt: zod.coerce.date(),
         })
         .nullish(),
@@ -189,6 +236,7 @@ export const createVehicleBodyVinMax = 17;
 
 export const CreateVehicleBody = zod.object({
   vin: zod.string().min(createVehicleBodyVinMin).max(createVehicleBodyVinMax),
+  plateNumber: zod.string().optional(),
   make: zod.string(),
   model: zod.string(),
   year: zod.number(),
@@ -207,6 +255,7 @@ export const GetVehicleByVinResponse = zod
   .object({
     id: zod.number(),
     vin: zod.string(),
+    plateNumber: zod.string().nullish(),
     make: zod.string(),
     model: zod.string(),
     year: zod.number(),
@@ -225,6 +274,12 @@ export const GetVehicleByVinResponse = zod
           role: zod.enum(["customer", "mechanic", "admin"]),
           status: zod.enum(["active", "suspended", "pending"]),
           avatarUrl: zod.string().nullish(),
+          referralCode: zod.string().nullish(),
+          mechanicTier: zod
+            .enum(["detailer", "technician", "senior", "master"])
+            .nullish(),
+          certifications: zod.string().nullish(),
+          loyaltyPoints: zod.number().optional(),
           createdAt: zod.coerce.date(),
         })
         .nullish(),
@@ -244,6 +299,7 @@ export const GetVehicleResponse = zod
   .object({
     id: zod.number(),
     vin: zod.string(),
+    plateNumber: zod.string().nullish(),
     make: zod.string(),
     model: zod.string(),
     year: zod.number(),
@@ -262,6 +318,12 @@ export const GetVehicleResponse = zod
           role: zod.enum(["customer", "mechanic", "admin"]),
           status: zod.enum(["active", "suspended", "pending"]),
           avatarUrl: zod.string().nullish(),
+          referralCode: zod.string().nullish(),
+          mechanicTier: zod
+            .enum(["detailer", "technician", "senior", "master"])
+            .nullish(),
+          certifications: zod.string().nullish(),
+          loyaltyPoints: zod.number().optional(),
           createdAt: zod.coerce.date(),
         })
         .nullish(),
@@ -399,6 +461,7 @@ export const ListJobsResponseItem = zod.object({
     .object({
       id: zod.number(),
       vin: zod.string(),
+      plateNumber: zod.string().nullish(),
       make: zod.string(),
       model: zod.string(),
       year: zod.number(),
@@ -460,6 +523,7 @@ export const ListAvailableJobsResponseItem = zod.object({
     .object({
       id: zod.number(),
       vin: zod.string(),
+      plateNumber: zod.string().nullish(),
       make: zod.string(),
       model: zod.string(),
       year: zod.number(),
@@ -514,6 +578,7 @@ export const GetJobResponse = zod.object({
     .object({
       id: zod.number(),
       vin: zod.string(),
+      plateNumber: zod.string().nullish(),
       make: zod.string(),
       model: zod.string(),
       year: zod.number(),
@@ -579,6 +644,7 @@ export const UpdateJobStatusResponse = zod.object({
     .object({
       id: zod.number(),
       vin: zod.string(),
+      plateNumber: zod.string().nullish(),
       make: zod.string(),
       model: zod.string(),
       year: zod.number(),
@@ -630,6 +696,7 @@ export const AcceptJobResponse = zod.object({
     .object({
       id: zod.number(),
       vin: zod.string(),
+      plateNumber: zod.string().nullish(),
       make: zod.string(),
       model: zod.string(),
       year: zod.number(),
@@ -681,6 +748,7 @@ export const CancelJobResponse = zod.object({
     .object({
       id: zod.number(),
       vin: zod.string(),
+      plateNumber: zod.string().nullish(),
       make: zod.string(),
       model: zod.string(),
       year: zod.number(),
@@ -739,6 +807,7 @@ export const RateJobResponse = zod.object({
     .object({
       id: zod.number(),
       vin: zod.string(),
+      plateNumber: zod.string().nullish(),
       make: zod.string(),
       model: zod.string(),
       year: zod.number(),
@@ -909,6 +978,7 @@ export const GetCustomerDashboardResponse = zod.object({
         .object({
           id: zod.number(),
           vin: zod.string(),
+          plateNumber: zod.string().nullish(),
           make: zod.string(),
           model: zod.string(),
           year: zod.number(),
@@ -967,6 +1037,7 @@ export const GetMechanicDashboardResponse = zod.object({
         .object({
           id: zod.number(),
           vin: zod.string(),
+          plateNumber: zod.string().nullish(),
           make: zod.string(),
           model: zod.string(),
           year: zod.number(),
@@ -1025,6 +1096,7 @@ export const GetAdminDashboardResponse = zod.object({
         .object({
           id: zod.number(),
           vin: zod.string(),
+          plateNumber: zod.string().nullish(),
           make: zod.string(),
           model: zod.string(),
           year: zod.number(),

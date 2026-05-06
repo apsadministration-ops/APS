@@ -818,6 +818,18 @@ components:
         avatarUrl:
           type: string
           nullable: true
+        referralCode:
+          type: string
+          nullable: true
+        mechanicTier:
+          type: string
+          enum: [detailer, technician, senior, master]
+          nullable: true
+        certifications:
+          type: string
+          nullable: true
+        loyaltyPoints:
+          type: integer
         createdAt:
           type: string
           format: date-time
@@ -832,6 +844,11 @@ components:
         name:
           type: string
         phone:
+          type: string
+        mechanicTier:
+          type: string
+          enum: [detailer, technician, senior, master]
+        certifications:
           type: string
 
     MechanicProfile:
@@ -858,6 +875,9 @@ components:
           type: integer
         vin:
           type: string
+        plateNumber:
+          type: string
+          nullable: true
         make:
           type: string
         model:
@@ -895,6 +915,8 @@ components:
           type: string
           minLength: 17
           maxLength: 17
+        plateNumber:
+          type: string
         make:
           type: string
         model:

@@ -1,15 +1,25 @@
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, RefreshControl } from "react-native";
 import { useColors } from "@/hooks/useColors";
 import { useGetMechanicDashboard } from "@workspace/api-client-react";
+import { useAuth } from "@/context/AuthContext";
 import { Feather } from "@expo/vector-icons";
-import { Link } from "expo-router";
+import { Link, useRouter } from "expo-router";
 import { JobCard } from "@/components/JobCard";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+function greeting() {
+  const h = new Date().getHours();
+  if (h < 12) return "Good morning";
+  if (h < 18) return "Good afternoon";
+  return "Good evening";
+}
 
 export default function MechanicDashboard() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { data: dashboard, isLoading, error } = useGetMechanicDashboard();
+  const router = useRouter();
+  const { user } = useAuth();
+  const { data: dashboard, isLoading, error, refetch, isRefetching } = useGetMechanicDashboard();
 
   if (isLoading) {
     return (
@@ -32,7 +42,12 @@ export default function MechanicDashboard() {
       <ScrollView 
         contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
         contentInsetAdjustmentBehavior="automatic"
+        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.primary} />}
       >
+        {/* Personalized greeting */}
+        <Text style={[styles.greeting, { color: colors.mutedForeground }]}>{greeting()},</Text>
+        <Text style={[styles.userName, { color: colors.foreground }]}>{user?.name?.split(" ")[0] ?? "there"} 🔧</Text>
+
         <View style={styles.earningsCard}>
           <Text style={[styles.earningsLabel, { color: "rgba(255,255,255,0.8)" }]}>Today's Earnings</Text>
           <Text style={styles.earningsValue}>${dashboard.todayEarnings.toFixed(2)}</Text>
@@ -42,22 +57,53 @@ export default function MechanicDashboard() {
           </View>
         </View>
 
+        {/* Quick actions — most-used mechanic destinations */}
         <View style={styles.statsGrid}>
-          <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.statValue, { color: colors.foreground }]}>{dashboard.activeJobCount}</Text>
-            <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Active Jobs</Text>
-          </View>
-          <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Pressable
+            style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={() => router.push("/(mechanic)/available")}
+          >
+            <Feather name="list" size={18} color="#0EA5E9" />
             <Text style={[styles.statValue, { color: colors.foreground }]}>{dashboard.availableJobCount}</Text>
-            <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Available Jobs</Text>
-          </View>
+            <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Available</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={() => router.push("/(mechanic)/active")}
+          >
+            <Feather name="play-circle" size={18} color="#22C55E" />
+            <Text style={[styles.statValue, { color: colors.foreground }]}>{dashboard.activeJobCount}</Text>
+            <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Active</Text>
+          </Pressable>
           <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Feather name="star" size={18} color="#FBBF24" />
             <Text style={[styles.statValue, { color: colors.foreground }]}>
               {dashboard.averageRating ? dashboard.averageRating.toFixed(1) : "—"}
             </Text>
             <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Rating</Text>
           </View>
         </View>
+
+        {/* Highlight available jobs if any */}
+        {dashboard.availableJobCount > 0 && (
+          <Pressable
+            style={[styles.alertCta, { backgroundColor: "#0EA5E912", borderColor: "#0EA5E940" }]}
+            onPress={() => router.push("/(mechanic)/available")}
+          >
+            <View style={[styles.alertIcon, { backgroundColor: "#0EA5E9" }]}>
+              <Feather name="bell" size={18} color="white" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.alertTitle, { color: colors.foreground }]}>
+                {dashboard.availableJobCount} job{dashboard.availableJobCount === 1 ? "" : "s"} waiting
+              </Text>
+              <Text style={[styles.alertSub, { color: colors.mutedForeground }]}>
+                Tap to browse and accept new work
+              </Text>
+            </View>
+            <Feather name="chevron-right" size={20} color="#0EA5E9" />
+          </Pressable>
+        )}
 
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Recent Jobs</Text>
@@ -131,27 +177,36 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "700",
   },
+  greeting: { fontSize: 14, fontWeight: "500" },
+  userName: { fontSize: 24, fontWeight: "800", marginBottom: 16 },
   statsGrid: {
     flexDirection: "row",
-    gap: 12,
-    marginBottom: 24,
+    gap: 10,
+    marginBottom: 16,
   },
   statCard: {
     flex: 1,
     borderWidth: 1,
     borderRadius: 12,
-    padding: 16,
+    padding: 12,
     alignItems: "center",
+    gap: 4,
   },
   statValue: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: "700",
-    marginBottom: 4,
   },
   statLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "500",
   },
+  alertCta: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    padding: 14, borderRadius: 14, borderWidth: 1, marginBottom: 24,
+  },
+  alertIcon: { width: 38, height: 38, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  alertTitle: { fontSize: 14, fontWeight: "700" },
+  alertSub: { fontSize: 12, marginTop: 2 },
   sectionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",

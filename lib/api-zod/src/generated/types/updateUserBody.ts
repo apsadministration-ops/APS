@@ -5,10 +5,13 @@
  * APS - Automotive Platform System API
  * OpenAPI spec version: 0.1.0
  */
+import type { UpdateUserBodyMechanicTier } from "./updateUserBodyMechanicTier";
 import type { UpdateUserBodyStatus } from "./updateUserBodyStatus";
 
 export interface UpdateUserBody {
   status?: UpdateUserBodyStatus;
   name?: string;
   phone?: string;
+  mechanicTier?: UpdateUserBodyMechanicTier;
+  certifications?: string;
 }

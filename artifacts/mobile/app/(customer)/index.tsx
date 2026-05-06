@@ -1,16 +1,25 @@
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, RefreshControl } from "react-native";
 import { useColors } from "@/hooks/useColors";
 import { useGetCustomerDashboard } from "@workspace/api-client-react";
+import { useAuth } from "@/context/AuthContext";
 import { Feather } from "@expo/vector-icons";
 import { Link, useRouter } from "expo-router";
 import { JobCard } from "@/components/JobCard";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+function greeting() {
+  const h = new Date().getHours();
+  if (h < 12) return "Good morning";
+  if (h < 18) return "Good afternoon";
+  return "Good evening";
+}
+
 export default function CustomerDashboard() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { data: dashboard, isLoading, error } = useGetCustomerDashboard();
+  const { user } = useAuth();
+  const { data: dashboard, isLoading, error, refetch, isRefetching } = useGetCustomerDashboard();
 
   if (isLoading) {
     return (
@@ -33,19 +42,51 @@ export default function CustomerDashboard() {
       <ScrollView 
         contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
         contentInsetAdjustmentBehavior="automatic"
+        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.primary} />}
       >
+        {/* Personalized greeting */}
+        <Text style={[styles.greeting, { color: colors.mutedForeground }]}>{greeting()},</Text>
+        <Text style={[styles.userName, { color: colors.foreground }]}>{user?.name?.split(" ")[0] ?? "there"} 👋</Text>
+
+        {/* Primary CTA — Request Service */}
+        <Pressable
+          style={[styles.primaryCta, { backgroundColor: colors.primary }]}
+          onPress={() => router.push("/request-service")}
+        >
+          <View style={styles.primaryCtaIcon}>
+            <Feather name="plus-circle" size={22} color={colors.primaryForeground} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.primaryCtaTitle, { color: colors.primaryForeground }]}>Request a Service</Text>
+            <Text style={[styles.primaryCtaSub, { color: colors.primaryForeground, opacity: 0.85 }]}>
+              Repairs, diagnostics, maintenance & more
+            </Text>
+          </View>
+          <Feather name="chevron-right" size={20} color={colors.primaryForeground} />
+        </Pressable>
+
+        {/* Compact stats row */}
         <View style={styles.statsGrid}>
-          <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Pressable
+            style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={() => router.push("/(customer)/vehicles")}
+          >
+            <Feather name="truck" size={18} color={colors.primary} />
             <Text style={[styles.statValue, { color: colors.foreground }]}>{dashboard.vehicleCount}</Text>
             <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Vehicles</Text>
-          </View>
-          <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          </Pressable>
+          <Pressable
+            style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={() => router.push("/(customer)/jobs")}
+          >
+            <Feather name="activity" size={18} color="#22C55E" />
             <Text style={[styles.statValue, { color: colors.foreground }]}>{dashboard.activeJobCount}</Text>
-            <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Active Jobs</Text>
-          </View>
+            <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Active</Text>
+          </Pressable>
           <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Feather name="dollar-sign" size={18} color="#F97316" />
             <Text style={[styles.statValue, { color: colors.foreground }]}>${dashboard.totalSpent.toFixed(0)}</Text>
-            <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Total Spent</Text>
+            <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Spent</Text>
           </View>
         </View>
 
@@ -56,20 +97,24 @@ export default function CustomerDashboard() {
             onPress={() => router.push("/detailing")}
           >
             <View style={[styles.quickActionIcon, { backgroundColor: "#0EA5E9" }]}>
-              <Feather name="droplet" size={20} color="white" />
+              <Feather name="droplet" size={18} color="white" />
             </View>
-            <Text style={[styles.quickActionLabel, { color: colors.foreground }]}>Book Detailing</Text>
-            <Text style={[styles.quickActionSub, { color: colors.mutedForeground }]}>4 packages</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.quickActionLabel, { color: colors.foreground }]}>Book Detailing</Text>
+              <Text style={[styles.quickActionSub, { color: colors.mutedForeground }]}>4 packages</Text>
+            </View>
           </Pressable>
           <Pressable
             style={[styles.quickAction, { backgroundColor: "#8B5CF612", borderColor: "#8B5CF640" }]}
             onPress={() => router.push("/referral")}
           >
             <View style={[styles.quickActionIcon, { backgroundColor: "#8B5CF6" }]}>
-              <Feather name="gift" size={20} color="white" />
+              <Feather name="gift" size={18} color="white" />
             </View>
-            <Text style={[styles.quickActionLabel, { color: colors.foreground }]}>Rewards</Text>
-            <Text style={[styles.quickActionSub, { color: colors.mutedForeground }]}>Earn points</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.quickActionLabel, { color: colors.foreground }]}>Rewards</Text>
+              <Text style={[styles.quickActionSub, { color: colors.mutedForeground }]}>Earn points</Text>
+            </View>
           </Pressable>
         </View>
 
@@ -119,25 +164,35 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  greeting: { fontSize: 14, fontWeight: "500" },
+  userName: { fontSize: 24, fontWeight: "800", marginBottom: 16 },
+  primaryCta: {
+    flexDirection: "row", alignItems: "center", gap: 14,
+    padding: 18, borderRadius: 16, marginBottom: 16,
+    elevation: 2, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 6,
+  },
+  primaryCtaIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.18)", alignItems: "center", justifyContent: "center" },
+  primaryCtaTitle: { fontSize: 16, fontWeight: "800" },
+  primaryCtaSub: { fontSize: 12, marginTop: 2 },
   statsGrid: {
     flexDirection: "row",
-    gap: 12,
-    marginBottom: 24,
+    gap: 10,
+    marginBottom: 16,
   },
   statCard: {
     flex: 1,
     borderWidth: 1,
     borderRadius: 12,
-    padding: 16,
+    padding: 12,
     alignItems: "center",
+    gap: 4,
   },
   statValue: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: "700",
-    marginBottom: 4,
   },
   statLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "500",
   },
   sectionHeader: {
@@ -189,11 +244,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 4,
   },
-  quickActions: { flexDirection: "row", gap: 12, marginBottom: 24 },
+  quickActions: { flexDirection: "row", gap: 10, marginBottom: 24 },
   quickAction: {
-    flex: 1, borderWidth: 1, borderRadius: 16, padding: 14, alignItems: "center", gap: 6,
+    flex: 1, flexDirection: "row", borderWidth: 1, borderRadius: 14, padding: 12, alignItems: "center", gap: 10,
   },
-  quickActionIcon: { width: 44, height: 44, borderRadius: 14, alignItems: "center", justifyContent: "center" },
-  quickActionLabel: { fontSize: 13, fontWeight: "700", textAlign: "center" },
-  quickActionSub: { fontSize: 11, textAlign: "center" },
+  quickActionIcon: { width: 38, height: 38, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  quickActionLabel: { fontSize: 13, fontWeight: "700" },
+  quickActionSub: { fontSize: 11, marginTop: 1 },
 });

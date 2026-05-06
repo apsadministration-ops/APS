@@ -12,6 +12,7 @@ export interface CreateVehicleBody {
    * @maxLength 17
    */
   vin: string;
+  plateNumber?: string;
   make: string;
   model: string;
   year: number;

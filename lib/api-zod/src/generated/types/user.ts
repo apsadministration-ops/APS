@@ -5,6 +5,7 @@
  * APS - Automotive Platform System API
  * OpenAPI spec version: 0.1.0
  */
+import type { UserMechanicTier } from "./userMechanicTier";
 import type { UserRole } from "./userRole";
 import type { UserStatus } from "./userStatus";
 
@@ -16,5 +17,9 @@ export interface User {
   role: UserRole;
   status: UserStatus;
   avatarUrl?: string | null;
+  referralCode?: string | null;
+  mechanicTier?: UserMechanicTier;
+  certifications?: string | null;
+  loyaltyPoints?: number;
   createdAt: Date;
 }

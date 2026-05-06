@@ -50,6 +50,17 @@ export const UserStatus = {
   pending: "pending",
 } as const;
 
+export type UserMechanicTier =
+  | (typeof UserMechanicTier)[keyof typeof UserMechanicTier]
+  | null;
+
+export const UserMechanicTier = {
+  detailer: "detailer",
+  technician: "technician",
+  senior: "senior",
+  master: "master",
+} as const;
+
 export interface User {
   id: number;
   name: string;
@@ -58,6 +69,10 @@ export interface User {
   role: UserRole;
   status: UserStatus;
   avatarUrl?: string | null;
+  referralCode?: string | null;
+  mechanicTier?: UserMechanicTier;
+  certifications?: string | null;
+  loyaltyPoints?: number;
   createdAt: string;
 }
 
@@ -75,10 +90,22 @@ export const UpdateUserBodyStatus = {
   pending: "pending",
 } as const;
 
+export type UpdateUserBodyMechanicTier =
+  (typeof UpdateUserBodyMechanicTier)[keyof typeof UpdateUserBodyMechanicTier];
+
+export const UpdateUserBodyMechanicTier = {
+  detailer: "detailer",
+  technician: "technician",
+  senior: "senior",
+  master: "master",
+} as const;
+
 export interface UpdateUserBody {
   status?: UpdateUserBodyStatus;
   name?: string;
   phone?: string;
+  mechanicTier?: UpdateUserBodyMechanicTier;
+  certifications?: string;
 }
 
 export interface MechanicProfile {
@@ -92,6 +119,7 @@ export interface MechanicProfile {
 export interface Vehicle {
   id: number;
   vin: string;
+  plateNumber?: string | null;
   make: string;
   model: string;
   year: number;
@@ -112,6 +140,7 @@ export interface CreateVehicleBody {
    * @maxLength 17
    */
   vin: string;
+  plateNumber?: string;
   make: string;
   model: string;
   year: number;

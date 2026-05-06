@@ -9,6 +9,7 @@
 export interface Vehicle {
   id: number;
   vin: string;
+  plateNumber?: string | null;
   make: string;
   model: string;
   year: number;
