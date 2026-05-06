@@ -1,4 +1,5 @@
-import { View, Text, StyleSheet, FlatList, Pressable, ActivityIndicator, Alert } from "react-native";
+import { View, Text, StyleSheet, FlatList, Pressable, ActivityIndicator } from "react-native";
+import { confirm, alertMessage } from "@/utils/confirm";
 import { useColors } from "@/hooks/useColors";
 import { useListAvailableJobs, useAcceptJob, Job } from "@workspace/api-client-react";
 import { Feather } from "@expo/vector-icons";
@@ -71,31 +72,25 @@ export default function AvailableJobsScreen() {
   const acceptMutation = useAcceptJob();
   const router = useRouter();
 
-  const handleAccept = (job: Job) => {
-    Alert.alert(
-      "Accept Job",
-      `Accept this ${job.jobType} job for ${job.vehicle?.year} ${job.vehicle?.make} ${job.vehicle?.model}?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Accept",
-          onPress: () => {
-            acceptMutation.mutate(
-              { jobId: job.id },
-              {
-                onSuccess: () => {
-                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                  refetch();
-                  router.push(`/job/${job.id}`);
-                },
-                onError: () => {
-                  Alert.alert("Error", "Failed to accept job. It may have been taken.");
-                },
-              }
-            );
-          },
+  const handleAccept = async (job: Job) => {
+    const ok = await confirm({
+      title: "Accept Job",
+      message: `Accept this ${job.jobType} job for ${job.vehicle?.year} ${job.vehicle?.make} ${job.vehicle?.model}?`,
+      confirmText: "Accept",
+    });
+    if (!ok) return;
+    acceptMutation.mutate(
+      { jobId: job.id },
+      {
+        onSuccess: () => {
+          try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch { /* web */ }
+          refetch();
+          router.push(`/job/${job.id}`);
         },
-      ]
+        onError: () => {
+          void alertMessage("Error", "Failed to accept job. It may have been taken.");
+        },
+      }
     );
   };
 
@@ -127,7 +122,7 @@ export default function AvailableJobsScreen() {
         renderItem={({ item }) => (
           <AvailableJobCard
             job={item}
-            onAccept={() => handleAccept(item)}
+            onAccept={() => { void handleAccept(item); }}
             isPending={acceptMutation.isPending}
           />
         )}

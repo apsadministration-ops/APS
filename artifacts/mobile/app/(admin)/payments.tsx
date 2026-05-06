@@ -1,6 +1,7 @@
 import {
-  View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Alert, RefreshControl,
+  View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, RefreshControl,
 } from "react-native";
+import { confirm } from "@/utils/confirm";
 import { useColors } from "@/hooks/useColors";
 import { Feather } from "@expo/vector-icons";
 import { useState, useEffect, useCallback } from "react";
@@ -51,30 +52,23 @@ export default function AdminPaymentsScreen() {
 
   useEffect(() => { fetchPayments(); }, [fetchPayments]);
 
-  const handleRelease = (paymentId: number, amount: number) => {
-    Alert.alert(
-      "Release Payment",
-      `Release $${amount.toFixed(2)} to the mechanic? This cannot be undone.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Release",
-          style: "default",
-          onPress: async () => {
-            setReleasing(paymentId);
-            try {
-              const token = await AsyncStorage.getItem("auth_token");
-              const res = await fetch(`https://${domain}/api/payments/${paymentId}/release`, {
-                method: "POST",
-                headers: { Authorization: `Bearer ${token}` },
-              });
-              if (res.ok) fetchPayments();
-            } catch { /* non-fatal */ }
-            finally { setReleasing(null); }
-          },
-        },
-      ],
-    );
+  const handleRelease = async (paymentId: number, amount: number) => {
+    const ok = await confirm({
+      title: "Release Payment",
+      message: `Release $${amount.toFixed(2)} to the mechanic? This cannot be undone.`,
+      confirmText: "Release",
+    });
+    if (!ok) return;
+    setReleasing(paymentId);
+    try {
+      const token = await AsyncStorage.getItem("auth_token");
+      const res = await fetch(`https://${domain}/api/payments/${paymentId}/release`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) fetchPayments();
+    } catch { /* non-fatal */ }
+    finally { setReleasing(null); }
   };
 
   const onRefresh = () => { setRefreshing(true); fetchPayments(); };
@@ -164,7 +158,7 @@ export default function AdminPaymentsScreen() {
                   {payment.status === "held" && (
                     <Pressable
                       style={[styles.releaseBtn, { backgroundColor: colors.primary, opacity: releasing === payment.id ? 0.6 : 1 }]}
-                      onPress={() => handleRelease(payment.id, payment.mechanicPayout)}
+                      onPress={() => { void handleRelease(payment.id, payment.mechanicPayout); }}
                       disabled={releasing === payment.id}
                     >
                       {releasing === payment.id

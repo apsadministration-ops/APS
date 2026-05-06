@@ -1,6 +1,7 @@
 import {
-  View, Text, StyleSheet, ScrollView, Pressable, Alert, ActivityIndicator,
+  View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator,
 } from "react-native";
+import { confirm } from "@/utils/confirm";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "expo-router";
@@ -64,18 +65,16 @@ export default function ProfileScreen() {
 
   useEffect(() => { fetchLoyalty(); }, [fetchLoyalty]);
 
-  const handleLogout = () => {
-    Alert.alert("Sign Out", "Are you sure you want to sign out?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Sign Out",
-        style: "destructive",
-        onPress: async () => {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-          await logout();
-        },
-      },
-    ]);
+  const handleLogout = async () => {
+    const ok = await confirm({
+      title: "Sign Out",
+      message: "Are you sure you want to sign out?",
+      confirmText: "Sign Out",
+      destructive: true,
+    });
+    if (!ok) return;
+    try { await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning); } catch { /* web */ }
+    await logout();
   };
 
   const pts = loyalty?.balance ?? user?.loyaltyPoints ?? 0;
@@ -83,7 +82,7 @@ export default function ProfileScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView
-        contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 40 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 120 }}
         contentInsetAdjustmentBehavior="automatic"
       >
         <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
@@ -152,7 +151,7 @@ export default function ProfileScreen() {
         )}
 
         <Text style={[styles.sectionTitle, { color: colors.mutedForeground, marginTop: 24 }]}>ACTIONS</Text>
-        <Row icon="log-out" label="Sign Out" onPress={handleLogout} danger />
+        <Row icon="log-out" label="Sign Out" onPress={() => { void handleLogout(); }} danger />
       </ScrollView>
     </View>
   );

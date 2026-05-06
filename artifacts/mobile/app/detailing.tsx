@@ -1,6 +1,7 @@
 import {
-  View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Alert,
+  View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator,
 } from "react-native";
+import { alertMessage } from "@/utils/confirm";
 import { Stack, useRouter } from "expo-router";
 import { useState } from "react";
 import { useColors } from "@/hooks/useColors";
@@ -82,7 +83,7 @@ export default function DetailingScreen() {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
-        Alert.alert("Permission denied", "Location permission is needed to auto-fill your address.");
+        void alertMessage("Permission denied", "Location permission is needed to auto-fill your address.");
         return;
       }
       const loc = await Location.getCurrentPositionAsync({});
@@ -90,7 +91,7 @@ export default function DetailingScreen() {
       setLocationLng(loc.coords.longitude);
       const [addr] = await Location.reverseGeocodeAsync({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
       if (addr) setLocationAddress(`${addr.street ?? ""} ${addr.city ?? ""}, ${addr.region ?? ""}`.trim());
-    } catch { Alert.alert("Error", "Could not detect location."); }
+    } catch { void alertMessage("Error", "Could not detect location."); }
     finally { setLocating(false); }
   };
 

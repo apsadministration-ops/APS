@@ -1,4 +1,5 @@
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Alert } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from "react-native";
+import { confirm } from "@/utils/confirm";
 import { useColors } from "@/hooks/useColors";
 import { useGetJob, useRateJob, useCancelJob } from "@workspace/api-client-react";
 import { useLocalSearchParams, useRouter, Stack } from "expo-router";
@@ -67,22 +68,21 @@ export default function JobDetailScreen() {
     ? ["REQUESTED", "CANCELLED"]
     : STATUS_ORDER.slice(0, STATUS_ORDER.indexOf("PAID") + 1).filter((s) => s !== "OFFERED");
 
-  const handleCancel = () => {
-    Alert.alert("Cancel Job", "Are you sure you want to cancel this job?", [
-      { text: "No", style: "cancel" },
-      {
-        text: "Yes, Cancel",
-        style: "destructive",
-        onPress: () => {
-          cancelMutation.mutate({ jobId }, {
-            onSuccess: () => {
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-              refetch();
-            },
-          });
-        },
+  const handleCancel = async () => {
+    const ok = await confirm({
+      title: "Cancel Job",
+      message: "Are you sure you want to cancel this job?",
+      confirmText: "Yes, Cancel",
+      cancelText: "No",
+      destructive: true,
+    });
+    if (!ok) return;
+    cancelMutation.mutate({ jobId }, {
+      onSuccess: () => {
+        try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning); } catch { /* web */ }
+        refetch();
       },
-    ]);
+    });
   };
 
   const handleRate = () => {
@@ -287,7 +287,7 @@ export default function JobDetailScreen() {
           {canCancel && (
             <Pressable
               style={[styles.primaryBtn, { backgroundColor: colors.destructive, marginTop: 8 }]}
-              onPress={handleCancel}
+              onPress={() => { void handleCancel(); }}
               disabled={cancelMutation.isPending}
             >
               {cancelMutation.isPending

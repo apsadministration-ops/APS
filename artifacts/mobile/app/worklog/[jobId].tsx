@@ -1,7 +1,8 @@
 import {
   View, Text, StyleSheet, Pressable, ActivityIndicator,
-  TextInput, Alert, Image, ScrollView,
+  TextInput, Image, ScrollView,
 } from "react-native";
+import { alertMessage } from "@/utils/confirm";
 import { useColors } from "@/hooks/useColors";
 import { useGetJob, useCreateWorkLog } from "@workspace/api-client-react";
 import { useLocalSearchParams, useRouter, Stack } from "expo-router";
@@ -83,11 +84,10 @@ export default function WorkLogScreen() {
         },
       },
       {
-        onSuccess: () => {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          Alert.alert("Work Log Submitted", "The job has been marked as completed.", [
-            { text: "OK", onPress: () => router.replace(`/job/${jid}`) },
-          ]);
+        onSuccess: async () => {
+          try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch { /* web */ }
+          await alertMessage("Work Log Submitted", "The job has been marked as completed.");
+          router.replace(`/job/${jid}`);
         },
         onError: (e: any) => {
           setError(e?.message ?? "Failed to submit work log.");

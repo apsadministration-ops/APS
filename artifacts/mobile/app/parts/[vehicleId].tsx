@@ -1,7 +1,8 @@
 import {
   View, Text, StyleSheet, ScrollView, ActivityIndicator,
-  Pressable, Linking, Alert,
+  Pressable, Linking,
 } from "react-native";
+import { alertMessage } from "@/utils/confirm";
 import { useLocalSearchParams, Stack } from "expo-router";
 import { useEffect, useState } from "react";
 import { useGetVehicle } from "@workspace/api-client-react";
@@ -119,7 +120,7 @@ function PartsLink({ icon, label, url, color }: { icon: string; label: string; u
   return (
     <Pressable
       style={[styles.partsLink, { backgroundColor: colors.card, borderColor: colors.border }]}
-      onPress={() => Linking.openURL(url).catch(() => Alert.alert("Error", "Could not open link."))}
+      onPress={() => Linking.openURL(url).catch(() => alertMessage("Error", "Could not open link."))}
     >
       <View style={[styles.partsLinkIcon, { backgroundColor: color + "20" }]}>
         <Feather name={icon as any} size={20} color={color} />

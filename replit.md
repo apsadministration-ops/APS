@@ -57,6 +57,7 @@ artifacts/mobile/context/AuthContext.tsx — auth state + token persistence
 artifacts/mobile/data/obd2Codes.ts — comprehensive OBD2 P/B/C/U code database
 artifacts/mobile/constants/colors.ts    — design tokens (light + dark)
 artifacts/mobile/hooks/            — usePushNotifications, useColors
+artifacts/mobile/utils/confirm.ts  — cross-platform confirm() / alertMessage() (web → window.confirm/alert; native → Alert.alert)
 ```
 
 ## Architecture decisions
@@ -94,6 +95,8 @@ _None recorded yet._
 - `expo-location` requires foreground permission before GPS watch starts; the tracker screen handles this gracefully.
 - PATCH `/api/users/:userId` accepts `mechanicTier` (admin only), `certifications` (self or admin), `status`/`name`/`phone`.
 - **`<Link href asChild>` around a `<Pressable>` with `position: "absolute"` + `shadow*` styles crashes on web** with `Failed to set an indexed property [0] on 'CSSStyleDeclaration'`. Use `<Pressable onPress={() => router.push(...)} style={...}>` for FABs / floating buttons instead. Plain text-only Pressables wrapped in Link asChild are fine.
+- **`Alert.alert` is a no-op on web** — buttons never fire `onPress`. Always use `confirm()` / `alertMessage()` from `@/utils/confirm` instead. (Web `window.confirm/alert` button text is not customizable, but the helper accepts `confirmText`/`cancelText` for native.)
+- **Web tab bar overlap:** the bottom tab bar is `position: absolute, height: 84` on web. Tabbed `ScrollView`s need `paddingBottom` ≥ 100 (or `insets.bottom + 120` if also accommodating a safe-area inset).
 
 ## Pointers
 

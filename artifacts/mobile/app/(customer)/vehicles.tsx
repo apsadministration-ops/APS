@@ -1,7 +1,8 @@
 import {
   View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator,
-  TextInput, Alert,
+  TextInput,
 } from "react-native";
+import { confirm } from "@/utils/confirm";
 import { useColors } from "@/hooks/useColors";
 import { useListVehicles, useCreateVehicle } from "@workspace/api-client-react";
 import { Feather } from "@expo/vector-icons";
@@ -63,33 +64,27 @@ export default function VehiclesScreen() {
     );
   };
 
-  const handleRemove = (vehicleId: number, vehicleName: string) => {
-    Alert.alert(
-      "Remove Vehicle",
-      `Remove ${vehicleName} from your account? The vehicle history will be preserved.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Remove",
-          style: "destructive",
-          onPress: async () => {
-            setRemovingId(vehicleId);
-            try {
-              const token = await AsyncStorage.getItem("auth_token");
-              const res = await fetch(`https://${domain}/api/vehicles/${vehicleId}`, {
-                method: "DELETE",
-                headers: { Authorization: `Bearer ${token}` },
-              });
-              if (res.ok) {
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-                refetch();
-              }
-            } catch { /* non-fatal */ }
-            finally { setRemovingId(null); }
-          },
-        },
-      ],
-    );
+  const handleRemove = async (vehicleId: number, vehicleName: string) => {
+    const ok = await confirm({
+      title: "Remove Vehicle",
+      message: `Remove ${vehicleName} from your account? The vehicle history will be preserved.`,
+      confirmText: "Remove",
+      destructive: true,
+    });
+    if (!ok) return;
+    setRemovingId(vehicleId);
+    try {
+      const token = await AsyncStorage.getItem("auth_token");
+      const res = await fetch(`https://${domain}/api/vehicles/${vehicleId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        try { await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning); } catch { /* web */ }
+        refetch();
+      }
+    } catch { /* non-fatal */ }
+    finally { setRemovingId(null); }
   };
 
   return (

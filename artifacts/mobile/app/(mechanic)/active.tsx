@@ -1,4 +1,5 @@
-import { View, Text, StyleSheet, FlatList, Pressable, ActivityIndicator, Alert } from "react-native";
+import { View, Text, StyleSheet, FlatList, Pressable, ActivityIndicator } from "react-native";
+import { confirm } from "@/utils/confirm";
 import { useColors } from "@/hooks/useColors";
 import { useListJobs, useUpdateJobStatus, Job } from "@workspace/api-client-react";
 import { Feather } from "@expo/vector-icons";
@@ -21,26 +22,24 @@ function ActiveJobCard({ job }: { job: Job }) {
   const updateMutation = useUpdateJobStatus();
   const flow = STATUS_FLOW[job.status];
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (!flow) return;
     if (job.status === "IN_PROGRESS") {
       router.push(`/worklog/${job.id}`);
       return;
     }
-    Alert.alert("Update Status", `Mark as "${flow.next.replace("_", " ")}"?`, [
-      { text: "Cancel", style: "cancel" },
+    const ok = await confirm({
+      title: "Update Status",
+      message: `Mark as "${flow.next.replace("_", " ")}"?`,
+      confirmText: "Confirm",
+    });
+    if (!ok) return;
+    updateMutation.mutate(
+      { jobId: job.id, data: { status: flow.next } },
       {
-        text: "Confirm",
-        onPress: () => {
-          updateMutation.mutate(
-            { jobId: job.id, data: { status: flow.next } },
-            {
-              onSuccess: () => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success),
-            }
-          );
-        },
-      },
-    ]);
+        onSuccess: () => { try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch { /* web */ } },
+      }
+    );
   };
 
   return (
@@ -77,7 +76,7 @@ function ActiveJobCard({ job }: { job: Job }) {
       {flow && (
         <Pressable
           style={[styles.nextBtn, { backgroundColor: colors.primary }, updateMutation.isPending && { opacity: 0.6 }]}
-          onPress={handleNext}
+          onPress={() => { void handleNext(); }}
           disabled={updateMutation.isPending}
         >
           {updateMutation.isPending

@@ -1,4 +1,5 @@
-import { View, Text, StyleSheet, TextInput, Pressable, ActivityIndicator, Alert } from "react-native";
+import { View, Text, StyleSheet, TextInput, Pressable, ActivityIndicator } from "react-native";
+import { confirm, alertMessage } from "@/utils/confirm";
 import { useColors } from "@/hooks/useColors";
 import { useGetVehicle, useTransferVehicle } from "@workspace/api-client-react";
 import { useLocalSearchParams, useRouter, Stack } from "expo-router";
@@ -19,38 +20,31 @@ export default function TransferScreen() {
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
 
-  const handleTransfer = () => {
+  const handleTransfer = async () => {
     setError("");
     if (!email.trim()) {
       setError("Please enter the new owner's email.");
       return;
     }
-    Alert.alert(
-      "Confirm Transfer",
-      `Transfer ${vehicle?.year} ${vehicle?.make} ${vehicle?.model} to ${email}?\n\nThis cannot be undone. All service history will remain permanently tied to this VIN.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Transfer",
-          style: "destructive",
-          onPress: () => {
-            transferMutation.mutate(
-              { vehicleId: id, data: { newOwnerEmail: email } },
-              {
-                onSuccess: () => {
-                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                  Alert.alert("Success", "Vehicle ownership transferred successfully.", [
-                    { text: "OK", onPress: () => router.replace("/(customer)/vehicles") },
-                  ]);
-                },
-                onError: (e: any) => {
-                  setError(e?.message ?? "Transfer failed. Please check the email and try again.");
-                },
-              }
-            );
-          },
+    const ok = await confirm({
+      title: "Confirm Transfer",
+      message: `Transfer ${vehicle?.year} ${vehicle?.make} ${vehicle?.model} to ${email}?\n\nThis cannot be undone. All service history will remain permanently tied to this VIN.`,
+      confirmText: "Transfer",
+      destructive: true,
+    });
+    if (!ok) return;
+    transferMutation.mutate(
+      { vehicleId: id, data: { newOwnerEmail: email } },
+      {
+        onSuccess: async () => {
+          try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch { /* web */ }
+          await alertMessage("Success", "Vehicle ownership transferred successfully.");
+          router.replace("/(customer)/vehicles");
         },
-      ]
+        onError: (e: any) => {
+          setError(e?.message ?? "Transfer failed. Please check the email and try again.");
+        },
+      }
     );
   };
 
@@ -106,7 +100,7 @@ export default function TransferScreen() {
 
           <Pressable
             style={[styles.btn, { backgroundColor: colors.destructive }, transferMutation.isPending && { opacity: 0.6 }]}
-            onPress={handleTransfer}
+            onPress={() => { void handleTransfer(); }}
             disabled={transferMutation.isPending}
           >
             {transferMutation.isPending

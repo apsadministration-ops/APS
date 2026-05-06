@@ -1,4 +1,5 @@
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, ScrollView, TextInput, Alert } from "react-native";
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, ScrollView, TextInput } from "react-native";
+import { alertMessage } from "@/utils/confirm";
 import { useColors } from "@/hooks/useColors";
 import { useListVehicles, useCreateJob } from "@workspace/api-client-react";
 import { useRouter, Stack } from "expo-router";
@@ -30,7 +31,7 @@ export default function RequestServiceScreen() {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
-        Alert.alert("Permission denied", "Location permission is needed to auto-fill your address.");
+        void alertMessage("Permission denied", "Location permission is needed to auto-fill your address.");
         return;
       }
       const loc = await Location.getCurrentPositionAsync({});
@@ -44,7 +45,7 @@ export default function RequestServiceScreen() {
         setLocationAddress(`${addr.street ?? ""} ${addr.city ?? ""}, ${addr.region ?? ""}`.trim());
       }
     } catch {
-      Alert.alert("Error", "Could not detect location.");
+      void alertMessage("Error", "Could not detect location.");
     } finally {
       setLocating(false);
     }

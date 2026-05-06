@@ -1,7 +1,8 @@
 import {
   View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator,
-  Alert, RefreshControl, TextInput,
+  RefreshControl, TextInput,
 } from "react-native";
+import { confirm } from "@/utils/confirm";
 import { useColors } from "@/hooks/useColors";
 import { Feather } from "@expo/vector-icons";
 import { useState, useEffect, useCallback } from "react";
@@ -136,27 +137,21 @@ export default function AdminUsersScreen() {
   const handleAction = async (action: string, userId: number, extra?: string) => {
     if (action === "promote" && extra) {
       const tierLabels: Record<string, string> = { technician: "Technician", senior: "Senior Tech", master: "Master Tech" };
-      Alert.alert(
-        "Promote Mechanic",
-        `Promote this mechanic to ${tierLabels[extra] ?? extra}?`,
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Promote",
-            onPress: async () => {
-              try {
-                const token = await AsyncStorage.getItem("auth_token");
-                const res = await fetch(`https://${domain}/api/users/${userId}`, {
-                  method: "PATCH",
-                  headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-                  body: JSON.stringify({ mechanicTier: extra }),
-                });
-                if (res.ok) fetchUsers();
-              } catch { /* non-fatal */ }
-            },
-          },
-        ],
-      );
+      const ok = await confirm({
+        title: "Promote Mechanic",
+        message: `Promote this mechanic to ${tierLabels[extra] ?? extra}?`,
+        confirmText: "Promote",
+      });
+      if (!ok) return;
+      try {
+        const token = await AsyncStorage.getItem("auth_token");
+        const res = await fetch(`https://${domain}/api/users/${userId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ mechanicTier: extra }),
+        });
+        if (res.ok) fetchUsers();
+      } catch { /* non-fatal */ }
       return;
     }
 
@@ -169,28 +164,22 @@ export default function AdminUsersScreen() {
     if (!newStatus) return;
 
     const label = action === "activate" ? "approve" : action === "suspend" ? "suspend" : "restore";
-    Alert.alert(
-      `${label.charAt(0).toUpperCase() + label.slice(1)} User`,
-      `Are you sure you want to ${label} this user?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Confirm",
-          style: action === "suspend" ? "destructive" : "default",
-          onPress: async () => {
-            try {
-              const token = await AsyncStorage.getItem("auth_token");
-              const res = await fetch(`https://${domain}/api/users/${userId}`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-                body: JSON.stringify({ status: newStatus }),
-              });
-              if (res.ok) fetchUsers();
-            } catch { /* non-fatal */ }
-          },
-        },
-      ],
-    );
+    const ok = await confirm({
+      title: `${label.charAt(0).toUpperCase() + label.slice(1)} User`,
+      message: `Are you sure you want to ${label} this user?`,
+      confirmText: "Confirm",
+      destructive: action === "suspend",
+    });
+    if (!ok) return;
+    try {
+      const token = await AsyncStorage.getItem("auth_token");
+      const res = await fetch(`https://${domain}/api/users/${userId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (res.ok) fetchUsers();
+    } catch { /* non-fatal */ }
   };
 
   const onRefresh = () => { setRefreshing(true); fetchUsers(); };
