@@ -9,6 +9,8 @@ import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useState, useEffect, useCallback } from "react";
 import * as Haptics from "expo-haptics";
+import * as WebBrowser from "expo-web-browser";
+import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const TIER_META: Record<string, { color: string; label: string; icon: string; desc: string }> = {
@@ -21,6 +23,7 @@ const TIER_META: Record<string, { color: string; label: string; icon: string; de
 const TIER_ORDER = ["detailer", "technician", "senior", "master"];
 
 interface LoyaltyData { balance: number; history: { id: number; points: number; reason: string; createdAt: string }[] }
+interface ConnectStatus { accountId: string | null; ready: boolean; chargesEnabled: boolean; payoutsEnabled: boolean; detailsSubmitted: boolean }
 
 function Row({ icon, label, value, onPress, danger }: {
   icon: string; label: string; value?: string; onPress?: () => void; danger?: boolean;
@@ -57,6 +60,8 @@ export default function MechanicProfileScreen() {
   const [newCert, setNewCert] = useState("");
   const [addingCert, setAddingCert] = useState(false);
   const [showAddCert, setShowAddCert] = useState(false);
+  const [connect, setConnect] = useState<ConnectStatus | null>(null);
+  const [payoutsLoading, setPayoutsLoading] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -68,8 +73,27 @@ export default function MechanicProfileScreen() {
       }
       const lRes = await fetch(`https://${domain}/api/loyalty`, { headers: { Authorization: `Bearer ${token}` } });
       if (lRes.ok) setLoyalty(await lRes.json());
+      const cRes = await fetch(`https://${domain}/api/payments/connect/status`, { headers: { Authorization: `Bearer ${token}` } });
+      if (cRes.ok) setConnect(await cRes.json());
     } catch { /* non-fatal */ }
   }, [domain]);
+
+  const handlePayouts = async () => {
+    setPayoutsLoading(true);
+    try {
+      const token = await AsyncStorage.getItem("auth_token");
+      const res = await fetch(`https://${domain}/api/payments/connect/onboarding`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok || !data.url) return;
+      if (Platform.OS === "web") window.open(data.url, "_blank");
+      else await WebBrowser.openBrowserAsync(data.url);
+      // Re-fetch status when user returns
+      setTimeout(() => { void fetchData(); }, 1500);
+    } finally { setPayoutsLoading(false); }
+  };
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -231,6 +255,33 @@ export default function MechanicProfileScreen() {
         {user?.referralCode && (
           <Row icon="gift" label="My Referral Code" value={user.referralCode} onPress={() => router.push("/referral")} />
         )}
+
+        {/* Payouts */}
+        <Text style={[styles.sectionTitle, { color: colors.mutedForeground, marginTop: 24 }]}>PAYOUTS</Text>
+        <Pressable
+          style={[styles.row, { backgroundColor: colors.card, borderColor: colors.border, opacity: payoutsLoading ? 0.6 : 1 }]}
+          onPress={() => { void handlePayouts(); }}
+          disabled={payoutsLoading}
+        >
+          <View style={[styles.rowIcon, { backgroundColor: connect?.ready ? "#22c55e22" : colors.secondary }]}>
+            <Feather name={connect?.ready ? "check-circle" : "credit-card"} size={18} color={connect?.ready ? "#22c55e" : colors.foreground} />
+          </View>
+          <View style={styles.rowContent}>
+            <Text style={[styles.rowLabel, { color: colors.foreground }]}>
+              {connect?.ready ? "Payouts Active" : connect?.accountId ? "Resume Payout Setup" : "Set up Payouts"}
+            </Text>
+            <Text style={[styles.rowValue, { color: colors.mutedForeground }]}>
+              {connect?.ready
+                ? "Funds transfer to your bank automatically"
+                : connect?.accountId
+                  ? "Onboarding in progress — tap to continue"
+                  : "Required before customers can pay you"}
+            </Text>
+          </View>
+          {payoutsLoading
+            ? <ActivityIndicator size="small" color={colors.mutedForeground} />
+            : <Feather name="chevron-right" size={18} color={colors.mutedForeground} />}
+        </Pressable>
 
         <Text style={[styles.sectionTitle, { color: colors.mutedForeground, marginTop: 24 }]}>ACTIONS</Text>
         <Row icon="log-out" label="Sign Out" onPress={() => { void handleLogout(); }} danger />

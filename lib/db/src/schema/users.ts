@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, timestamp, doublePrecision } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, timestamp, doublePrecision, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -23,6 +23,11 @@ export const usersTable = pgTable("users", {
   homeLat: doublePrecision("home_lat"),
   homeLng: doublePrecision("home_lng"),
   serviceRadiusMiles: integer("service_radius_miles"),
+  // Stripe — customers have customer_id; mechanics have account_id (Connect Express).
+  // Only opaque provider IDs are stored. NEVER card data.
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeAccountId: text("stripe_account_id"),
+  stripeAccountReady: boolean("stripe_account_ready").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

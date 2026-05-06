@@ -8,6 +8,9 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { useAuth } from "@/context/AuthContext";
 import { useState } from "react";
 import * as Haptics from "expo-haptics";
+import * as WebBrowser from "expo-web-browser";
+import { Platform } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const STATUS_ORDER = ["REQUESTED", "OFFERED", "ACCEPTED", "EN_ROUTE", "IN_PROGRESS", "COMPLETED", "PAID"];
 
@@ -45,6 +48,32 @@ export default function JobDetailScreen() {
   const [reviewText, setReviewText] = useState("");
   const [custRating, setCustRating] = useState(0);
   const [custReviewText, setCustReviewText] = useState("");
+  const [payLoading, setPayLoading] = useState(false);
+
+  const handlePay = async () => {
+    setPayLoading(true);
+    try {
+      const token = await AsyncStorage.getItem("auth_token");
+      const domain = process.env.EXPO_PUBLIC_DOMAIN;
+      const res = await fetch(`https://${domain}/api/payments/jobs/${jobId}/checkout`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        await alertMessage("Payment unavailable", data.error ?? "Could not start checkout.");
+        return;
+      }
+      if (data.url) {
+        if (Platform.OS === "web") window.open(data.url, "_blank");
+        else await WebBrowser.openBrowserAsync(data.url);
+      }
+    } catch (e: any) {
+      await alertMessage("Network error", e?.message ?? "Try again.");
+    } finally {
+      setPayLoading(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -204,6 +233,25 @@ export default function JobDetailScreen() {
                   <Text style={[styles.priceValue, { color: colors.primary, fontWeight: "700" }]}>${job.finalPrice.toFixed(2)}</Text>
                 </View>
               )}
+            </View>
+          )}
+
+          {/* Customer payment authorization */}
+          {isCustomer && job.status === "ACCEPTED" && job.estimatedPrice != null && (
+            <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Text style={[styles.cardTitle, { color: colors.foreground }]}>Authorize Payment</Text>
+              <Text style={{ color: colors.mutedForeground, fontSize: 13, lineHeight: 18, marginBottom: 12 }}>
+                Funds are placed on hold now. You're only charged when the mechanic completes the job. Card, Apple Pay, and Google Pay all supported.
+              </Text>
+              <Pressable
+                style={[styles.primaryBtn, { backgroundColor: colors.primary }, payLoading && { opacity: 0.6 }]}
+                onPress={handlePay}
+                disabled={payLoading}
+              >
+                {payLoading
+                  ? <ActivityIndicator color="white" />
+                  : <Text style={styles.primaryBtnText}>Pay & Authorize ${job.estimatedPrice.toFixed(2)}</Text>}
+              </Pressable>
             </View>
           )}
 

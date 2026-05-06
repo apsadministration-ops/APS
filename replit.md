@@ -1,108 +1,61 @@
 # APS — Automotive Platform System
 
-VIN-centric automotive service marketplace connecting customers with mechanics for repairs, diagnostics, maintenance, and detailing. Every vehicle is permanently identified by VIN; service history persists across ownership changes.
+A VIN-centric automotive service marketplace connecting customers with mechanics for repairs, diagnostics, maintenance, and detailing, preserving service history across ownership changes.
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — run API server (port 8080, path `/api`)
-- `pnpm --filter @workspace/mobile run dev` — run Expo mobile app (port 18115)
-- `pnpm run typecheck` — full typecheck across all packages
+- `pnpm --filter @workspace/api-server run dev` — run API server
+- `pnpm --filter @workspace/mobile run dev` — run Expo mobile app
+- `pnpm run typecheck` — full typecheck
 - `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks + Zod schemas from OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only; may prompt interactively)
+- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks + Zod schemas
+- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
 - For non-interactive DB migrations, run SQL directly via: `cd lib/db && node -e "require('pg')..."`
 
-**Required env vars:** `SESSION_SECRET` (JWT signing), `DATABASE_URL` (PostgreSQL)
+**Required env vars:** `SESSION_SECRET`, `DATABASE_URL`
 
 ## Stack
 
 - **Monorepo:** pnpm workspaces, TypeScript 5.9, Node.js 24
-- **API:** Express 5, esbuild (CJS bundle)
-- **DB:** PostgreSQL + Drizzle ORM (`lib/db`)
-- **Validation:** Zod (`zod/v4`), `drizzle-zod`
-- **API codegen:** Orval from OpenAPI spec (`lib/api-spec`)
+- **API:** Express 5, esbuild
+- **DB:** PostgreSQL + Drizzle ORM
+- **Validation:** Zod, `drizzle-zod`
+- **API codegen:** Orval from OpenAPI spec
 - **Mobile:** Expo (expo-router), React Native, React Query
-- **Auth:** bcryptjs + jsonwebtoken (30-day JWT)
+- **Auth:** bcryptjs + jsonwebtoken
 
 ## Where things live
 
 ```
 lib/api-spec/openapi.yaml          — full OpenAPI spec (source of truth)
-lib/api-spec/orval.config.ts       — codegen config
 lib/db/src/schema/                 — Drizzle table definitions
-  users.ts                         — users (referralCode, mechanicTier, certifications, loyaltyPoints)
-  vehicles.ts                      — vehicles (plateNumber, mileage required)
-  loyalty.ts                       — loyalty_points table
-  referrals.ts                     — referrals table
-  favorites.ts                     — customer ↔ mechanic favorites
-  flags.ts                         — user reports (scam/rude/no_show/unsafe/other)
-lib/api-client-react/src/generated — generated React Query hooks + Zod schemas
 artifacts/api-server/src/routes/   — Express route handlers
-  auth.ts                          — register (referral code gen + referredBy), login, me
-  vehicles.ts                      — CRUD + DELETE (closes ownership) + plateNumber
-  jobs.ts                          — tier-filtered available jobs + requestedMechanicId filter + rate + rate-customer + DELETE /jobs/:jobId (admin)
-  mechanics.ts                     — GET /mechanics (browse with avg rating, reviews, fav, flag count), /mechanics/:id/reviews, /me/reviews
-  favorites.ts                     — GET/POST/DELETE /favorites (customer-only)
-  flags.ts                         — GET/POST /flags + POST /flags/:id/resolve (admin)
-  payments.ts                      — release + loyalty points award
-  loyalty.ts                       — GET /loyalty + awardLoyaltyPoints()
-  referrals.ts                     — GET /referral stats
-  users.ts                         — PATCH accepts mechanicTier + certifications
-  assistant.ts                     — POST /assistant/chat (Anthropic, loads vehicle/job/worklog context)
-artifacts/mobile/app/              — Expo screens (expo-router file-based)
-  (customer)/index.tsx             — dashboard with Detailing + Rewards quick actions
-  (customer)/vehicles.tsx          — plateNumber field + remove vehicle button
-  (customer)/profile.tsx           — loyalty points card + referral link
-  (mechanic)/profile.tsx           — tier badge, certification list, sign out
-  (mechanic)/_layout.tsx           — 5 tabs: Dashboard/Available/Active/History/Profile
-  (admin)/index.tsx                — admin dashboard with sign out button
-  (admin)/users.tsx                — user management + mechanic tier promotion
-  referral.tsx                     — referral code + loyalty tier + stats
-  detailing.tsx                    — 4-package detailing booking flow
-  request-service.tsx              — booking screen: GPS + ZIP lookup; accepts ?mechanicId= to lock-in a specific mechanic
-  mechanics.tsx                    — customer browse-mechanics list (heart fav, ratings, ?select=1 → pick mode)
-  mechanic/[id].tsx                — mechanic detail: stats, certifications, reviews list, request CTA, fav, report
-  (admin)/flags.tsx                — admin reports queue (resolve flags)
+artifacts/mobile/app/              — Expo screens
 artifacts/mobile/context/AuthContext.tsx — auth state + token persistence
-artifacts/mobile/data/obd2Codes.ts — comprehensive OBD2 P/B/C/U code database
-artifacts/mobile/constants/colors.ts    — design tokens (light + dark)
-artifacts/mobile/hooks/            — usePushNotifications, useColors
-artifacts/mobile/utils/confirm.ts  — cross-platform confirm() / alertMessage() (web → window.confirm/alert; native → Alert.alert)
-artifacts/mobile/components/AIAssistantWidget.tsx — draggable floating AI chat widget mounted in root layout
-lib/integrations-anthropic-ai/    — Replit AI Integrations Anthropic client (server-only)
+artifacts/mobile/data/obd2Codes.ts — comprehensive OBD2 code database
+artifacts/mobile/constants/colors.ts    — design tokens
+artifacts/mobile/components/AIAssistantWidget.tsx — draggable floating AI chat widget
+lib/integrations-anthropic-ai/    — Replit AI Integrations Anthropic client
 ```
 
 ## Architecture decisions
 
-- **VIN permanence:** Service history (`work_logs`) written immutably; persists across ownership transfers.
-- **Role-based navigation:** Root layout redirects to `/(customer)`, `/(mechanic)`, or `/(admin)` based on `user.role`.
-- **Payment escrow:** Work log submission creates `payments` record with `status = "held"`; admin releases it.
-- **Auth token flow:** JWT stored in AsyncStorage; `setAuthTokenGetter` injects into all API requests.
-- **setBaseUrl at top level:** Called outside React in `_layout.tsx` using `EXPO_PUBLIC_DOMAIN`.
-- **Mechanic tiers:** detailer → technician → senior → master. Detailers see only detailing jobs. Admin promotes. Stored as `mechanic_tier` on users table.
-- **Loyalty points:** 100 pts per completed job (customer), 500 pts referrer bonus, 200 pts welcome for joining via referral. `awardLoyaltyPoints()` in `loyalty.ts`.
-- **Referral codes:** 8-char alphanumeric, auto-generated on registration. Stored as `users.referral_code` (unique, nullable).
-- **User home address:** `users.address/city/region/zip_code/home_lat/home_lng` captured at registration for both roles. Address is verified via Nominatim (back-fills city/region/zip + lat/lng) before signup is allowed.
-- **Mechanic service radius:** `users.service_radius_miles` (default 25) chosen at signup from preset chips (5/10/25/50/100). Stored mechanic-only.
-- **Admin job deletion:** `DELETE /jobs/:jobId` (admin only) cascades messages → payments → work_logs → job in a transaction. Trash button on each row in admin/jobs.tsx with confirm().
-- **Cancel rules:** customers can cancel `REQUESTED`/`OFFERED`; mechanics can cancel/drop their own `ACCEPTED`/`EN_ROUTE` jobs (which releases them back to `REQUESTED` with `mechanicId`/GPS cleared); admins can cancel anytime. Once `IN_PROGRESS` only admins can cancel.
-- **Job tracker visibility:** `/tracker/[jobId]` is customer-only — entry points are `(customer)` job/[id] "Track Mechanic" pill while job is ACCEPTED/EN_ROUTE/IN_PROGRESS. The mechanic tools row in job/[id] no longer shows Track.
-- **Vehicle plate numbers:** Added to vehicles table. Required in UI when adding a new vehicle.
-- **Vehicle mileage (odometer):** Required when customer adds a vehicle (`vehicles.mileage`, NOT NULL). Mechanics MUST enter `mileageAtService` on every work-log submission; submission is rejected if it's lower than the vehicle's current odometer. On successful work-log creation, the vehicle's stored mileage is updated to the new reading. Re-adding a vehicle by VIN only bumps mileage if the new value is higher.
-- **Certifications:** Stored as JSON string (`[]`) on users table. Mechanics self-add; displayed on profile.
-- **Push notifications:** Expo Push API (no third-party). Mechanics notified on new jobs; customers on accept + completion.
-- **Live location:** Mechanic GPS sent via `PUT /api/jobs/:jobId/mechanic-location` every 15s; customer polls every 10s.
-- **AI Assistant:** Floating widget mounted once in `app/_layout.tsx` (renders only when authed). Drags + snaps to edges, persists position/visibility in AsyncStorage. Server route `assistant.ts` injects vehicle/job/worklog context into the system prompt (with role-based access checks) and calls Anthropic via `@workspace/integrations-anthropic-ai` (`AI_INTEGRATIONS_ANTHROPIC_*` envs auto-provisioned by Replit). Chat history is ephemeral (in-memory in widget). Urgency level (low/medium/high) is detected from reply text and shown as a chip.
-- **Bidirectional reviews:** Customer rates mechanic via `POST /jobs/:id/rate` (sets `rating` + `mechanicReviewText`). Mechanic rates customer via `POST /jobs/:id/rate-customer` (sets `customerRating` + `customerReviewText`). Both reviews are visible to each other on the job detail screen. Mechanic profile pages show aggregate rating + reviews list (`GET /mechanics/:id/reviews`). `GET /me/reviews` returns reviews left for the current user.
-- **Favorites:** `favorites` table (unique customer+mechanic). Customer-only `GET/POST/DELETE /favorites`. Heart toggle on browse screen + mechanic detail.
-- **Flags / reports:** `flags` table (reporter, target, target_role, job_id, type[scam/rude/no_show/unsafe/other], reason, resolved). `POST /flags` enforces role rules (customers report mechanics only; mechanics report customers only; admins anything). `GET /flags` returns user's own flags or all (admin). `POST /flags/:id/resolve` admin-only. Admin Reports tab in `(admin)/flags.tsx`.
-- **Pick a mechanic flow:** `CreateJobBody.requestedMechanicId` restricts the new job to a single mechanic — `/jobs/available` filters out other mechanics' results when set. Customer entry points: `/mechanics?select=1` → pick → `/request-service?mechanicId=` (preselected). Direct entry from mechanic detail page also passes `mechanicId`.
+- **VIN permanence:** Service history (`work_logs`) is immutable and persists across ownership transfers.
+- **Role-based navigation:** Root layout redirects based on `user.role` to `/(customer)`, `/(mechanic)`, or `/(admin)`.
+- **Payment escrow:** `payments` records are `held` until admin releases them upon work log submission.
+- **Auth token flow:** JWT stored in AsyncStorage and injected into all API requests.
+- **Mechanic tiers:** Progressive tiers (detailer → technician → senior → master), impacting job visibility.
+- **Loyalty points & Referrals:** Automated rewards for job completion and referral bonuses.
+- **User home address & Mechanic service radius:** Captured at registration and verified via Nominatim for location-based services.
+- **AI Assistant:** Floating widget with ephemeral chat history, providing context-aware assistance via Anthropic.
+- **Bidirectional reviews:** Customers and mechanics rate each other, with aggregate ratings and review lists.
+- **Stripe payments:** PCI-compliant via Stripe Checkout with manual capture, 10% platform fee, and Connect Express onboarding for mechanics.
 
 ## Product
 
-- **Customer:** Register/login, add vehicles by VIN + plate, request services, book detailing (4 packages), track jobs live, browse mechanics with reviews & favorites, pick a specific mechanic for a job, rate + review mechanics, report mechanics, view loyalty points + referral program
-- **Mechanic:** Register/login (pending approval → detailer tier), browse/accept jobs (tier-filtered + customer-requested filter), update status, share GPS, submit work logs, add certifications, rate + review customers after job, report customers, view profile with tier progression, access OBD2 + parts catalog
-- **Admin:** Manage users, promote mechanic tiers, release payments, review/resolve user reports (Reports tab), view platform dashboard
+- **Customer:** Register, add vehicles, request/track services, book detailing, browse/select mechanics, rate/review/report mechanics, view loyalty points/referrals.
+- **Mechanic:** Register (pending approval), browse/accept jobs (tier-filtered), update status, share GPS, submit work logs, add certifications, rate/review/report customers, view profile, access OBD2/parts catalog.
+- **Admin:** Manage users, promote mechanic tiers, release payments, resolve user reports, view platform dashboard.
 
 ## User preferences
 
@@ -111,15 +64,15 @@ _None recorded yet._
 ## Gotchas
 
 - Do NOT run `pnpm dev` at workspace root — use restart_workflow instead.
-- `orval.config.ts` has `indexFiles: false` for zod output to avoid regeneration conflicts.
+- `orval.config.ts` has `indexFiles: false` to avoid regeneration conflicts.
 - `lib/db` must be rebuilt (`pnpm run typecheck:libs`) before API server typechecks pick up new schema exports.
-- Mechanic registration sets `status = "pending"` and `mechanicTier = "detailer"` — admin must activate before they can work.
-- `drizzle-kit push` may prompt interactively for unique constraints on existing tables — use direct SQL node script instead.
-- `expo-location` requires foreground permission before GPS watch starts; the tracker screen handles this gracefully.
-- PATCH `/api/users/:userId` accepts `mechanicTier` (admin only), `certifications` (self or admin), `status`/`name`/`phone`.
-- **`<Link href asChild>` around a `<Pressable>` with `position: "absolute"` + `shadow*` styles crashes on web** with `Failed to set an indexed property [0] on 'CSSStyleDeclaration'`. Use `<Pressable onPress={() => router.push(...)} style={...}>` for FABs / floating buttons instead. Plain text-only Pressables wrapped in Link asChild are fine.
-- **`Alert.alert` is a no-op on web** — buttons never fire `onPress`. Always use `confirm()` / `alertMessage()` from `@/utils/confirm` instead. (Web `window.confirm/alert` button text is not customizable, but the helper accepts `confirmText`/`cancelText` for native.)
-- **Web tab bar overlap:** the bottom tab bar is `position: absolute, height: 84` on web. Tabbed `ScrollView`s need `paddingBottom` ≥ 100 (or `insets.bottom + 120` if also accommodating a safe-area inset).
+- Mechanic registration sets `status = "pending"` and `mechanicTier = "detailer"` — admin must activate.
+- `drizzle-kit push` may prompt interactively; use direct SQL node script for non-interactive migrations.
+- `expo-location` requires foreground permission before GPS watch starts.
+- `<Link href asChild>` around a `<Pressable>` with `position: "absolute"` + `shadow*` styles crashes on web. Use `<Pressable onPress={() => router.push(...)} style={...}>` instead.
+- `Alert.alert` is a no-op on web; use `confirm()` / `alertMessage()` from `@/utils/confirm` instead.
+- Stripe webhook MUST be mounted with `express.raw()` BEFORE `express.json()` in `app.ts` for signature verification.
+- Web tab bar overlap: `ScrollView`s in tabbed layouts need `paddingBottom` ≥ 100 on web.
 
 ## Pointers
 

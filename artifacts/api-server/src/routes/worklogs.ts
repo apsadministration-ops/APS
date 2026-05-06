@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { db, workLogsTable, jobsTable, usersTable, paymentsTable, vehiclesTable } from "@workspace/db";
 import { authenticate, type AuthRequest } from "../middlewares/authenticate";
 import { notifyCustomerJobComplete } from "../lib/notifications";
+import { getUncachableStripeClient } from "../lib/stripeClient";
 
 const router: IRouter = Router();
 
@@ -51,6 +52,30 @@ router.post("/worklogs", authenticate, async (req: AuthRequest, res): Promise<vo
 
   const mileageInt = Math.floor(mileageAtService);
 
+  // Stripe payment gate: if a Stripe-flow payment row exists for this job, the
+  // mechanic cannot complete work until funds are AUTHORIZED, and the final
+  // cost cannot exceed the authorized amount (else customer must re-auth).
+  const [existingPayment] = await db.select().from(paymentsTable).where(eq(paymentsTable.jobId, jobId));
+  const isStripeFlow = !!existingPayment?.providerSessionId;
+  if (isStripeFlow) {
+    if (existingPayment!.status === "pending" || !existingPayment!.providerPaymentIntentId) {
+      res.status(409).json({ error: "Customer has not yet authorized payment for this job." });
+      return;
+    }
+    if (!["authorized"].includes(existingPayment!.status)) {
+      res.status(409).json({ error: `Payment is ${existingPayment!.status}; cannot submit work log.` });
+      return;
+    }
+    const authorizedCents = existingPayment!.amountCents ?? Math.round((existingPayment!.amount ?? 0) * 100);
+    const finalCents = Math.round(totalCost * 100);
+    if (finalCents > authorizedCents) {
+      res.status(409).json({
+        error: `Final cost ($${totalCost.toFixed(2)}) exceeds authorized amount ($${(authorizedCents / 100).toFixed(2)}). Ask the customer to re-authorize before submitting.`,
+      });
+      return;
+    }
+  }
+
   const workLog = await db.transaction(async (tx) => {
     const [created] = await tx.insert(workLogsTable).values({
       jobId, vehicleId: job.vehicleId, vin: job.vin, mechanicId: req.userId!, customerId: job.customerId,
@@ -65,9 +90,31 @@ router.post("/worklogs", authenticate, async (req: AuthRequest, res): Promise<vo
 
     await tx.update(jobsTable).set({ status: "COMPLETED", finalPrice: totalCost, completedAt: new Date() }).where(eq(jobsTable.id, jobId));
     await tx.update(vehiclesTable).set({ mileage: mileageInt }).where(eq(vehiclesTable.id, job.vehicleId));
-    await tx.insert(paymentsTable).values({ jobId, amount: totalCost, platformFee, mechanicPayout, status: "held" });
+    if (!existingPayment) {
+      // Legacy path (no Stripe authorization on this job) — keep an in-DB
+      // record so the admin Release flow continues to work.
+      await tx.insert(paymentsTable).values({ jobId, amount: totalCost, platformFee, mechanicPayout, status: "held" });
+    }
     return created;
   });
+
+  // Capture authorized Stripe funds (up to authorized amount). The
+  // payment_intent.succeeded webhook will then mark the job PAID + award
+  // loyalty. We block here so a capture failure surfaces in logs immediately.
+  if (isStripeFlow && existingPayment!.providerPaymentIntentId) {
+    try {
+      const stripe = await getUncachableStripeClient();
+      const authorizedCents = existingPayment!.amountCents ?? Math.round((existingPayment!.amount ?? totalCost) * 100);
+      const finalCents = Math.round(totalCost * 100);
+      const captureCents = Math.min(authorizedCents, finalCents);
+      await stripe.paymentIntents.capture(existingPayment!.providerPaymentIntentId, {
+        amount_to_capture: captureCents,
+      });
+      req.log.info({ jobId, intentId: existingPayment!.providerPaymentIntentId, captureCents }, "Stripe payment captured");
+    } catch (err) {
+      req.log.error({ err, jobId }, "Stripe capture failed — work log saved, payment requires manual review");
+    }
+  }
 
   // Notify customer job is complete (fire-and-forget)
   db.select().from(usersTable).where(eq(usersTable.id, job.customerId))
