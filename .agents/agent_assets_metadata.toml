@@ -6,3 +6,27 @@ id = "BZM7m10NeUHRdvcxOZ-fE"
 uri = "file://artifacts/mobile/assets/images/icon.png"
 type = "image"
 title = "generated_image"
+
+[[generated]]
+id = "CmZ7xtrwgoXsYH3USzRDf"
+uri = "file://artifacts/demo-video/public/images/dashboard-warning.png"
+type = "image"
+title = "check engine light dashboard"
+
+[[generated]]
+id = "cxx3EKFItlq-Gyt5cOxyQ"
+uri = "file://artifacts/demo-video/public/images/honda-accord.png"
+type = "image"
+title = "sleek silver honda accord"
+
+[[generated]]
+id = "5Yb9FokeO1pFepwKB3bNB"
+uri = "file://artifacts/demo-video/public/images/mechanic-profile.png"
+type = "image"
+title = "professional mechanic profile"
+
+[[generated]]
+id = "622mz5JvmOSFgTK91SVYg"
+uri = "file://artifacts/demo-video/public/images/tech-map.png"
+type = "image"
+title = "abstract tech dots map"
