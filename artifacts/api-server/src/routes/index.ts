@@ -28,6 +28,10 @@ import amplificationRouter from "./amplification";
 import mechanicWorkspaceRouter from "./mechanicWorkspace";
 import transportRouter from "./transport";
 import tierCatalogRouter from "./tierCatalog";
+import workConfirmationsRouter from "./workConfirmations";
+import tipsRouter from "./tips";
+import disputesRouter from "./disputes";
+import payoutsRouter from "./payouts";
 
 const router: IRouter = Router();
 
@@ -60,5 +64,9 @@ router.use(amplificationRouter);
 router.use(mechanicWorkspaceRouter);
 router.use(transportRouter);
 router.use(tierCatalogRouter);
+router.use(workConfirmationsRouter);
+router.use(tipsRouter);
+router.use(disputesRouter);
+router.use(payoutsRouter);
 
 export default router;

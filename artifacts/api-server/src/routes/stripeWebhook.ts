@@ -1,9 +1,9 @@
 // Stripe webhook handler. Exported as a plain Express handler so it can be
 // mounted with `express.raw()` ONLY on its own path — never on the whole /api.
 import type { Request, Response } from "express";
-import { eq, and, ne } from "drizzle-orm";
+import { eq, and, ne, isNull } from "drizzle-orm";
 import type Stripe from "stripe";
-import { db, paymentsTable, usersTable, jobsTable } from "@workspace/db";
+import { db, paymentsTable, usersTable, jobsTable, tipsTable } from "@workspace/db";
 import { tryConvertReferral, revertReferralForJob } from "../lib/referralEngine";
 import { getUncachableStripeClient, getWebhookSecret } from "../lib/stripeClient";
 import {
@@ -15,6 +15,12 @@ import {
 } from "../lib/loyaltyEngine";
 import { logger } from "../lib/logger";
 import { runProgression } from "../lib/tierProgressionEngine";
+import { recordStripeDispute } from "../lib/disputeEngine";
+import {
+  handleTransferCreated, handleTransferFailed, handleTransferReversed,
+  handlePayoutEvent,
+} from "../lib/payoutEventEngine";
+import { notifyMechanicTipReceived } from "../lib/notifications";
 
 export async function stripeWebhookHandler(req: Request, res: Response): Promise<void> {
   const secret = getWebhookSecret();
@@ -56,6 +62,18 @@ async function handleEvent(event: Stripe.Event): Promise<void> {
         ? session.payment_intent
         : session.payment_intent?.id ?? null;
       if (!session.id || !intentId) return;
+      // Tip checkouts: tag flowed via Checkout session metadata.kind="tip".
+      // Tip captures immediately (no manual capture), so we just stamp the
+      // intent + status here. The actual capture state flips on
+      // payment_intent.succeeded below (and that handler dispatches the tip
+      // path when it sees a matching tips row).
+      if (session.metadata?.["kind"] === "tip") {
+        await db.update(tipsTable)
+          .set({ providerPaymentIntentId: intentId })
+          .where(eq(tipsTable.providerSessionId, session.id));
+        logger.info({ sessionId: session.id, intentId }, "Tip checkout session completed");
+        break;
+      }
       // Move pending → authorized ONLY. If the row is already in any other
       // state (canceled/failed/refunded/captured/authorized), do NOT regress —
       // and treat it as orphaned so the late-arriving authorization is voided.
@@ -97,6 +115,39 @@ async function handleEvent(event: Stripe.Event): Promise<void> {
 
     case "payment_intent.succeeded": {
       const intent = event.data.object as Stripe.PaymentIntent;
+      // TIP path — separate table, separate flow. Captured tips fire the
+      // mechanic's tip-received push and stop here (no loyalty/job changes).
+      //
+      // Webhook ordering safety: payment_intent.succeeded can arrive BEFORE
+      // checkout.session.completed (which is what stamps `providerPaymentIntentId`
+      // on the tips row). When it does, fall back to the intent.metadata
+      // breadcrumbs we set at tip-checkout creation (`kind=tip`, `tipId`)
+      // and stamp the intent id ourselves so the next retry / status flip
+      // is consistent.
+      if (intent.metadata?.["kind"] === "tip" && intent.metadata?.["tipId"]) {
+        const tipId = Number(intent.metadata["tipId"]);
+        if (Number.isInteger(tipId)) {
+          await db.update(tipsTable)
+            .set({ providerPaymentIntentId: intent.id })
+            .where(and(eq(tipsTable.id, tipId), isNull(tipsTable.providerPaymentIntentId)));
+        }
+      }
+      const tipUpdated = await db.update(tipsTable)
+        .set({ status: "captured", capturedAt: new Date() })
+        .where(and(
+          eq(tipsTable.providerPaymentIntentId, intent.id),
+          ne(tipsTable.status, "captured"),
+        ))
+        .returning();
+      if (tipUpdated.length > 0) {
+        const tip = tipUpdated[0]!;
+        const [mech] = await db.select().from(usersTable).where(eq(usersTable.id, tip.mechanicId));
+        if (mech?.pushToken) {
+          void notifyMechanicTipReceived(mech.pushToken, tip.jobId, tip.mechanicAmountCents / 100);
+        }
+        logger.info({ tipId: tip.id, intentId: intent.id }, "Tip captured");
+        return;
+      }
       // Atomic, idempotent transition: only the FIRST update with status != 'captured'
       // returns a row. Subsequent webhook retries return 0 rows → no double awards.
       const updated = await db.update(paymentsTable)
@@ -198,6 +249,52 @@ async function handleEvent(event: Stripe.Event): Promise<void> {
         logger.error({ err, jobId: payment.jobId }, "referral revert failed on refund"),
       );
       logger.info({ jobId: payment.jobId, intentId }, "Payment refunded — job reverted + loyalty reversed");
+      break;
+    }
+
+    /* ---------------------------------------------------------------- */
+    /* Disputes — chargebacks. Mirrored into the disputes table so the   */
+    /* mechanic + admin dashboards can show one unified queue.           */
+    /* ---------------------------------------------------------------- */
+    case "charge.dispute.created":
+    case "charge.dispute.updated":
+    case "charge.dispute.closed":
+    case "charge.dispute.funds_withdrawn":
+    case "charge.dispute.funds_reinstated": {
+      const dispute = event.data.object as Stripe.Dispute;
+      const intentId =
+        typeof dispute.payment_intent === "string"
+          ? dispute.payment_intent
+          : dispute.payment_intent?.id ?? null;
+      await recordStripeDispute(dispute, intentId);
+      break;
+    }
+
+    /* ---------------------------------------------------------------- */
+    /* Transfer / payout lifecycle — feeds the mechanic payout dashboard */
+    /* timeline and triggers retry/notify on failures. Connect events    */
+    /* arrive with `event.account` set to the connected account id.      */
+    /* ---------------------------------------------------------------- */
+    case "transfer.created": {
+      await handleTransferCreated(event.data.object as Stripe.Transfer, event.id);
+      break;
+    }
+    case "transfer.reversed": {
+      await handleTransferReversed(event.data.object as Stripe.Transfer, event.id);
+      break;
+    }
+    case "payout.paid":
+    case "payout.failed":
+    case "payout.canceled": {
+      const kind = event.type === "payout.paid" ? "payout_paid"
+        : event.type === "payout.failed" ? "payout_failed"
+        : "payout_canceled";
+      await handlePayoutEvent(
+        event.data.object as Stripe.Payout,
+        kind,
+        event.id,
+        event.account ?? null,
+      );
       break;
     }
 

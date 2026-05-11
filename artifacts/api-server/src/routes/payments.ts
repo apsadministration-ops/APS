@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
-import { db, paymentsTable, jobsTable, usersTable } from "@workspace/db";
+import { db, paymentsTable, jobsTable, usersTable, shopsTable } from "@workspace/db";
 import { tryConvertReferral } from "../lib/referralEngine";
 import { authenticate, requireRole, requireActiveMechanic, type AuthRequest } from "../middlewares/authenticate";
 import { awardCustomerPoints } from "../lib/loyaltyEngine";
@@ -121,6 +121,31 @@ router.post("/payments/jobs/:jobId/checkout", authenticate, async (req: AuthRequ
   });
   const { platformFeeCents, mechanicPayoutCents } = splitCents(amountCents, commission);
 
+  // Per-job payout destination — `existing` may have been pre-stamped by an
+  // admin or shop owner via PATCH /payouts/job/:jobId/destination BEFORE the
+  // customer authorizes. Stripe `transfer_data.destination` is fixed at PI
+  // creation, so this is the only point at which we can route to a shop.
+  //
+  // Modes:
+  //   "mechanic" (default) → mechanic's connected account
+  //   "shop"               → shop's connected account
+  //   "split"              → routed to mechanic at capture time; the shop's
+  //                          share is moved with a follow-up Stripe transfer
+  //                          (post-capture). Schema/UI ready; secondary
+  //                          transfer execution is left for a future change
+  //                          and is logged via payout_events when wired.
+  let transferDestination = mechanic.stripeAccountId;
+  let resolvedShopId: number | null = existing?.shopId ?? null;
+  let resolvedDestination: "mechanic" | "shop" | "split" = (existing?.payoutDestination ?? "mechanic") as "mechanic" | "shop" | "split";
+  if (resolvedDestination === "shop" && resolvedShopId) {
+    const [shop] = await db.select().from(shopsTable).where(eq(shopsTable.id, resolvedShopId));
+    if (!shop?.stripeAccountId || !shop.stripeAccountReady) {
+      res.status(400).json({ error: "Selected shop has not finished payout setup yet." });
+      return;
+    }
+    transferDestination = shop.stripeAccountId;
+  }
+
   const baseUrl = `https://${(process.env["REPLIT_DOMAINS"] ?? "").split(",")[0] ?? ""}`;
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
@@ -141,8 +166,8 @@ router.post("/payments/jobs/:jobId/checkout", authenticate, async (req: AuthRequ
     payment_intent_data: {
       capture_method: "manual",
       application_fee_amount: platformFeeCents,
-      transfer_data: { destination: mechanic.stripeAccountId },
-      metadata: { jobId: String(jobId), customerId: String(customer.id), mechanicId: String(mechanic.id) },
+      transfer_data: { destination: transferDestination },
+      metadata: { jobId: String(jobId), customerId: String(customer.id), mechanicId: String(mechanic.id), payoutDestination: resolvedDestination },
     },
     success_url: `${baseUrl}/api/payments/checkout/return?session_id={CHECKOUT_SESSION_ID}&status=success`,
     cancel_url: `${baseUrl}/api/payments/checkout/return?session_id={CHECKOUT_SESSION_ID}&status=cancel`,
@@ -166,6 +191,8 @@ router.post("/payments/jobs/:jobId/checkout", authenticate, async (req: AuthRequ
         providerPaymentIntentId: null,
         failureReason: null,
         status: "pending",
+        payoutDestination: resolvedDestination,
+        shopId: resolvedShopId,
       })
       .where(eq(paymentsTable.id, existing.id));
   } else {
@@ -179,6 +206,8 @@ router.post("/payments/jobs/:jobId/checkout", authenticate, async (req: AuthRequ
       mechanicPayoutCents,
       providerSessionId: session.id,
       status: "pending",
+      payoutDestination: resolvedDestination,
+      shopId: resolvedShopId,
     });
   }
 

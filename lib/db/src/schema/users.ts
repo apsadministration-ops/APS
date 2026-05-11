@@ -36,6 +36,12 @@ export const usersTable = pgTable("users", {
   stripeCustomerId: text("stripe_customer_id"),
   stripeAccountId: text("stripe_account_id"),
   stripeAccountReady: boolean("stripe_account_ready").notNull().default(false),
+  // "individual" for sole-proprietor mechanics (default), "company" for
+  // shop owners. Drives Stripe Connect Express `business_type` at create time.
+  stripeAccountType: text("stripe_account_type", { enum: ["individual", "company"] }).notNull().default("individual"),
+  // Schema-only prep for Stripe Instant Payouts — flipped by admin once the
+  // mechanic meets eligibility. NOT enforced anywhere yet.
+  allowInstantPayouts: boolean("allow_instant_payouts").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

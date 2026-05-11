@@ -279,6 +279,7 @@ export default function MechanicProfileScreen() {
           <>
             <Row icon="gift" label="My Referral Code" value={user.referralCode} onPress={() => router.push("/referral")} />
             <Row icon="zap" label="Amplification Kit" value="QR, booking link, AI content" onPress={() => router.push("/(mechanic)/amplification")} />
+            <Row icon="dollar-sign" label="Payouts Dashboard" value="Earnings, tips, status, retries" onPress={() => router.push("/mechanic/payouts")} />
           </>
         )}
 

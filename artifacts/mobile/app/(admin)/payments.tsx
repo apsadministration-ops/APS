@@ -1,6 +1,7 @@
 import {
   View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, RefreshControl,
 } from "react-native";
+import { useRouter } from "expo-router";
 import { confirm } from "@/utils/confirm";
 import { useColors } from "@/hooks/useColors";
 import { Feather } from "@expo/vector-icons";
@@ -40,6 +41,7 @@ const STATUS_COLOR: Record<string, string> = {
 
 export default function AdminPaymentsScreen() {
   const colors = useColors();
+  const router = useRouter();
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -105,6 +107,15 @@ export default function AdminPaymentsScreen() {
           <Text style={[styles.summaryAmount, { color: "#22C55E" }]}>${totalReleased.toFixed(2)}</Text>
           <Text style={[styles.summaryLabel, { color: colors.mutedForeground }]}>Released</Text>
         </View>
+      </View>
+
+      {/* Quick links */}
+      <View style={{ flexDirection: "row", gap: 8, paddingHorizontal: 16, marginTop: 8 }}>
+        <Pressable onPress={() => router.push("/(admin)/disputes")}
+          style={{ flex: 1, backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, borderRadius: 8, padding: 12, alignItems: "center", flexDirection: "row", gap: 8, justifyContent: "center" }}>
+          <Feather name="alert-octagon" size={16} color="#dc2626" />
+          <Text style={{ color: colors.foreground, fontWeight: "600" }}>Disputes</Text>
+        </Pressable>
       </View>
 
       {/* Filter */}

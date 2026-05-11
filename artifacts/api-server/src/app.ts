@@ -5,6 +5,7 @@ import router from "./routes";
 import { stripeWebhookHandler } from "./routes/stripeWebhook";
 import { logger } from "./lib/logger";
 import { initStripeWebhook } from "./lib/stripeInit";
+import { startPayoutScheduler } from "./lib/payoutSchedulerInit";
 
 const app: Express = express();
 
@@ -39,5 +40,9 @@ app.use("/api", router);
 
 // Fire-and-forget: register webhook endpoint with Stripe + cache the signing secret.
 void initStripeWebhook();
+
+// In-process cron — sweeps approval expiry (60s) and work-confirmation
+// expiry (24h capture release) every minute. See payoutSchedulerInit.ts.
+startPayoutScheduler();
 
 export default app;

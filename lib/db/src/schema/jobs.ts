@@ -45,6 +45,10 @@ export const jobsTable = pgTable("jobs", {
   // start working. Defaults to true for non-ghost-garage jobs (no transport
   // happens). For ghost-garage jobs the customer must explicitly opt in.
   customerTransportApproved: boolean("customer_transport_approved").notNull().default(true),
+  // Set when the customer either explicitly confirms the completed work or
+  // the 24h auto-confirm sweeper fires. Used by the payout-hold engine to
+  // know when to release the Stripe capture.
+  customerWorkApprovedAt: timestamp("customer_work_approved_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   acceptedAt: timestamp("accepted_at", { withTimezone: true }),
   completedAt: timestamp("completed_at", { withTimezone: true }),

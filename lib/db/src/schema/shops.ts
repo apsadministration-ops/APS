@@ -21,6 +21,20 @@ export const shopsTable = pgTable("shops", {
   insuranceCarrier: text("insurance_carrier"),
   insurancePolicyNumber: text("insurance_policy_number"),
   status: text("status", { enum: ["active", "inactive"] }).notNull().default("active"),
+
+  // Stripe Connect Express (company-type) for shop-level payouts. Distinct
+  // from the OWNER's user-level `stripeAccountId` — a shop has its own
+  // payout destination so a single owner can run multiple shops with
+  // separate bank accounts and 1099s.
+  stripeAccountId: text("stripe_account_id"),
+  stripeAccountReady: integer("stripe_account_ready").notNull().default(0),
+  // Default routing for any job worked at this shop:
+  //   "mechanic" — pay the mechanic directly (no shop cut)
+  //   "shop"     — pay the shop, owner pays mechanic outside APS
+  //   "split"    — split per shopSplitPct
+  defaultPayoutMode: text("default_payout_mode", { enum: ["mechanic", "shop", "split"] }).notNull().default("mechanic"),
+  defaultShopSplitPct: integer("default_shop_split_pct").notNull().default(0),
+
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   index("shops_owner_id_idx").on(t.ownerId),

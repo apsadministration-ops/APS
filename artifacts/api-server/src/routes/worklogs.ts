@@ -2,10 +2,9 @@ import { Router, type IRouter } from "express";
 import { eq, and } from "drizzle-orm";
 import { db, workLogsTable, jobsTable, usersTable, paymentsTable, vehiclesTable, ownershipTable, inspectionsTable, bayBookingsTable } from "@workspace/db";
 import { authenticate, requireActiveMechanic, type AuthRequest } from "../middlewares/authenticate";
-import { notifyCustomerJobComplete } from "../lib/notifications";
-import { getUncachableStripeClient } from "../lib/stripeClient";
+import { notifyCustomerJobComplete, notifyMechanicWorkUnderReview } from "../lib/notifications";
 import { awardMechanicPoints, RULES } from "../lib/loyaltyEngine";
-import { commissionForJob, splitCents, type TierKey, type ServiceCategory } from "@workspace/tier-catalog";
+import { openWorkConfirmation } from "../lib/payoutHoldEngine";
 
 const router: IRouter = Router();
 
@@ -198,48 +197,32 @@ router.post("/worklogs", authenticate, requireActiveMechanic, async (req: AuthRe
     return created;
   });
 
-  // Capture authorized Stripe funds (up to authorized amount). The
-  // payment_intent.succeeded webhook will then mark the job PAID + award
-  // loyalty. We block here so a capture failure surfaces in logs immediately.
+  // Open the 24h customer-confirmation window. Capture is DEFERRED until
+  // either the customer confirms or the sweeper auto-confirms. This is the
+  // single chokepoint for kicking off the escrow hold — see lib/
+  // payoutHoldEngine.ts for the full lifecycle.
   if (isStripeFlow && existingPayment!.providerPaymentIntentId) {
-    try {
-      const stripe = await getUncachableStripeClient();
-      const authorizedCents = existingPayment!.amountCents ?? Math.round((existingPayment!.amount ?? totalCost) * 100);
-      const finalCents = Math.round(totalCost * 100);
-      const captureCents = Math.min(authorizedCents, finalCents);
-      // Recompute platform fee against the ACTUAL captured amount. If we left
-      // application_fee_amount at the original (estimate-based) figure, Stripe
-      // would either reject a small capture (fee > capture) or take a larger
-      // cut than 10% — shorting the mechanic.
-      // Recompute the commission split using the same tier-aware rules used
-      // at authorization. Detailing stays 15%, working-down stays 25%, etc.
-      const [mechRow] = await db.select({ mechanicTier: usersTable.mechanicTier }).from(usersTable).where(eq(usersTable.id, job.mechanicId!));
-      const commission = commissionForJob({
-        category: job.jobType as ServiceCategory,
-        jobTier: ((job.requiredTier ?? "detailer") as TierKey),
-        mechanicTier: (mechRow?.mechanicTier ?? "detailer") as TierKey,
-      });
-      const { platformFeeCents: newFeeCents, mechanicPayoutCents: newPayoutCents } = splitCents(captureCents, commission);
-      await stripe.paymentIntents.capture(existingPayment!.providerPaymentIntentId, {
-        amount_to_capture: captureCents,
-        application_fee_amount: newFeeCents,
-      });
-      // Sync DB columns with what was actually captured so admin/customer
-      // dashboards display the correct numbers.
-      await db.update(paymentsTable)
-        .set({
-          amount: captureCents / 100,
-          platformFee: newFeeCents / 100,
-          mechanicPayout: newPayoutCents / 100,
-          amountCents: captureCents,
-          platformFeeCents: newFeeCents,
-          mechanicPayoutCents: newPayoutCents,
-        })
-        .where(eq(paymentsTable.id, existingPayment!.id));
-      req.log.info({ jobId, intentId: existingPayment!.providerPaymentIntentId, captureCents, newFeeCents }, "Stripe payment captured");
-    } catch (err) {
-      req.log.error({ err, jobId }, "Stripe capture failed — work log saved, payment requires manual review");
-    }
+    // Sync the authorized payment's cents fields with the FINAL totalCost
+    // before opening the window, so the captureNow() call later sees the
+    // correct amount and split.
+    const authorizedCents = existingPayment!.amountCents ?? Math.round((existingPayment!.amount ?? totalCost) * 100);
+    const finalCents = Math.min(authorizedCents, Math.round(totalCost * 100));
+    await db.update(paymentsTable)
+      .set({
+        amount: finalCents / 100,
+        amountCents: finalCents,
+      })
+      .where(eq(paymentsTable.id, existingPayment!.id));
+    await openWorkConfirmation(jobId);
+    req.log.info({ jobId, finalCents }, "24h customer work-confirmation window opened");
+    // Tell the mechanic the funds are in 24h review (separate from the
+    // customer's notify, which fires inside openWorkConfirmation).
+    void (async () => {
+      try {
+        const [mech] = await db.select().from(usersTable).where(eq(usersTable.id, job.mechanicId!));
+        if (mech?.pushToken) await notifyMechanicWorkUnderReview(mech.pushToken, jobId);
+      } catch { /* best-effort */ }
+    })();
   }
 
   // MECHANIC: upsell points — 2 pts per $1 of CUSTOMER-APPROVED upsells only.

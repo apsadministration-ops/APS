@@ -26,3 +26,7 @@ export * from "./badges";
 export * from "./userReputation";
 export * from "./mechanicWorkspace";
 export * from "./transportLegs";
+export * from "./disputes";
+export * from "./tips";
+export * from "./payoutEvents";
+export * from "./workConfirmations";
