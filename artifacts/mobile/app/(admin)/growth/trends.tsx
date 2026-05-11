@@ -4,7 +4,7 @@ import { Feather } from "@expo/vector-icons";
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "expo-router";
 import { confirm, alertMessage } from "@/utils/confirm";
-import { growthGet, growthSend, PLATFORMS, TOPIC_LABELS, type PlatformValue } from "./_api";
+import { growthGet, growthSend, PLATFORMS, TOPIC_LABELS, type PlatformValue } from "@/lib/growthApi";
 
 interface Idea {
   topicKind: string;

@@ -3,7 +3,7 @@ import { useColors } from "@/hooks/useColors";
 import { Feather } from "@expo/vector-icons";
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "expo-router";
-import { growthGet } from "./_api";
+import { growthGet } from "@/lib/growthApi";
 
 interface Overview {
   totals: { customers: number; mechanics: number; pendingMechanics: number; activeMechanics: number };

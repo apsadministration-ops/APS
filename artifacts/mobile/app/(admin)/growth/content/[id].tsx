@@ -4,7 +4,7 @@ import { Feather } from "@expo/vector-icons";
 import { useState, useEffect, useCallback } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { confirm, alertMessage } from "@/utils/confirm";
-import { growthGet, growthSend, PLATFORMS, STATUS_LABELS, TOPIC_LABELS } from "../_api";
+import { growthGet, growthSend, PLATFORMS, STATUS_LABELS, TOPIC_LABELS } from "@/lib/growthApi";
 
 interface Post {
   id: number; platform: string; status: string; topicKind: string; topicTitle: string;

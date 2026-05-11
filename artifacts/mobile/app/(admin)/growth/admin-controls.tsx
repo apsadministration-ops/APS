@@ -13,7 +13,7 @@ import {
 import { useColors } from "@/hooks/useColors";
 import { Feather } from "@expo/vector-icons";
 import { useState, useEffect, useCallback } from "react";
-import { growthGet, growthSend } from "./_api";
+import { growthGet, growthSend } from "@/lib/growthApi";
 
 interface SettingsResponse {
   settings: { id: number; aiContentGenerationPaused: boolean; maxDailyDrafts: number; updatedAt: string };

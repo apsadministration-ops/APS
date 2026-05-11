@@ -2,7 +2,7 @@ import { View, Text, StyleSheet, ScrollView, ActivityIndicator, RefreshControl }
 import { useColors } from "@/hooks/useColors";
 import { Feather } from "@expo/vector-icons";
 import { useState, useEffect, useCallback } from "react";
-import { growthGet } from "./_api";
+import { growthGet } from "@/lib/growthApi";
 
 interface Row {
   mechanicId: number; name: string; region: string | null; tier: string;
