@@ -37,7 +37,7 @@ import {
 } from "@workspace/db";
 import { logger } from "./logger";
 import { getUncachableStripeClient } from "./stripeClient";
-import { commissionForJob, splitCents, type TierKey, type ServiceCategory } from "@workspace/tier-catalog";
+import { commissionForJob, splitOnNetProfit, findServiceBySlug, partsCostCentsFor, defaultPartsCostPct, type TierKey, type ServiceCategory } from "@workspace/tier-catalog";
 import {
   notifyCustomerWorkAwaitingConfirmation,
   notifyMechanicWorkUnderReview,
@@ -254,7 +254,14 @@ export async function captureNow(
       jobTier: ((job.requiredTier ?? "detailer") as TierKey),
       mechanicTier: (mechRow?.mechanicTier ?? "detailer") as TierKey,
     });
-    const { platformFeeCents, mechanicPayoutCents } = splitCents(finalCents, commission);
+    // True Net Profit split — commission applies only to (revenue − parts
+    // cost). MUST mirror the parts-cost rule used at authorization in
+    // payments.ts so the mechanic's payout matches what was visible at accept.
+    const svcEntry = findServiceBySlug(job.serviceSlug);
+    const partsCostCents = svcEntry
+      ? partsCostCentsFor(svcEntry, finalCents)
+      : Math.round(finalCents * defaultPartsCostPct(job.jobType as ServiceCategory));
+    const { platformFeeCents, mechanicPayoutCents } = splitOnNetProfit(finalCents, partsCostCents, commission);
 
     await stripe.paymentIntents.capture(pmt.providerPaymentIntentId, {
       amount_to_capture: finalCents,

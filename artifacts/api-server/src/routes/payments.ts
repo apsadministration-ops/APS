@@ -6,7 +6,7 @@ import { authenticate, requireRole, requireActiveMechanic, type AuthRequest } fr
 import { awardCustomerPoints } from "../lib/loyaltyEngine";
 import { runProgression } from "../lib/tierProgressionEngine";
 import { getStripePublishableKey, getUncachableStripeClient } from "../lib/stripeClient";
-import { commissionForJob, splitCents, type TierKey, type ServiceCategory } from "@workspace/tier-catalog";
+import { commissionForJob, splitOnNetProfit, findServiceBySlug, partsCostCentsFor, defaultPartsCostPct, type TierKey, type ServiceCategory } from "@workspace/tier-catalog";
 
 const router: IRouter = Router();
 
@@ -119,7 +119,14 @@ router.post("/payments/jobs/:jobId/checkout", authenticate, async (req: AuthRequ
     jobTier: ((job.requiredTier ?? "detailer") as TierKey),
     mechanicTier: (mechanic.mechanicTier ?? "detailer") as TierKey,
   });
-  const { platformFeeCents, mechanicPayoutCents } = splitCents(amountCents, commission);
+  // True Net Profit: APS commission applies ONLY to (revenue − parts cost).
+  // Mechanic gets the parts-cost passthrough at 100% plus their share of net
+  // profit. Catalog entry preferred; if missing, fall back to category default.
+  const svcEntry = findServiceBySlug(job.serviceSlug);
+  const partsCostCents = svcEntry
+    ? partsCostCentsFor(svcEntry, amountCents)
+    : Math.round(amountCents * defaultPartsCostPct(job.jobType as ServiceCategory));
+  const { platformFeeCents, mechanicPayoutCents } = splitOnNetProfit(amountCents, partsCostCents, commission);
 
   // Per-job payout destination — `existing` may have been pre-stamped by an
   // admin or shop owner via PATCH /payouts/job/:jobId/destination BEFORE the

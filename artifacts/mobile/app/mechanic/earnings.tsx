@@ -13,7 +13,8 @@ import {
   tierLabel,
   commissionForJob,
   quoteForService,
-  splitCents,
+  splitOnNetProfit,
+  partsCostCentsFor,
   isPricedService,
   type TierKey,
 } from "@workspace/tier-catalog";
@@ -48,16 +49,21 @@ export default function EarningsScreen() {
         jobTier: t.key,
         mechanicTier: myTier,
       });
-      // Use the SAME cents-based split the server uses at Stripe capture
-      // (`splitCents` in payments.ts/worklogs.ts). This guarantees the
-      // mechanic sees the exact take-home they'll be paid, not a rounded
-      // approximation that drifts a dollar from the payout.
+      // Use the SAME True-Net-Profit split the server uses at Stripe
+      // capture (`splitOnNetProfit` in payments.ts + payoutHoldEngine.ts).
+      // Commission applies only to (revenue − parts cost); mechanic also
+      // gets the parts-cost passthrough at 100%. This guarantees the
+      // mechanic sees the exact take-home they'll be paid.
       const total = quote.bookedTotal;
       const totalCents = total * 100;
-      const { mechanicPayoutCents, platformFeeCents } = splitCents(totalCents, c);
+      const partsCostCents = partsCostCentsFor(sample, totalCents);
+      const { mechanicPayoutCents, platformFeeCents, netProfitCents } =
+        splitOnNetProfit(totalCents, partsCostCents, c);
       const mechanicTake = mechanicPayoutCents / 100;
       const platformTake = platformFeeCents / 100;
-      return { tier: t, sample, c, quote, total, mechanicTake, platformTake };
+      const partsCost = partsCostCents / 100;
+      const netProfit = netProfitCents / 100;
+      return { tier: t, sample, c, quote, total, mechanicTake, platformTake, partsCost, netProfit };
     }).filter(Boolean) as Array<{
       tier: typeof TIERS[number];
       sample: typeof JOB_CATALOG[number];
@@ -66,6 +72,8 @@ export default function EarningsScreen() {
       total: number;
       mechanicTake: number;
       platformTake: number;
+      partsCost: number;
+      netProfit: number;
     }>;
   }, [european, myTier]);
 
@@ -81,7 +89,7 @@ export default function EarningsScreen() {
       <ScrollView style={[styles.container, { backgroundColor: colors.background }]} contentContainerStyle={{ padding: 16, paddingBottom: 120 }}>
         <Text style={[styles.h1, { color: colors.foreground }]}>Earn more by leveling up</Text>
         <Text style={[styles.lede, { color: colors.mutedForeground }]}>
-          APS pays mechanics on labor only. Three simple rules: same-tier work pays the most, detailing always pays best, and "working down" to a lower-tier job is a small cut.
+          APS commission is calculated on True Net Profit — your job revenue (labor + parts markup) minus the cost of parts. Three simple rules: same-tier work pays the most, detailing always pays best, and "working down" to a lower-tier job is a small cut. Parts, fees, and tips pass through 100%.
         </Text>
 
         {/* The three rates */}
@@ -161,6 +169,11 @@ export default function EarningsScreen() {
                     <Text style={[styles.calcSplit, { color: colors.mutedForeground }]}>
                       of ${row.total} · {row.c.mechanicPct}% / {row.c.platformPct}%
                     </Text>
+                    {row.partsCost > 0 ? (
+                      <Text style={[styles.calcSplit, { color: colors.mutedForeground, fontSize: 10 }]}>
+                        Net profit ${row.netProfit} · parts ${row.partsCost} passes through
+                      </Text>
+                    ) : null}
                   </View>
                 </View>
               );
@@ -216,7 +229,7 @@ export default function EarningsScreen() {
         <View style={[styles.footnote, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Feather name="info" size={14} color={colors.mutedForeground} />
           <Text style={[styles.footnoteText, { color: colors.mutedForeground }]}>
-            Commission applies to labor only — parts, fees, and tips pass through 100% to the mechanic. Refunded jobs reverse both sides of the ledger.
+            Earnings estimates include average labor + typical parts markup for each job. Your actual take-home will be 75–85% of the True Net Profit after parts cost. Parts, fees, and tips pass through 100% to the mechanic. Refunded jobs reverse both sides of the ledger.
           </Text>
         </View>
 

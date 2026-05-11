@@ -76,6 +76,16 @@ export interface ServiceDef {
    */
   priceMin?: number;
   priceMax?: number;
+  /**
+   * Estimated share of the booked total that is true *parts cost* (not
+   * markup). Drives the "True Net Profit" commission split — APS commission
+   * applies to (bookedTotal − partsCost), and the mechanic gets the parts
+   * cost back at 100%.
+   *
+   * If omitted, falls back to the per-category default in
+   * `defaultPartsCostPct(category)`. Range: 0..1.
+   */
+  partsCostPct?: number;
 }
 
 export const JOB_CATALOG: readonly ServiceDef[] = [
@@ -196,6 +206,47 @@ export function isPricedService(s: ServiceDef): s is ServiceDef & { priceMin: nu
 }
 
 /* -------------------------------------------------------------------------- */
+/* PARTS COST / TRUE NET PROFIT                                               */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Per-category default for the share of the booked total that is true parts
+ * cost (cost to the mechanic, NOT markup). Used when a service doesn't
+ * declare its own `partsCostPct`. Tuned for typical APS service mix:
+ *   - detailing: chemicals & supplies are negligible against labor → 0
+ *   - diagnostic: scanner labor only, no parts → 0
+ *   - maintenance: filters/fluids ≈ 30% of total
+ *   - repair: replacement parts ≈ 40% of total
+ *
+ * APS commission applies to revenue MINUS this cost (True Net Profit), so
+ * tighter numbers here = larger mechanic take. These are intentionally
+ * conservative (favoring the mechanic) until per-service overrides are
+ * tuned in `JOB_CATALOG`.
+ */
+export function defaultPartsCostPct(category: ServiceCategory): number {
+  switch (category) {
+    case "detailing":   return 0;
+    case "diagnostic":  return 0;
+    case "maintenance": return 0.30;
+    case "repair":      return 0.40;
+  }
+}
+
+/** Resolved parts-cost share for a service (per-service override → category default). */
+export function partsCostPctFor(svc: ServiceDef): number {
+  return typeof svc.partsCostPct === "number"
+    ? Math.max(0, Math.min(1, svc.partsCostPct))
+    : defaultPartsCostPct(svc.category);
+}
+
+/** Parts cost in CENTS for a job — clamped to [0, amountCents]. */
+export function partsCostCentsFor(svc: ServiceDef, amountCents: number): number {
+  if (!Number.isFinite(amountCents) || amountCents <= 0) return 0;
+  const cost = Math.round(amountCents * partsCostPctFor(svc));
+  return Math.max(0, Math.min(amountCents, cost));
+}
+
+/* -------------------------------------------------------------------------- */
 /* EUROPEAN-VEHICLE PREMIUM                                                   */
 /* -------------------------------------------------------------------------- */
 
@@ -294,6 +345,12 @@ export interface ServiceQuote {
   /** The single "booked" total the server stamps on the job — uses the base
    *  midpoint × (1 + applied premium). Whole dollars. */
   bookedTotal: number;
+  /** Estimated true parts cost in WHOLE DOLLARS — passes through 100% to
+   *  the mechanic at capture; not subject to commission. */
+  partsCostEstimate: number;
+  /** True Net Profit estimate in WHOLE DOLLARS — `bookedTotal − partsCostEstimate`.
+   *  This is what the commission percentage applies against. */
+  netProfitEstimate: number;
 }
 
 /** Quote a service, optionally applying the European premium. */
@@ -313,11 +370,14 @@ export function quoteForService(
   const finalMax = Math.round(baseMax * (1 + premiumMaxPct / 100));
   const baseMid = (baseMin + baseMax) / 2;
   const bookedTotal = Math.round(baseMid * (1 + appliedPremiumPct / 100));
+  const partsCostEstimate = Math.round(bookedTotal * partsCostPctFor(svc));
+  const netProfitEstimate = Math.max(0, bookedTotal - partsCostEstimate);
   return {
     slug: svc.slug, name: svc.name, tier: svc.tier, category: svc.category,
     baseMin, baseMax, isEuropean,
     premiumMinPct, premiumMaxPct, appliedPremiumPct,
     finalMin, finalMax, bookedTotal,
+    partsCostEstimate, netProfitEstimate,
   };
 }
 
@@ -385,11 +445,41 @@ function makeResult(rule: { platformPct: number; mechanicPct: number }, reason: 
 }
 
 /**
- * Compute fee/payout in cents, rounding the platform fee (so the mechanic
- * always gets the rounding remainder, never the other way around).
+ * LEGACY — splits the FULL amount by the commission rate. Retained for
+ * tip pass-through (where rate.platformRate=0 → 100% to mechanic) and any
+ * caller that has no parts-cost context. New code should use
+ * `splitOnNetProfit` so commission applies to (revenue − parts cost) per
+ * the True Net Profit policy.
  */
 export function splitCents(amountCents: number, rate: CommissionResult): { platformFeeCents: number; mechanicPayoutCents: number } {
   const platformFeeCents = Math.round(amountCents * rate.platformRate);
   const mechanicPayoutCents = amountCents - platformFeeCents;
   return { platformFeeCents, mechanicPayoutCents };
+}
+
+/**
+ * "True Net Profit" split — APS commission applies ONLY to
+ * `(amountCents − partsCostCents)`. The mechanic receives the full parts-cost
+ * passthrough plus their share of the net profit.
+ *
+ * Rounding favors the mechanic: the platform fee is rounded, then mechanic
+ * payout = total − fee. Clamps `partsCostCents` to [0, amountCents] so a
+ * mis-stamped parts cost can never push the platform fee negative.
+ */
+export function splitOnNetProfit(
+  amountCents: number,
+  partsCostCents: number,
+  rate: CommissionResult,
+): { platformFeeCents: number; mechanicPayoutCents: number; partsPassthroughCents: number; netProfitCents: number } {
+  const safeAmount = Math.max(0, Math.round(amountCents));
+  const safeParts = Math.max(0, Math.min(safeAmount, Math.round(partsCostCents)));
+  const netProfitCents = safeAmount - safeParts;
+  const platformFeeCents = Math.round(netProfitCents * rate.platformRate);
+  const mechanicPayoutCents = safeAmount - platformFeeCents;
+  return {
+    platformFeeCents,
+    mechanicPayoutCents,
+    partsPassthroughCents: safeParts,
+    netProfitCents,
+  };
 }
