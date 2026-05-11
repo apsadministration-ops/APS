@@ -25,6 +25,7 @@ import inspectionsRouter from "./inspections";
 import progressionRouter from "./progression";
 import growthRouter from "./growth";
 import amplificationRouter from "./amplification";
+import mechanicWorkspaceRouter from "./mechanicWorkspace";
 
 const router: IRouter = Router();
 
@@ -54,5 +55,6 @@ router.use(inspectionsRouter);
 router.use(progressionRouter);
 router.use(growthRouter);
 router.use(amplificationRouter);
+router.use(mechanicWorkspaceRouter);
 
 export default router;

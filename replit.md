@@ -47,6 +47,12 @@ artifacts/api-server/src/lib/reviewVisibility.ts      — 72h lock + reciprocati
 artifacts/api-server/src/lib/reputationEngine.ts      — full per-user reputation recompute + trust score
 artifacts/api-server/src/lib/badgeEngine.ts           — code-defined badge auto-award/revoke
 artifacts/api-server/src/lib/customerApprovalEngine.ts — 60s approve/decline/auto-approve state machine
+artifacts/api-server/src/lib/partsCompatibilityEngine.ts — PARTS_CATEGORIES + computeCompatibility() (high/medium/verify, prior-install promotion, override surfacing)
+artifacts/api-server/src/routes/mechanicWorkspace.ts — ALL /mechanic/* endpoints (single chokepoint requireMechanicOrAdmin gates EVERY route)
+lib/db/src/schema/mechanicWorkspace.ts — mechanic_vehicle_profiles, installed_parts (partial unique active rows), mechanic_vehicle_notes, vehicle_recommendations
+artifacts/mobile/app/mechanic/vin.tsx — VIN entry/decoder screen
+artifacts/mobile/app/mechanic/workspace/[vin].tsx — full Vehicle Intelligence Workspace (8 tabs)
+artifacts/mobile/components/VehicleDiagram.tsx — clickable component diagram
 lib/db/src/schema/reviews.ts          — reviews + review_audit_logs tables
 lib/db/src/schema/customerApprovals.ts — customer_approvals table (unique per job)
 lib/db/src/schema/badges.ts           — user_badges (partial unique on active rows)
@@ -82,6 +88,7 @@ lib/integrations-anthropic-ai/    — Replit AI Integrations Anthropic client
 - **Reputation engine:** `recomputeUserReputation(userId)` does a full recompute over visible reviews where the user is the subject + behavioural metrics from jobs (completion / cancellation / no-show / repeat-customer rates). Trust score 0..100 with documented weighting: base 50, +up to 30 from rating avg, +10 from completion, +10 from review-volume saturation, −25× cancellation rate, −15× no-show rate. Recomputed after every visibility flip / edit / moderation. Cached in `user_reputation`.
 - **Badge engine:** Definitions in code (`badgeEngine.ts`), not DB — adding a badge ships without migrations. Auto-award/revoke runs after every reputation recompute. `user_badges` partial unique index `(user_id, badge_key) WHERE revoked_at IS NULL` prevents double-active rows; revoking inserts `revoked_at` so award history is preserved.
 - **Stripe payments:** PCI-compliant via Stripe Checkout with manual capture, 10% platform fee, and Connect Express onboarding for mechanics.
+- **Vehicle Intelligence Workspace (mechanic+admin only):** VIN-keyed dealership-grade operating screen. `/mechanic/*` routes are gated by a SINGLE `requireMechanicOrAdmin` chokepoint — customers (and pending mechanics) get 403 on every endpoint. NHTSA vPIC decode is cached per-VIN in `mechanic_vehicle_profiles`. Opening a workspace by VIN is idempotent: `/mechanic/workspace/by-vin/:vin` lazily creates the `vehicles` row + profile if APS hasn't seen the VIN. Installed-parts uses a "replace-on-install" pattern (any active row in the same category becomes `removed` with reason "Superseded by new install" before the new row inserts) — preserves history while keeping the active list correct via partial unique index `(vehicle_id, category) WHERE removed_at IS NULL`. Compatibility engine promotes confidence to `high` when the same vehicle has a prior install record, and surfaces the most recent mechanic override so the next mechanic sees why someone deviated. Diagram lookup overlays NHTSA decode + currently-installed parts so a tap on "front brakes" shows OEM hint + the actual pads/rotors on this VIN.
 
 ## Product
 

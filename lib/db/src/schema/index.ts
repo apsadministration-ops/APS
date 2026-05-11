@@ -24,3 +24,4 @@ export * from "./reviews";
 export * from "./customerApprovals";
 export * from "./badges";
 export * from "./userReputation";
+export * from "./mechanicWorkspace";

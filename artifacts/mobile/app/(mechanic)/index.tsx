@@ -89,6 +89,23 @@ export default function MechanicDashboard() {
           </View>
         </View>
 
+        {/* Vehicle Intelligence Workspace entrypoint */}
+        <Pressable
+          style={[styles.alertCta, { backgroundColor: "#7C3AED12", borderColor: "#7C3AED40" }]}
+          onPress={() => router.push("/mechanic/vin" as never)}
+        >
+          <View style={[styles.alertIcon, { backgroundColor: "#7C3AED" }]}>
+            <Feather name="cpu" size={18} color="white" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.alertTitle, { color: colors.foreground }]}>Vehicle Intelligence</Text>
+            <Text style={[styles.alertSub, { color: colors.mutedForeground }]}>
+              Decode any VIN, see its full service history, installed parts, and notes.
+            </Text>
+          </View>
+          <Feather name="chevron-right" size={20} color={colors.mutedForeground} />
+        </Pressable>
+
         {/* Highlight available jobs if any */}
         {dashboard.availableJobCount > 0 && (
           <Pressable
