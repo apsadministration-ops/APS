@@ -68,6 +68,12 @@ export default function LoginScreen() {
             onChangeText={setPassword}
           />
 
+          <Link href="/(auth)/forgot-password" asChild>
+            <Pressable style={styles.forgotRow}>
+              <Text style={[styles.link, { color: colors.primary }]}>Forgot password?</Text>
+            </Pressable>
+          </Link>
+
           {loginMutation.isError && (
             <Text style={[styles.error, { color: colors.destructive }]}>
               {loginMutation.error?.message || "Login failed. Please check your credentials."}
@@ -124,6 +130,7 @@ const styles = StyleSheet.create({
   },
   buttonText: { fontSize: 16, fontWeight: "700" },
   error: { fontSize: 14, marginTop: 8 },
+  forgotRow: { alignSelf: "flex-end", marginTop: -4 },
   footer: {
     flexDirection: "row",
     justifyContent: "center",

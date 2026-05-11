@@ -8,6 +8,12 @@ import { initStripeWebhook } from "./lib/stripeInit";
 
 const app: Express = express();
 
+// We sit behind Replit's reverse proxy. Trusting it lets Express resolve
+// `req.ip`, `req.protocol`, and `req.hostname` from the X-Forwarded-* headers
+// — required for express-rate-limit and for building correct password reset
+// links (https://<real-host> instead of http://localhost).
+app.set("trust proxy", 1);
+
 app.use(
   pinoHttp({
     logger,

@@ -19,3 +19,4 @@ export * from "./tierPromotions";
 export * from "./socialPosts";
 export * from "./mechanicAmplification";
 export * from "./adminGrowthSettings";
+export * from "./passwordResetTokens";
