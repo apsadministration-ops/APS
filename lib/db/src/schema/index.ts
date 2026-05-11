@@ -16,3 +16,4 @@ export * from "./bayBookings";
 export * from "./inspections";
 export * from "./mechanicCertifications";
 export * from "./tierPromotions";
+export * from "./socialPosts";

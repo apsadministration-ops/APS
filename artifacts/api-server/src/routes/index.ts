@@ -20,6 +20,7 @@ import baysRouter from "./bays";
 import bookingsRouter from "./bookings";
 import inspectionsRouter from "./inspections";
 import progressionRouter from "./progression";
+import growthRouter from "./growth";
 
 const router: IRouter = Router();
 
@@ -44,5 +45,6 @@ router.use(baysRouter);
 router.use(bookingsRouter);
 router.use(inspectionsRouter);
 router.use(progressionRouter);
+router.use(growthRouter);
 
 export default router;

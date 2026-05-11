@@ -89,6 +89,14 @@ export default function AdminTabLayout() {
           tabBarIcon: ({ color }) => <Feather name="award" size={22} color={color} />,
         }}
       />
+      <Tabs.Screen
+        name="growth"
+        options={{
+          title: "Growth",
+          headerShown: false,
+          tabBarIcon: ({ color }) => <Feather name="trending-up" size={22} color={color} />,
+        }}
+      />
     </Tabs>
   );
 }
