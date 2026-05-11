@@ -5,7 +5,7 @@ import { verifyToken } from "../lib/auth";
 
 export interface AuthUser {
   id: number;
-  role: "customer" | "mechanic" | "admin";
+  role: "customer" | "mechanic" | "admin" | "shop_owner";
   status: "active" | "pending" | "suspended";
   email: string;
   name: string;
@@ -80,6 +80,25 @@ export function requireRole(...roles: string[]) {
  * sensitive mechanic action — DO NOT inline `req.userRole === "mechanic"`
  * checks elsewhere when this gate is needed.
  */
+/**
+ * Shop-owner-only chokepoint for Ghost Garage management endpoints
+ * (creating shops, adding bays, etc.). We do not have a separate "pending"
+ * state for shop owners today — all shop_owner accounts are active on
+ * signup — but the status check is still applied for symmetry with the
+ * mechanic flow and to honor admin suspensions.
+ */
+export function requireShopOwner(req: AuthRequest, res: Response, next: NextFunction): void {
+  if (req.user?.role !== "shop_owner") {
+    res.status(403).json({ error: "Shop owners only" });
+    return;
+  }
+  if (req.user.status !== "active") {
+    res.status(403).json({ error: "Your shop owner account is not active." });
+    return;
+  }
+  next();
+}
+
 export function requireActiveMechanic(req: AuthRequest, res: Response, next: NextFunction): void {
   if (req.user?.role !== "mechanic") {
     res.status(403).json({ error: "Mechanics only" });

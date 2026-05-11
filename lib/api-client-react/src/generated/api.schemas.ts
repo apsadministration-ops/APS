@@ -19,6 +19,7 @@ export type RegisterBodyRole =
 export const RegisterBodyRole = {
   customer: "customer",
   mechanic: "mechanic",
+  shop_owner: "shop_owner",
 } as const;
 
 export interface RegisterBody {
@@ -48,6 +49,7 @@ export const UserRole = {
   customer: "customer",
   mechanic: "mechanic",
   admin: "admin",
+  shop_owner: "shop_owner",
 } as const;
 
 export type UserStatus = (typeof UserStatus)[keyof typeof UserStatus];
@@ -236,6 +238,10 @@ export interface Job {
   customerRating?: number | null;
   customerReviewText?: string | null;
   requestedMechanicId?: number | null;
+  /** True when the job needs an indoor shop bay (lift, etc). Gates work-log submission on pre + post inspections. */
+  requiresGhostGarage?: boolean;
+  /** Whether the customer has approved their vehicle being transported to a shop bay. Always true for non-ghost-garage jobs. */
+  customerTransportApproved?: boolean;
 }
 
 export type CreateJobBodyJobType =
@@ -421,6 +427,16 @@ export interface WorkLog {
   afterImages: string[];
   /** Optional upsells/recommendations logged on job completion. Only items with customerApproved=true earn mechanic upsell points. */
   upsells: WorkLogUpsellsItem[];
+  laborHours?: number | null;
+  diagnosticCodes: string[];
+  rootCauseDiagnosis?: string | null;
+  repairSteps?: string | null;
+  observedSymptoms?: string | null;
+  recommendedMonitoring?: string | null;
+  recurringIssueTags: string[];
+  bayBookingId?: number | null;
+  preInspectionId?: number | null;
+  postInspectionId?: number | null;
   createdAt: string;
 }
 
@@ -457,6 +473,17 @@ export interface CreateWorkLogBody {
   afterImages: string[];
   /** Optional upsells/recommendations. Only items with customerApproved=true earn mechanic points. */
   upsells?: CreateWorkLogBodyUpsellsItem[];
+  laborHours?: number;
+  /** OBD-II / proprietary trouble codes recorded at service. */
+  diagnosticCodes?: string[];
+  rootCauseDiagnosis?: string;
+  repairSteps?: string;
+  observedSymptoms?: string;
+  recommendedMonitoring?: string;
+  /** Free-form tags marking patterns to watch (e.g. "intermittent", "post-storm"). */
+  recurringIssueTags?: string[];
+  /** Required if the job's requiresGhostGarage is true. */
+  bayBookingId?: number;
 }
 
 export type PaymentStatus = (typeof PaymentStatus)[keyof typeof PaymentStatus];
@@ -555,6 +582,278 @@ export interface AssistantChatResponse {
   urgency?: AssistantChatResponseUrgency;
 }
 
+export type ShopStatus = (typeof ShopStatus)[keyof typeof ShopStatus];
+
+export const ShopStatus = {
+  active: "active",
+  inactive: "inactive",
+} as const;
+
+export interface Shop {
+  id: number;
+  ownerId: number;
+  name: string;
+  address: string;
+  city: string;
+  region: string;
+  zipCode: string;
+  lat?: number | null;
+  lng?: number | null;
+  phone?: string | null;
+  insuranceCarrier?: string | null;
+  insurancePolicyNumber?: string | null;
+  status: ShopStatus;
+  createdAt: string;
+}
+
+export interface CreateShopBody {
+  name: string;
+  address: string;
+  city: string;
+  region: string;
+  zipCode: string;
+  lat?: number;
+  lng?: number;
+  phone?: string;
+  insuranceCarrier?: string;
+  insurancePolicyNumber?: string;
+}
+
+export type UpdateShopBodyStatus =
+  (typeof UpdateShopBodyStatus)[keyof typeof UpdateShopBodyStatus];
+
+export const UpdateShopBodyStatus = {
+  active: "active",
+  inactive: "inactive",
+} as const;
+
+export interface UpdateShopBody {
+  name?: string;
+  address?: string;
+  city?: string;
+  region?: string;
+  zipCode?: string;
+  lat?: number;
+  lng?: number;
+  phone?: string;
+  insuranceCarrier?: string;
+  insurancePolicyNumber?: string;
+  status?: UpdateShopBodyStatus;
+}
+
+export type BayAllowedJobCategoriesItem =
+  (typeof BayAllowedJobCategoriesItem)[keyof typeof BayAllowedJobCategoriesItem];
+
+export const BayAllowedJobCategoriesItem = {
+  repair: "repair",
+  diagnostic: "diagnostic",
+  maintenance: "maintenance",
+  detailing: "detailing",
+} as const;
+
+export type BayMinMechanicTier =
+  (typeof BayMinMechanicTier)[keyof typeof BayMinMechanicTier];
+
+export const BayMinMechanicTier = {
+  detailer: "detailer",
+  technician: "technician",
+  senior: "senior",
+  master: "master",
+} as const;
+
+export type BayStatus = (typeof BayStatus)[keyof typeof BayStatus];
+
+export const BayStatus = {
+  active: "active",
+  inactive: "inactive",
+} as const;
+
+export interface Bay {
+  id: number;
+  shopId: number;
+  name: string;
+  hourlyRate: number;
+  equipment: string[];
+  allowedJobCategories: BayAllowedJobCategoriesItem[];
+  minMechanicTier: BayMinMechanicTier;
+  autoApprove: boolean;
+  status: BayStatus;
+  createdAt: string;
+}
+
+export type ShopWithBays = Shop & {
+  bays: Bay[];
+};
+
+export type BayWithShop = Bay & {
+  shop: Shop;
+};
+
+export type CreateBayBodyAllowedJobCategoriesItem =
+  (typeof CreateBayBodyAllowedJobCategoriesItem)[keyof typeof CreateBayBodyAllowedJobCategoriesItem];
+
+export const CreateBayBodyAllowedJobCategoriesItem = {
+  repair: "repair",
+  diagnostic: "diagnostic",
+  maintenance: "maintenance",
+  detailing: "detailing",
+} as const;
+
+export type CreateBayBodyMinMechanicTier =
+  (typeof CreateBayBodyMinMechanicTier)[keyof typeof CreateBayBodyMinMechanicTier];
+
+export const CreateBayBodyMinMechanicTier = {
+  detailer: "detailer",
+  technician: "technician",
+  senior: "senior",
+  master: "master",
+} as const;
+
+export interface CreateBayBody {
+  name: string;
+  /** @minimum 0 */
+  hourlyRate: number;
+  equipment?: string[];
+  allowedJobCategories: CreateBayBodyAllowedJobCategoriesItem[];
+  minMechanicTier: CreateBayBodyMinMechanicTier;
+  autoApprove?: boolean;
+}
+
+export type UpdateBayBodyAllowedJobCategoriesItem =
+  (typeof UpdateBayBodyAllowedJobCategoriesItem)[keyof typeof UpdateBayBodyAllowedJobCategoriesItem];
+
+export const UpdateBayBodyAllowedJobCategoriesItem = {
+  repair: "repair",
+  diagnostic: "diagnostic",
+  maintenance: "maintenance",
+  detailing: "detailing",
+} as const;
+
+export type UpdateBayBodyMinMechanicTier =
+  (typeof UpdateBayBodyMinMechanicTier)[keyof typeof UpdateBayBodyMinMechanicTier];
+
+export const UpdateBayBodyMinMechanicTier = {
+  detailer: "detailer",
+  technician: "technician",
+  senior: "senior",
+  master: "master",
+} as const;
+
+export type UpdateBayBodyStatus =
+  (typeof UpdateBayBodyStatus)[keyof typeof UpdateBayBodyStatus];
+
+export const UpdateBayBodyStatus = {
+  active: "active",
+  inactive: "inactive",
+} as const;
+
+export interface UpdateBayBody {
+  name?: string;
+  /** @minimum 0 */
+  hourlyRate?: number;
+  equipment?: string[];
+  allowedJobCategories?: UpdateBayBodyAllowedJobCategoriesItem[];
+  minMechanicTier?: UpdateBayBodyMinMechanicTier;
+  autoApprove?: boolean;
+  status?: UpdateBayBodyStatus;
+}
+
+export type BayBookingStatus =
+  (typeof BayBookingStatus)[keyof typeof BayBookingStatus];
+
+export const BayBookingStatus = {
+  reserved: "reserved",
+  active: "active",
+  completed: "completed",
+  cancelled: "cancelled",
+} as const;
+
+export interface BayBooking {
+  id: number;
+  bayId: number;
+  jobId: number;
+  mechanicId: number;
+  shopId: number;
+  startTime: string;
+  estimatedEndTime: string;
+  actualStartTime?: string | null;
+  actualEndTime?: string | null;
+  hourlyRateSnapshot: number;
+  estimatedHours: number;
+  totalCost?: number | null;
+  status: BayBookingStatus;
+  cancellationReason?: string | null;
+  createdAt: string;
+}
+
+export interface CreateBayBookingBody {
+  jobId: number;
+  startTime: string;
+  /** @minimum 0.25 */
+  estimatedHours: number;
+}
+
+export interface DamageChecklistItem {
+  ok: boolean;
+  notes?: string;
+}
+
+export interface DamageChecklist {
+  scratches: DamageChecklistItem;
+  dents: DamageChecklistItem;
+  glass: DamageChecklistItem;
+  wheels: DamageChecklistItem;
+  lights: DamageChecklistItem;
+  interior: DamageChecklistItem;
+  fluidLeaks: DamageChecklistItem;
+  other?: string;
+}
+
+export type InspectionKind =
+  (typeof InspectionKind)[keyof typeof InspectionKind];
+
+export const InspectionKind = {
+  pre: "pre",
+  post: "post",
+} as const;
+
+export interface Inspection {
+  id: number;
+  jobId: number;
+  vehicleId: number;
+  vin: string;
+  mechanicId: number;
+  kind: InspectionKind;
+  mileage: number;
+  mediaUrls: string[];
+  damageChecklist?: DamageChecklist | null;
+  notes?: string | null;
+  transportPickupMileage?: number | null;
+  transportArrivalMileage?: number | null;
+  createdAt: string;
+}
+
+export type CreateInspectionBodyKind =
+  (typeof CreateInspectionBodyKind)[keyof typeof CreateInspectionBodyKind];
+
+export const CreateInspectionBodyKind = {
+  pre: "pre",
+  post: "post",
+} as const;
+
+export interface CreateInspectionBody {
+  kind: CreateInspectionBodyKind;
+  /** @minimum 0 */
+  mileage: number;
+  mediaUrls: string[];
+  damageChecklist?: DamageChecklist;
+  notes?: string;
+  /** @minimum 0 */
+  transportPickupMileage?: number;
+  /** @minimum 0 */
+  transportArrivalMileage?: number;
+}
+
 export type ListUsersParams = {
   role?: ListUsersRole;
   status?: ListUsersStatus;
@@ -613,4 +912,33 @@ export const ListMechanicsJobType = {
 
 export type RemoveFavorite200 = {
   ok: boolean;
+};
+
+export type ListAvailableBaysParams = {
+  jobCategory?: ListAvailableBaysJobCategory;
+  minTier?: ListAvailableBaysMinTier;
+};
+
+export type ListAvailableBaysJobCategory =
+  (typeof ListAvailableBaysJobCategory)[keyof typeof ListAvailableBaysJobCategory];
+
+export const ListAvailableBaysJobCategory = {
+  repair: "repair",
+  diagnostic: "diagnostic",
+  maintenance: "maintenance",
+  detailing: "detailing",
+} as const;
+
+export type ListAvailableBaysMinTier =
+  (typeof ListAvailableBaysMinTier)[keyof typeof ListAvailableBaysMinTier];
+
+export const ListAvailableBaysMinTier = {
+  detailer: "detailer",
+  technician: "technician",
+  senior: "senior",
+  master: "master",
+} as const;
+
+export type CancelBayBookingBody = {
+  reason?: string;
 };

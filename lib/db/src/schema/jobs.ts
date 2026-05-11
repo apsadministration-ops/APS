@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, timestamp, real, index } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, timestamp, real, boolean, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
@@ -29,6 +29,13 @@ export const jobsTable = pgTable("jobs", {
   customerRating: integer("customer_rating"),
   customerReviewText: text("customer_review_text"),
   requestedMechanicId: integer("requested_mechanic_id").references(() => usersTable.id),
+  // Ghost Garage: set true when the job needs an indoor bay (lift, etc.).
+  // When true, POST /worklogs is gated on pre+post inspections existing.
+  requiresGhostGarage: boolean("requires_ghost_garage").notNull().default(false),
+  // Customer must approve transport to a shop bay before the mechanic can
+  // start working. Defaults to true for non-ghost-garage jobs (no transport
+  // happens). For ghost-garage jobs the customer must explicitly opt in.
+  customerTransportApproved: boolean("customer_transport_approved").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   acceptedAt: timestamp("accepted_at", { withTimezone: true }),
   completedAt: timestamp("completed_at", { withTimezone: true }),

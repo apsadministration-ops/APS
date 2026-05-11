@@ -83,6 +83,8 @@ async function formatJob(job: typeof jobsTable.$inferSelect) {
     customerRating: job.customerRating ?? null,
     customerReviewText: job.customerReviewText ?? null,
     requestedMechanicId: job.requestedMechanicId ?? null,
+    requiresGhostGarage: job.requiresGhostGarage,
+    customerTransportApproved: job.customerTransportApproved,
     vehicle: vehicle ? {
       id: vehicle.id, vin: vehicle.vin, make: vehicle.make, model: vehicle.model,
       year: vehicle.year, trim: vehicle.trim ?? null, color: vehicle.color ?? null, createdAt: vehicle.createdAt,
@@ -134,10 +136,11 @@ router.post("/jobs", authenticate, async (req: AuthRequest, res): Promise<void> 
   if (req.userRole !== "customer" && req.userRole !== "admin") {
     res.status(403).json({ error: "Only customers can create jobs" }); return;
   }
-  const { vehicleId, jobType, description, locationLat, locationLng, locationAddress, estimatedPrice, requestedMechanicId } = req.body as {
+  const { vehicleId, jobType, description, locationLat, locationLng, locationAddress, estimatedPrice, requestedMechanicId, requiresGhostGarage } = req.body as {
     vehicleId: number; jobType: string; description: string;
     locationLat?: number; locationLng?: number; locationAddress?: string; estimatedPrice?: number;
     requestedMechanicId?: number;
+    requiresGhostGarage?: boolean;
   };
   if (!vehicleId || !jobType || !description) {
     res.status(400).json({ error: "vehicleId, jobType, and description are required" }); return;
@@ -154,12 +157,20 @@ router.post("/jobs", authenticate, async (req: AuthRequest, res): Promise<void> 
     validatedReqMech = requestedMechanicId;
   }
 
+  // Ghost Garage flag is opt-in at job creation. When true the customer
+  // hasn't yet approved transport — they'll do that once they pick a bay
+  // (POST /jobs/:id/transport-approval). When false, we keep the default
+  // (true) so non-ghost jobs aren't blocked by the transport gate.
+  const ghostGarage = requiresGhostGarage === true;
+
   const [job] = await db.insert(jobsTable).values({
     vehicleId, vin: vehicle.vin, customerId: req.userId!,
     jobType: jobType as "repair" | "diagnostic" | "maintenance" | "detailing",
     description, locationLat: locationLat ?? null, locationLng: locationLng ?? null,
     locationAddress: locationAddress ?? null, estimatedPrice: estimatedPrice ?? null,
     requestedMechanicId: validatedReqMech, status: "REQUESTED",
+    requiresGhostGarage: ghostGarage,
+    customerTransportApproved: !ghostGarage,
   }).returning();
 
   // Notify mechanics: if requested-specific, only that mechanic; else all active mechanics.
@@ -213,11 +224,40 @@ router.patch("/jobs/:jobId/status", authenticate, async (req: AuthRequest, res):
   if (!(req.userRole === "admin" || isAssignedMechanic)) {
     res.status(403).json({ error: "Forbidden" }); return;
   }
+  // Job completion MUST flow through POST /worklogs so the audit trail
+  // (work log, mileage update, payment capture, Ghost Garage inspections)
+  // stays in lockstep with the COMPLETED transition. Mechanics flipping
+  // the status directly would let them skip those gates.
+  if (status === "COMPLETED" && req.userRole !== "admin") {
+    res.status(409).json({
+      error: "Submit a work log to complete a job — direct status changes to COMPLETED are not allowed.",
+    });
+    return;
+  }
   const updates: Partial<typeof jobsTable.$inferInsert> = { status: status as typeof job.status };
   if (estimatedPrice !== undefined) updates.estimatedPrice = estimatedPrice;
   if (status === "COMPLETED") updates.completedAt = new Date();
   if (status === "ACCEPTED") updates.acceptedAt = new Date();
   const [updated] = await db.update(jobsTable).set(updates).where(eq(jobsTable.id, jobId)).returning();
+  res.json(await formatJob(updated));
+});
+
+// Customer approves transport of their vehicle to a shop bay. Required for
+// any job with requiresGhostGarage=true before a bay booking can be made.
+router.post("/jobs/:jobId/transport-approval", authenticate, async (req: AuthRequest, res): Promise<void> => {
+  const jobId = parseInt(String(req.params.jobId), 10);
+  if (isNaN(jobId)) { res.status(400).json({ error: "Invalid job ID" }); return; }
+  const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, jobId));
+  if (!job) { res.status(404).json({ error: "Job not found" }); return; }
+  if (req.userRole !== "customer" || job.customerId !== req.userId) {
+    res.status(403).json({ error: "Only the job's customer can approve transport" }); return;
+  }
+  if (!job.requiresGhostGarage) {
+    res.status(400).json({ error: "This job does not need transport approval" }); return;
+  }
+  const [updated] = await db.update(jobsTable)
+    .set({ customerTransportApproved: true })
+    .where(eq(jobsTable.id, jobId)).returning();
   res.json(await formatJob(updated));
 });
 

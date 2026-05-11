@@ -38,4 +38,8 @@ export interface Job {
   customerRating?: number | null;
   customerReviewText?: string | null;
   requestedMechanicId?: number | null;
+  /** True when the job needs an indoor shop bay (lift, etc). Gates work-log submission on pre + post inspections. */
+  requiresGhostGarage?: boolean;
+  /** Whether the customer has approved their vehicle being transported to a shop bay. Always true for non-ghost-garage jobs. */
+  customerTransportApproved?: boolean;
 }

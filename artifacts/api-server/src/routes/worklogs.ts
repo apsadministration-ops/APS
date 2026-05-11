@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, and } from "drizzle-orm";
-import { db, workLogsTable, jobsTable, usersTable, paymentsTable, vehiclesTable, ownershipTable } from "@workspace/db";
+import { db, workLogsTable, jobsTable, usersTable, paymentsTable, vehiclesTable, ownershipTable, inspectionsTable, bayBookingsTable } from "@workspace/db";
 import { authenticate, requireActiveMechanic, type AuthRequest } from "../middlewares/authenticate";
 import { notifyCustomerJobComplete } from "../lib/notifications";
 import { getUncachableStripeClient } from "../lib/stripeClient";
@@ -19,17 +19,40 @@ async function formatWorkLog(log: typeof workLogsTable.$inferSelect) {
     partsUsed: (log.partsUsed as string[]) ?? [], notes: log.notes ?? null,
     beforeImages: (log.beforeImages as string[]) ?? [], afterImages: (log.afterImages as string[]) ?? [],
     upsells: (log.upsells as { description: string; amount: number; customerApproved: boolean }[]) ?? [],
+    laborHours: log.laborHours ?? null,
+    diagnosticCodes: (log.diagnosticCodes as string[]) ?? [],
+    rootCauseDiagnosis: log.rootCauseDiagnosis ?? null,
+    repairSteps: log.repairSteps ?? null,
+    observedSymptoms: log.observedSymptoms ?? null,
+    recommendedMonitoring: log.recommendedMonitoring ?? null,
+    recurringIssueTags: (log.recurringIssueTags as string[]) ?? [],
+    bayBookingId: log.bayBookingId ?? null,
+    preInspectionId: log.preInspectionId ?? null,
+    postInspectionId: log.postInspectionId ?? null,
     createdAt: log.createdAt,
   };
 }
 
 router.post("/worklogs", authenticate, requireActiveMechanic, async (req: AuthRequest, res): Promise<void> => {
-  const { jobId, serviceCategory, serviceDescription, mileageAtService, laborCost, partsCost, partsUsed, notes, beforeImages, afterImages, upsells } = req.body as {
+  const {
+    jobId, serviceCategory, serviceDescription, mileageAtService,
+    laborCost, partsCost, partsUsed, notes, beforeImages, afterImages, upsells,
+    laborHours, diagnosticCodes, rootCauseDiagnosis, repairSteps,
+    observedSymptoms, recommendedMonitoring, recurringIssueTags, bayBookingId,
+  } = req.body as {
     jobId: number; serviceCategory: string; serviceDescription: string;
     mileageAtService: number;
     laborCost: number; partsCost: number; partsUsed: string[];
     notes?: string; beforeImages: string[]; afterImages: string[];
     upsells?: { description: string; amount: number; customerApproved?: boolean }[];
+    laborHours?: number;
+    diagnosticCodes?: string[];
+    rootCauseDiagnosis?: string;
+    repairSteps?: string;
+    observedSymptoms?: string;
+    recommendedMonitoring?: string;
+    recurringIssueTags?: string[];
+    bayBookingId?: number;
   };
   // Validate upsells: non-empty description, positive amount, and an explicit
   // boolean `customerApproved` attesting the customer agreed in person.
@@ -65,6 +88,49 @@ router.post("/worklogs", authenticate, requireActiveMechanic, async (req: AuthRe
       error: `Mileage at service (${mileageAtService}) cannot be lower than the current odometer reading (${vehicle.mileage}).`,
     });
     return;
+  }
+
+  // Ghost Garage gate: if the job required a shop bay, BOTH a pre and a post
+  // inspection must exist before we'll accept the work log. The unique
+  // (job_id, kind) index on inspections keeps this trivially correct: if
+  // either lookup is missing we know we never captured that walkthrough.
+  let preInspectionId: number | null = null;
+  let postInspectionId: number | null = null;
+  let resolvedBayBookingId: number | null = null;
+  if (job.requiresGhostGarage) {
+    const inspections = await db.select().from(inspectionsTable).where(eq(inspectionsTable.jobId, jobId));
+    const pre = inspections.find((i) => i.kind === "pre");
+    const post = inspections.find((i) => i.kind === "post");
+    if (!pre || !post) {
+      res.status(409).json({
+        error: "Ghost Garage jobs require both a pre-service and a post-service inspection before submitting a work log.",
+        missing: { pre: !pre, post: !post },
+      });
+      return;
+    }
+    preInspectionId = pre.id;
+    postInspectionId = post.id;
+
+    // Also require a bay booking — and it must belong to this job and this
+    // mechanic. Snapshot the id on the work log so the audit trail links the
+    // log → booking → bay → shop without a separate join lookup.
+    if (!bayBookingId || !Number.isFinite(bayBookingId)) {
+      res.status(409).json({ error: "Ghost Garage jobs require a bayBookingId on the work log." });
+      return;
+    }
+    const [booking] = await db.select().from(bayBookingsTable).where(eq(bayBookingsTable.id, bayBookingId));
+    if (!booking || booking.jobId !== jobId || booking.mechanicId !== req.userId) {
+      res.status(400).json({ error: "Bay booking does not match this job/mechanic." });
+      return;
+    }
+    resolvedBayBookingId = booking.id;
+  } else if (bayBookingId) {
+    // Optional bay booking on a non-ghost-garage job — still validate
+    // ownership before recording it.
+    const [booking] = await db.select().from(bayBookingsTable).where(eq(bayBookingsTable.id, bayBookingId));
+    if (booking && booking.jobId === jobId && booking.mechanicId === req.userId) {
+      resolvedBayBookingId = booking.id;
+    }
   }
 
   const totalCost = (laborCost ?? 0) + (partsCost ?? 0);
@@ -108,6 +174,16 @@ router.post("/worklogs", authenticate, requireActiveMechanic, async (req: AuthRe
       partsUsed: partsUsed ?? [], notes: notes ?? null,
       beforeImages: beforeImages ?? [], afterImages: afterImages ?? [],
       upsells: cleanUpsells,
+      // Mechanic technical-intelligence (optional; nullable for legacy logs).
+      laborHours: typeof laborHours === "number" && Number.isFinite(laborHours) ? laborHours : null,
+      diagnosticCodes: Array.isArray(diagnosticCodes) ? diagnosticCodes.map(String) : [],
+      rootCauseDiagnosis: rootCauseDiagnosis?.trim() || null,
+      repairSteps: repairSteps?.trim() || null,
+      observedSymptoms: observedSymptoms?.trim() || null,
+      recommendedMonitoring: recommendedMonitoring?.trim() || null,
+      recurringIssueTags: Array.isArray(recurringIssueTags) ? recurringIssueTags.map(String) : [],
+      bayBookingId: resolvedBayBookingId,
+      preInspectionId, postInspectionId,
       immutableFlag: true,
     }).returning();
 

@@ -22,7 +22,7 @@ export const RegisterBody = zod.object({
   email: zod.string().email(),
   phone: zod.string().optional(),
   password: zod.string(),
-  role: zod.enum(["customer", "mechanic"]),
+  role: zod.enum(["customer", "mechanic", "shop_owner"]),
   address: zod.string(),
   city: zod.string(),
   region: zod.string(),
@@ -48,7 +48,7 @@ export const LoginResponse = zod.object({
     name: zod.string(),
     email: zod.string(),
     phone: zod.string().nullish(),
-    role: zod.enum(["customer", "mechanic", "admin"]),
+    role: zod.enum(["customer", "mechanic", "admin", "shop_owner"]),
     status: zod.enum(["active", "suspended", "pending"]),
     avatarUrl: zod.string().nullish(),
     referralCode: zod.string().nullish(),
@@ -77,7 +77,7 @@ export const GetMeResponse = zod.object({
   name: zod.string(),
   email: zod.string(),
   phone: zod.string().nullish(),
-  role: zod.enum(["customer", "mechanic", "admin"]),
+  role: zod.enum(["customer", "mechanic", "admin", "shop_owner"]),
   status: zod.enum(["active", "suspended", "pending"]),
   avatarUrl: zod.string().nullish(),
   referralCode: zod.string().nullish(),
@@ -110,7 +110,7 @@ export const ListUsersResponseItem = zod.object({
   name: zod.string(),
   email: zod.string(),
   phone: zod.string().nullish(),
-  role: zod.enum(["customer", "mechanic", "admin"]),
+  role: zod.enum(["customer", "mechanic", "admin", "shop_owner"]),
   status: zod.enum(["active", "suspended", "pending"]),
   avatarUrl: zod.string().nullish(),
   referralCode: zod.string().nullish(),
@@ -143,7 +143,7 @@ export const GetUserResponse = zod.object({
   name: zod.string(),
   email: zod.string(),
   phone: zod.string().nullish(),
-  role: zod.enum(["customer", "mechanic", "admin"]),
+  role: zod.enum(["customer", "mechanic", "admin", "shop_owner"]),
   status: zod.enum(["active", "suspended", "pending"]),
   avatarUrl: zod.string().nullish(),
   referralCode: zod.string().nullish(),
@@ -185,7 +185,7 @@ export const UpdateUserResponse = zod.object({
   name: zod.string(),
   email: zod.string(),
   phone: zod.string().nullish(),
-  role: zod.enum(["customer", "mechanic", "admin"]),
+  role: zod.enum(["customer", "mechanic", "admin", "shop_owner"]),
   status: zod.enum(["active", "suspended", "pending"]),
   avatarUrl: zod.string().nullish(),
   referralCode: zod.string().nullish(),
@@ -218,7 +218,7 @@ export const GetMechanicProfileResponse = zod.object({
     name: zod.string(),
     email: zod.string(),
     phone: zod.string().nullish(),
-    role: zod.enum(["customer", "mechanic", "admin"]),
+    role: zod.enum(["customer", "mechanic", "admin", "shop_owner"]),
     status: zod.enum(["active", "suspended", "pending"]),
     avatarUrl: zod.string().nullish(),
     referralCode: zod.string().nullish(),
@@ -267,7 +267,7 @@ export const ListVehiclesResponseItem = zod
           name: zod.string(),
           email: zod.string(),
           phone: zod.string().nullish(),
-          role: zod.enum(["customer", "mechanic", "admin"]),
+          role: zod.enum(["customer", "mechanic", "admin", "shop_owner"]),
           status: zod.enum(["active", "suspended", "pending"]),
           avatarUrl: zod.string().nullish(),
           referralCode: zod.string().nullish(),
@@ -343,7 +343,7 @@ export const GetVehicleByVinResponse = zod
           name: zod.string(),
           email: zod.string(),
           phone: zod.string().nullish(),
-          role: zod.enum(["customer", "mechanic", "admin"]),
+          role: zod.enum(["customer", "mechanic", "admin", "shop_owner"]),
           status: zod.enum(["active", "suspended", "pending"]),
           avatarUrl: zod.string().nullish(),
           referralCode: zod.string().nullish(),
@@ -396,7 +396,7 @@ export const GetVehicleResponse = zod
           name: zod.string(),
           email: zod.string(),
           phone: zod.string().nullish(),
-          role: zod.enum(["customer", "mechanic", "admin"]),
+          role: zod.enum(["customer", "mechanic", "admin", "shop_owner"]),
           status: zod.enum(["active", "suspended", "pending"]),
           avatarUrl: zod.string().nullish(),
           referralCode: zod.string().nullish(),
@@ -462,6 +462,16 @@ export const GetVehicleHistoryResponseItem = zod.object({
     .describe(
       "Optional upsells\/recommendations logged on job completion. Only items with customerApproved=true earn mechanic upsell points.",
     ),
+  laborHours: zod.number().nullish(),
+  diagnosticCodes: zod.array(zod.string()),
+  rootCauseDiagnosis: zod.string().nullish(),
+  repairSteps: zod.string().nullish(),
+  observedSymptoms: zod.string().nullish(),
+  recommendedMonitoring: zod.string().nullish(),
+  recurringIssueTags: zod.array(zod.string()),
+  bayBookingId: zod.number().nullish(),
+  preInspectionId: zod.number().nullish(),
+  postInspectionId: zod.number().nullish(),
   createdAt: zod.coerce.date(),
 });
 export const GetVehicleHistoryResponse = zod.array(
@@ -582,6 +592,18 @@ export const ListJobsResponseItem = zod.object({
   customerRating: zod.number().nullish(),
   customerReviewText: zod.string().nullish(),
   requestedMechanicId: zod.number().nullish(),
+  requiresGhostGarage: zod
+    .boolean()
+    .optional()
+    .describe(
+      "True when the job needs an indoor shop bay (lift, etc). Gates work-log submission on pre + post inspections.",
+    ),
+  customerTransportApproved: zod
+    .boolean()
+    .optional()
+    .describe(
+      "Whether the customer has approved their vehicle being transported to a shop bay. Always true for non-ghost-garage jobs.",
+    ),
 });
 export const ListJobsResponse = zod.array(ListJobsResponseItem);
 
@@ -656,6 +678,18 @@ export const ListAvailableJobsResponseItem = zod.object({
   customerRating: zod.number().nullish(),
   customerReviewText: zod.string().nullish(),
   requestedMechanicId: zod.number().nullish(),
+  requiresGhostGarage: zod
+    .boolean()
+    .optional()
+    .describe(
+      "True when the job needs an indoor shop bay (lift, etc). Gates work-log submission on pre + post inspections.",
+    ),
+  customerTransportApproved: zod
+    .boolean()
+    .optional()
+    .describe(
+      "Whether the customer has approved their vehicle being transported to a shop bay. Always true for non-ghost-garage jobs.",
+    ),
 });
 export const ListAvailableJobsResponse = zod.array(
   ListAvailableJobsResponseItem,
@@ -719,6 +753,18 @@ export const GetJobResponse = zod.object({
   customerRating: zod.number().nullish(),
   customerReviewText: zod.string().nullish(),
   requestedMechanicId: zod.number().nullish(),
+  requiresGhostGarage: zod
+    .boolean()
+    .optional()
+    .describe(
+      "True when the job needs an indoor shop bay (lift, etc). Gates work-log submission on pre + post inspections.",
+    ),
+  customerTransportApproved: zod
+    .boolean()
+    .optional()
+    .describe(
+      "Whether the customer has approved their vehicle being transported to a shop bay. Always true for non-ghost-garage jobs.",
+    ),
 });
 
 /**
@@ -793,6 +839,18 @@ export const UpdateJobStatusResponse = zod.object({
   customerRating: zod.number().nullish(),
   customerReviewText: zod.string().nullish(),
   requestedMechanicId: zod.number().nullish(),
+  requiresGhostGarage: zod
+    .boolean()
+    .optional()
+    .describe(
+      "True when the job needs an indoor shop bay (lift, etc). Gates work-log submission on pre + post inspections.",
+    ),
+  customerTransportApproved: zod
+    .boolean()
+    .optional()
+    .describe(
+      "Whether the customer has approved their vehicle being transported to a shop bay. Always true for non-ghost-garage jobs.",
+    ),
 });
 
 /**
@@ -853,6 +911,18 @@ export const AcceptJobResponse = zod.object({
   customerRating: zod.number().nullish(),
   customerReviewText: zod.string().nullish(),
   requestedMechanicId: zod.number().nullish(),
+  requiresGhostGarage: zod
+    .boolean()
+    .optional()
+    .describe(
+      "True when the job needs an indoor shop bay (lift, etc). Gates work-log submission on pre + post inspections.",
+    ),
+  customerTransportApproved: zod
+    .boolean()
+    .optional()
+    .describe(
+      "Whether the customer has approved their vehicle being transported to a shop bay. Always true for non-ghost-garage jobs.",
+    ),
 });
 
 /**
@@ -913,6 +983,18 @@ export const CancelJobResponse = zod.object({
   customerRating: zod.number().nullish(),
   customerReviewText: zod.string().nullish(),
   requestedMechanicId: zod.number().nullish(),
+  requiresGhostGarage: zod
+    .boolean()
+    .optional()
+    .describe(
+      "True when the job needs an indoor shop bay (lift, etc). Gates work-log submission on pre + post inspections.",
+    ),
+  customerTransportApproved: zod
+    .boolean()
+    .optional()
+    .describe(
+      "Whether the customer has approved their vehicle being transported to a shop bay. Always true for non-ghost-garage jobs.",
+    ),
 });
 
 /**
@@ -980,6 +1062,18 @@ export const RateCustomerResponse = zod.object({
   customerRating: zod.number().nullish(),
   customerReviewText: zod.string().nullish(),
   requestedMechanicId: zod.number().nullish(),
+  requiresGhostGarage: zod
+    .boolean()
+    .optional()
+    .describe(
+      "True when the job needs an indoor shop bay (lift, etc). Gates work-log submission on pre + post inspections.",
+    ),
+  customerTransportApproved: zod
+    .boolean()
+    .optional()
+    .describe(
+      "Whether the customer has approved their vehicle being transported to a shop bay. Always true for non-ghost-garage jobs.",
+    ),
 });
 
 /**
@@ -1048,6 +1142,18 @@ export const RateJobResponse = zod.object({
   customerRating: zod.number().nullish(),
   customerReviewText: zod.string().nullish(),
   requestedMechanicId: zod.number().nullish(),
+  requiresGhostGarage: zod
+    .boolean()
+    .optional()
+    .describe(
+      "True when the job needs an indoor shop bay (lift, etc). Gates work-log submission on pre + post inspections.",
+    ),
+  customerTransportApproved: zod
+    .boolean()
+    .optional()
+    .describe(
+      "Whether the customer has approved their vehicle being transported to a shop bay. Always true for non-ghost-garage jobs.",
+    ),
 });
 
 /**
@@ -1086,6 +1192,25 @@ export const CreateWorkLogBody = zod.object({
     .describe(
       "Optional upsells\/recommendations. Only items with customerApproved=true earn mechanic points.",
     ),
+  laborHours: zod.number().optional(),
+  diagnosticCodes: zod
+    .array(zod.string())
+    .optional()
+    .describe("OBD-II \/ proprietary trouble codes recorded at service."),
+  rootCauseDiagnosis: zod.string().optional(),
+  repairSteps: zod.string().optional(),
+  observedSymptoms: zod.string().optional(),
+  recommendedMonitoring: zod.string().optional(),
+  recurringIssueTags: zod
+    .array(zod.string())
+    .optional()
+    .describe(
+      'Free-form tags marking patterns to watch (e.g. \"intermittent\", \"post-storm\").',
+    ),
+  bayBookingId: zod
+    .number()
+    .optional()
+    .describe("Required if the job's requiresGhostGarage is true."),
 });
 
 /**
@@ -1129,6 +1254,16 @@ export const GetWorkLogsByVinResponseItem = zod.object({
     .describe(
       "Optional upsells\/recommendations logged on job completion. Only items with customerApproved=true earn mechanic upsell points.",
     ),
+  laborHours: zod.number().nullish(),
+  diagnosticCodes: zod.array(zod.string()),
+  rootCauseDiagnosis: zod.string().nullish(),
+  repairSteps: zod.string().nullish(),
+  observedSymptoms: zod.string().nullish(),
+  recommendedMonitoring: zod.string().nullish(),
+  recurringIssueTags: zod.array(zod.string()),
+  bayBookingId: zod.number().nullish(),
+  preInspectionId: zod.number().nullish(),
+  postInspectionId: zod.number().nullish(),
   createdAt: zod.coerce.date(),
 });
 export const GetWorkLogsByVinResponse = zod.array(GetWorkLogsByVinResponseItem);
@@ -1174,6 +1309,16 @@ export const GetWorkLogResponse = zod.object({
     .describe(
       "Optional upsells\/recommendations logged on job completion. Only items with customerApproved=true earn mechanic upsell points.",
     ),
+  laborHours: zod.number().nullish(),
+  diagnosticCodes: zod.array(zod.string()),
+  rootCauseDiagnosis: zod.string().nullish(),
+  repairSteps: zod.string().nullish(),
+  observedSymptoms: zod.string().nullish(),
+  recommendedMonitoring: zod.string().nullish(),
+  recurringIssueTags: zod.array(zod.string()),
+  bayBookingId: zod.number().nullish(),
+  preInspectionId: zod.number().nullish(),
+  postInspectionId: zod.number().nullish(),
   createdAt: zod.coerce.date(),
 });
 
@@ -1269,6 +1414,18 @@ export const GetCustomerDashboardResponse = zod.object({
       customerRating: zod.number().nullish(),
       customerReviewText: zod.string().nullish(),
       requestedMechanicId: zod.number().nullish(),
+      requiresGhostGarage: zod
+        .boolean()
+        .optional()
+        .describe(
+          "True when the job needs an indoor shop bay (lift, etc). Gates work-log submission on pre + post inspections.",
+        ),
+      customerTransportApproved: zod
+        .boolean()
+        .optional()
+        .describe(
+          "Whether the customer has approved their vehicle being transported to a shop bay. Always true for non-ghost-garage jobs.",
+        ),
     }),
   ),
   totalSpent: zod.number(),
@@ -1336,6 +1493,18 @@ export const GetMechanicDashboardResponse = zod.object({
       customerRating: zod.number().nullish(),
       customerReviewText: zod.string().nullish(),
       requestedMechanicId: zod.number().nullish(),
+      requiresGhostGarage: zod
+        .boolean()
+        .optional()
+        .describe(
+          "True when the job needs an indoor shop bay (lift, etc). Gates work-log submission on pre + post inspections.",
+        ),
+      customerTransportApproved: zod
+        .boolean()
+        .optional()
+        .describe(
+          "Whether the customer has approved their vehicle being transported to a shop bay. Always true for non-ghost-garage jobs.",
+        ),
     }),
   ),
 });
@@ -1403,6 +1572,18 @@ export const GetAdminDashboardResponse = zod.object({
       customerRating: zod.number().nullish(),
       customerReviewText: zod.string().nullish(),
       requestedMechanicId: zod.number().nullish(),
+      requiresGhostGarage: zod
+        .boolean()
+        .optional()
+        .describe(
+          "True when the job needs an indoor shop bay (lift, etc). Gates work-log submission on pre + post inspections.",
+        ),
+      customerTransportApproved: zod
+        .boolean()
+        .optional()
+        .describe(
+          "Whether the customer has approved their vehicle being transported to a shop bay. Always true for non-ghost-garage jobs.",
+        ),
     }),
   ),
 });
@@ -1578,4 +1759,609 @@ export const AssistantChatResponse = zod.object({
       zod.literal(null),
     ])
     .nullish(),
+});
+
+/**
+ * @summary Create a new shop (shop_owner only)
+ */
+export const CreateShopBody = zod.object({
+  name: zod.string(),
+  address: zod.string(),
+  city: zod.string(),
+  region: zod.string(),
+  zipCode: zod.string(),
+  lat: zod.number().optional(),
+  lng: zod.number().optional(),
+  phone: zod.string().optional(),
+  insuranceCarrier: zod.string().optional(),
+  insurancePolicyNumber: zod.string().optional(),
+});
+
+/**
+ * @summary List shops owned by the current shop_owner
+ */
+export const ListMyShopsResponseItem = zod.object({
+  id: zod.number(),
+  ownerId: zod.number(),
+  name: zod.string(),
+  address: zod.string(),
+  city: zod.string(),
+  region: zod.string(),
+  zipCode: zod.string(),
+  lat: zod.number().nullish(),
+  lng: zod.number().nullish(),
+  phone: zod.string().nullish(),
+  insuranceCarrier: zod.string().nullish(),
+  insurancePolicyNumber: zod.string().nullish(),
+  status: zod.enum(["active", "inactive"]),
+  createdAt: zod.coerce.date(),
+});
+export const ListMyShopsResponse = zod.array(ListMyShopsResponseItem);
+
+/**
+ * @summary Get a shop with its bays
+ */
+export const GetShopParams = zod.object({
+  shopId: zod.coerce.number(),
+});
+
+export const GetShopResponse = zod
+  .object({
+    id: zod.number(),
+    ownerId: zod.number(),
+    name: zod.string(),
+    address: zod.string(),
+    city: zod.string(),
+    region: zod.string(),
+    zipCode: zod.string(),
+    lat: zod.number().nullish(),
+    lng: zod.number().nullish(),
+    phone: zod.string().nullish(),
+    insuranceCarrier: zod.string().nullish(),
+    insurancePolicyNumber: zod.string().nullish(),
+    status: zod.enum(["active", "inactive"]),
+    createdAt: zod.coerce.date(),
+  })
+  .and(
+    zod.object({
+      bays: zod.array(
+        zod.object({
+          id: zod.number(),
+          shopId: zod.number(),
+          name: zod.string(),
+          hourlyRate: zod.number(),
+          equipment: zod.array(zod.string()),
+          allowedJobCategories: zod.array(
+            zod.enum(["repair", "diagnostic", "maintenance", "detailing"]),
+          ),
+          minMechanicTier: zod.enum([
+            "detailer",
+            "technician",
+            "senior",
+            "master",
+          ]),
+          autoApprove: zod.boolean(),
+          status: zod.enum(["active", "inactive"]),
+          createdAt: zod.coerce.date(),
+        }),
+      ),
+    }),
+  );
+
+/**
+ * @summary Update a shop (owner only)
+ */
+export const UpdateShopParams = zod.object({
+  shopId: zod.coerce.number(),
+});
+
+export const UpdateShopBody = zod.object({
+  name: zod.string().optional(),
+  address: zod.string().optional(),
+  city: zod.string().optional(),
+  region: zod.string().optional(),
+  zipCode: zod.string().optional(),
+  lat: zod.number().optional(),
+  lng: zod.number().optional(),
+  phone: zod.string().optional(),
+  insuranceCarrier: zod.string().optional(),
+  insurancePolicyNumber: zod.string().optional(),
+  status: zod.enum(["active", "inactive"]).optional(),
+});
+
+export const UpdateShopResponse = zod.object({
+  id: zod.number(),
+  ownerId: zod.number(),
+  name: zod.string(),
+  address: zod.string(),
+  city: zod.string(),
+  region: zod.string(),
+  zipCode: zod.string(),
+  lat: zod.number().nullish(),
+  lng: zod.number().nullish(),
+  phone: zod.string().nullish(),
+  insuranceCarrier: zod.string().nullish(),
+  insurancePolicyNumber: zod.string().nullish(),
+  status: zod.enum(["active", "inactive"]),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Add a bay to a shop (owner only)
+ */
+export const CreateBayParams = zod.object({
+  shopId: zod.coerce.number(),
+});
+
+export const createBayBodyHourlyRateMin = 0;
+
+export const CreateBayBody = zod.object({
+  name: zod.string(),
+  hourlyRate: zod.number().min(createBayBodyHourlyRateMin),
+  equipment: zod.array(zod.string()).optional(),
+  allowedJobCategories: zod.array(
+    zod.enum(["repair", "diagnostic", "maintenance", "detailing"]),
+  ),
+  minMechanicTier: zod.enum(["detailer", "technician", "senior", "master"]),
+  autoApprove: zod.boolean().optional(),
+});
+
+/**
+ * @summary List bays for a shop
+ */
+export const ListShopBaysParams = zod.object({
+  shopId: zod.coerce.number(),
+});
+
+export const ListShopBaysResponseItem = zod.object({
+  id: zod.number(),
+  shopId: zod.number(),
+  name: zod.string(),
+  hourlyRate: zod.number(),
+  equipment: zod.array(zod.string()),
+  allowedJobCategories: zod.array(
+    zod.enum(["repair", "diagnostic", "maintenance", "detailing"]),
+  ),
+  minMechanicTier: zod.enum(["detailer", "technician", "senior", "master"]),
+  autoApprove: zod.boolean(),
+  status: zod.enum(["active", "inactive"]),
+  createdAt: zod.coerce.date(),
+});
+export const ListShopBaysResponse = zod.array(ListShopBaysResponseItem);
+
+/**
+ * @summary Search bookable bays (active mechanic only)
+ */
+export const ListAvailableBaysQueryParams = zod.object({
+  jobCategory: zod
+    .enum(["repair", "diagnostic", "maintenance", "detailing"])
+    .optional(),
+  minTier: zod.enum(["detailer", "technician", "senior", "master"]).optional(),
+});
+
+export const ListAvailableBaysResponseItem = zod
+  .object({
+    id: zod.number(),
+    shopId: zod.number(),
+    name: zod.string(),
+    hourlyRate: zod.number(),
+    equipment: zod.array(zod.string()),
+    allowedJobCategories: zod.array(
+      zod.enum(["repair", "diagnostic", "maintenance", "detailing"]),
+    ),
+    minMechanicTier: zod.enum(["detailer", "technician", "senior", "master"]),
+    autoApprove: zod.boolean(),
+    status: zod.enum(["active", "inactive"]),
+    createdAt: zod.coerce.date(),
+  })
+  .and(
+    zod.object({
+      shop: zod.object({
+        id: zod.number(),
+        ownerId: zod.number(),
+        name: zod.string(),
+        address: zod.string(),
+        city: zod.string(),
+        region: zod.string(),
+        zipCode: zod.string(),
+        lat: zod.number().nullish(),
+        lng: zod.number().nullish(),
+        phone: zod.string().nullish(),
+        insuranceCarrier: zod.string().nullish(),
+        insurancePolicyNumber: zod.string().nullish(),
+        status: zod.enum(["active", "inactive"]),
+        createdAt: zod.coerce.date(),
+      }),
+    }),
+  );
+export const ListAvailableBaysResponse = zod.array(
+  ListAvailableBaysResponseItem,
+);
+
+/**
+ * @summary Get a single bay with its shop
+ */
+export const GetBayParams = zod.object({
+  bayId: zod.coerce.number(),
+});
+
+export const GetBayResponse = zod
+  .object({
+    id: zod.number(),
+    shopId: zod.number(),
+    name: zod.string(),
+    hourlyRate: zod.number(),
+    equipment: zod.array(zod.string()),
+    allowedJobCategories: zod.array(
+      zod.enum(["repair", "diagnostic", "maintenance", "detailing"]),
+    ),
+    minMechanicTier: zod.enum(["detailer", "technician", "senior", "master"]),
+    autoApprove: zod.boolean(),
+    status: zod.enum(["active", "inactive"]),
+    createdAt: zod.coerce.date(),
+  })
+  .and(
+    zod.object({
+      shop: zod.object({
+        id: zod.number(),
+        ownerId: zod.number(),
+        name: zod.string(),
+        address: zod.string(),
+        city: zod.string(),
+        region: zod.string(),
+        zipCode: zod.string(),
+        lat: zod.number().nullish(),
+        lng: zod.number().nullish(),
+        phone: zod.string().nullish(),
+        insuranceCarrier: zod.string().nullish(),
+        insurancePolicyNumber: zod.string().nullish(),
+        status: zod.enum(["active", "inactive"]),
+        createdAt: zod.coerce.date(),
+      }),
+    }),
+  );
+
+/**
+ * @summary Update a bay (owner only)
+ */
+export const UpdateBayParams = zod.object({
+  bayId: zod.coerce.number(),
+});
+
+export const updateBayBodyHourlyRateMin = 0;
+
+export const UpdateBayBody = zod.object({
+  name: zod.string().optional(),
+  hourlyRate: zod.number().min(updateBayBodyHourlyRateMin).optional(),
+  equipment: zod.array(zod.string()).optional(),
+  allowedJobCategories: zod
+    .array(zod.enum(["repair", "diagnostic", "maintenance", "detailing"]))
+    .optional(),
+  minMechanicTier: zod
+    .enum(["detailer", "technician", "senior", "master"])
+    .optional(),
+  autoApprove: zod.boolean().optional(),
+  status: zod.enum(["active", "inactive"]).optional(),
+});
+
+export const UpdateBayResponse = zod.object({
+  id: zod.number(),
+  shopId: zod.number(),
+  name: zod.string(),
+  hourlyRate: zod.number(),
+  equipment: zod.array(zod.string()),
+  allowedJobCategories: zod.array(
+    zod.enum(["repair", "diagnostic", "maintenance", "detailing"]),
+  ),
+  minMechanicTier: zod.enum(["detailer", "technician", "senior", "master"]),
+  autoApprove: zod.boolean(),
+  status: zod.enum(["active", "inactive"]),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Reserve a bay for a job (active mechanic; tier and category enforced)
+ */
+export const CreateBayBookingParams = zod.object({
+  bayId: zod.coerce.number(),
+});
+
+export const createBayBookingBodyEstimatedHoursMin = 0.25;
+
+export const CreateBayBookingBody = zod.object({
+  jobId: zod.number(),
+  startTime: zod.coerce.date(),
+  estimatedHours: zod.number().min(createBayBookingBodyEstimatedHoursMin),
+});
+
+/**
+ * @summary List bookings for the current user (mechanic sees own; shop_owner sees own shops')
+ */
+export const ListMyBookingsResponseItem = zod.object({
+  id: zod.number(),
+  bayId: zod.number(),
+  jobId: zod.number(),
+  mechanicId: zod.number(),
+  shopId: zod.number(),
+  startTime: zod.coerce.date(),
+  estimatedEndTime: zod.coerce.date(),
+  actualStartTime: zod.coerce.date().nullish(),
+  actualEndTime: zod.coerce.date().nullish(),
+  hourlyRateSnapshot: zod.number(),
+  estimatedHours: zod.number(),
+  totalCost: zod.number().nullish(),
+  status: zod.enum(["reserved", "active", "completed", "cancelled"]),
+  cancellationReason: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+});
+export const ListMyBookingsResponse = zod.array(ListMyBookingsResponseItem);
+
+/**
+ * @summary Mechanic marks the booking as active (work has begun)
+ */
+export const StartBayBookingParams = zod.object({
+  bookingId: zod.coerce.number(),
+});
+
+export const StartBayBookingResponse = zod.object({
+  id: zod.number(),
+  bayId: zod.number(),
+  jobId: zod.number(),
+  mechanicId: zod.number(),
+  shopId: zod.number(),
+  startTime: zod.coerce.date(),
+  estimatedEndTime: zod.coerce.date(),
+  actualStartTime: zod.coerce.date().nullish(),
+  actualEndTime: zod.coerce.date().nullish(),
+  hourlyRateSnapshot: zod.number(),
+  estimatedHours: zod.number(),
+  totalCost: zod.number().nullish(),
+  status: zod.enum(["reserved", "active", "completed", "cancelled"]),
+  cancellationReason: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Mechanic ends the booking; total cost is computed from elapsed time
+ */
+export const CompleteBayBookingParams = zod.object({
+  bookingId: zod.coerce.number(),
+});
+
+export const CompleteBayBookingResponse = zod.object({
+  id: zod.number(),
+  bayId: zod.number(),
+  jobId: zod.number(),
+  mechanicId: zod.number(),
+  shopId: zod.number(),
+  startTime: zod.coerce.date(),
+  estimatedEndTime: zod.coerce.date(),
+  actualStartTime: zod.coerce.date().nullish(),
+  actualEndTime: zod.coerce.date().nullish(),
+  hourlyRateSnapshot: zod.number(),
+  estimatedHours: zod.number(),
+  totalCost: zod.number().nullish(),
+  status: zod.enum(["reserved", "active", "completed", "cancelled"]),
+  cancellationReason: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Cancel a booking (mechanic or shop owner)
+ */
+export const CancelBayBookingParams = zod.object({
+  bookingId: zod.coerce.number(),
+});
+
+export const CancelBayBookingBody = zod.object({
+  reason: zod.string().optional(),
+});
+
+export const CancelBayBookingResponse = zod.object({
+  id: zod.number(),
+  bayId: zod.number(),
+  jobId: zod.number(),
+  mechanicId: zod.number(),
+  shopId: zod.number(),
+  startTime: zod.coerce.date(),
+  estimatedEndTime: zod.coerce.date(),
+  actualStartTime: zod.coerce.date().nullish(),
+  actualEndTime: zod.coerce.date().nullish(),
+  hourlyRateSnapshot: zod.number(),
+  estimatedHours: zod.number(),
+  totalCost: zod.number().nullish(),
+  status: zod.enum(["reserved", "active", "completed", "cancelled"]),
+  cancellationReason: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Submit a pre or post-service inspection (active mechanic; immutable)
+ */
+export const CreateInspectionParams = zod.object({
+  jobId: zod.coerce.number(),
+});
+
+export const createInspectionBodyMileageMin = 0;
+
+export const createInspectionBodyTransportPickupMileageMin = 0;
+
+export const createInspectionBodyTransportArrivalMileageMin = 0;
+
+export const CreateInspectionBody = zod.object({
+  kind: zod.enum(["pre", "post"]),
+  mileage: zod.number().min(createInspectionBodyMileageMin),
+  mediaUrls: zod.array(zod.string()),
+  damageChecklist: zod
+    .object({
+      scratches: zod.object({
+        ok: zod.boolean(),
+        notes: zod.string().optional(),
+      }),
+      dents: zod.object({
+        ok: zod.boolean(),
+        notes: zod.string().optional(),
+      }),
+      glass: zod.object({
+        ok: zod.boolean(),
+        notes: zod.string().optional(),
+      }),
+      wheels: zod.object({
+        ok: zod.boolean(),
+        notes: zod.string().optional(),
+      }),
+      lights: zod.object({
+        ok: zod.boolean(),
+        notes: zod.string().optional(),
+      }),
+      interior: zod.object({
+        ok: zod.boolean(),
+        notes: zod.string().optional(),
+      }),
+      fluidLeaks: zod.object({
+        ok: zod.boolean(),
+        notes: zod.string().optional(),
+      }),
+      other: zod.string().optional(),
+    })
+    .optional(),
+  notes: zod.string().optional(),
+  transportPickupMileage: zod
+    .number()
+    .min(createInspectionBodyTransportPickupMileageMin)
+    .optional(),
+  transportArrivalMileage: zod
+    .number()
+    .min(createInspectionBodyTransportArrivalMileageMin)
+    .optional(),
+});
+
+/**
+ * @summary List inspections for a job (admin, customer, or assigned mechanic)
+ */
+export const ListJobInspectionsParams = zod.object({
+  jobId: zod.coerce.number(),
+});
+
+export const ListJobInspectionsResponseItem = zod.object({
+  id: zod.number(),
+  jobId: zod.number(),
+  vehicleId: zod.number(),
+  vin: zod.string(),
+  mechanicId: zod.number(),
+  kind: zod.enum(["pre", "post"]),
+  mileage: zod.number(),
+  mediaUrls: zod.array(zod.string()),
+  damageChecklist: zod
+    .object({
+      scratches: zod.object({
+        ok: zod.boolean(),
+        notes: zod.string().optional(),
+      }),
+      dents: zod.object({
+        ok: zod.boolean(),
+        notes: zod.string().optional(),
+      }),
+      glass: zod.object({
+        ok: zod.boolean(),
+        notes: zod.string().optional(),
+      }),
+      wheels: zod.object({
+        ok: zod.boolean(),
+        notes: zod.string().optional(),
+      }),
+      lights: zod.object({
+        ok: zod.boolean(),
+        notes: zod.string().optional(),
+      }),
+      interior: zod.object({
+        ok: zod.boolean(),
+        notes: zod.string().optional(),
+      }),
+      fluidLeaks: zod.object({
+        ok: zod.boolean(),
+        notes: zod.string().optional(),
+      }),
+      other: zod.string().optional(),
+    })
+    .nullish(),
+  notes: zod.string().nullish(),
+  transportPickupMileage: zod.number().nullish(),
+  transportArrivalMileage: zod.number().nullish(),
+  createdAt: zod.coerce.date(),
+});
+export const ListJobInspectionsResponse = zod.array(
+  ListJobInspectionsResponseItem,
+);
+
+/**
+ * @summary Customer approves vehicle transport to a shop bay
+ */
+export const ApproveJobTransportParams = zod.object({
+  jobId: zod.coerce.number(),
+});
+
+export const ApproveJobTransportResponse = zod.object({
+  id: zod.number(),
+  vehicleId: zod.number(),
+  vin: zod.string(),
+  customerId: zod.number(),
+  customerName: zod.string(),
+  mechanicId: zod.number().nullish(),
+  mechanicName: zod.string().nullish(),
+  jobType: zod.enum(["repair", "diagnostic", "maintenance", "detailing"]),
+  description: zod.string(),
+  locationLat: zod.number().nullish(),
+  locationLng: zod.number().nullish(),
+  locationAddress: zod.string().nullish(),
+  status: zod.enum([
+    "REQUESTED",
+    "OFFERED",
+    "ACCEPTED",
+    "EN_ROUTE",
+    "IN_PROGRESS",
+    "COMPLETED",
+    "PAID",
+    "CANCELLED",
+  ]),
+  estimatedPrice: zod.number().nullish(),
+  finalPrice: zod.number().nullish(),
+  rating: zod.number().nullish(),
+  ratingNote: zod.string().nullish(),
+  mechanicLat: zod.number().nullish(),
+  mechanicLng: zod.number().nullish(),
+  mechanicLocationUpdatedAt: zod.coerce.date().nullish(),
+  vehicle: zod
+    .object({
+      id: zod.number(),
+      vin: zod.string(),
+      plateNumber: zod.string().nullish(),
+      make: zod.string(),
+      model: zod.string(),
+      year: zod.number(),
+      trim: zod.string().nullish(),
+      color: zod.string().nullish(),
+      mileage: zod.number(),
+      createdAt: zod.coerce.date(),
+    })
+    .nullish(),
+  createdAt: zod.coerce.date(),
+  acceptedAt: zod.coerce.date().nullish(),
+  completedAt: zod.coerce.date().nullish(),
+  mechanicReviewText: zod.string().nullish(),
+  customerRating: zod.number().nullish(),
+  customerReviewText: zod.string().nullish(),
+  requestedMechanicId: zod.number().nullish(),
+  requiresGhostGarage: zod
+    .boolean()
+    .optional()
+    .describe(
+      "True when the job needs an indoor shop bay (lift, etc). Gates work-log submission on pre + post inspections.",
+    ),
+  customerTransportApproved: zod
+    .boolean()
+    .optional()
+    .describe(
+      "Whether the customer has approved their vehicle being transported to a shop bay. Always true for non-ghost-garage jobs.",
+    ),
 });

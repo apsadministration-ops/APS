@@ -28,6 +28,14 @@ tags:
     description: Summary and analytics endpoints
   - name: assistant
     description: AI Assistant for explaining repairs and parts
+  - name: shops
+    description: Ghost Garage shop management (shop owners list bays for rent)
+  - name: bays
+    description: Rentable service bays inside a shop
+  - name: bookings
+    description: Mechanic-to-shop bay rental bookings
+  - name: inspections
+    description: Pre and post-service vehicle inspections (Ghost Garage)
 
 paths:
   /healthz:
@@ -972,6 +980,366 @@ paths:
               schema:
                 $ref: "#/components/schemas/AssistantChatResponse"
 
+  # ────────────── Ghost Garage ──────────────
+  /shops:
+    post:
+      operationId: createShop
+      tags: [shops]
+      summary: Create a new shop (shop_owner only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateShopBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Shop"
+
+  /shops/mine:
+    get:
+      operationId: listMyShops
+      tags: [shops]
+      summary: List shops owned by the current shop_owner
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Shop"
+
+  /shops/{shopId}:
+    get:
+      operationId: getShop
+      tags: [shops]
+      summary: Get a shop with its bays
+      parameters:
+        - name: shopId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShopWithBays"
+    patch:
+      operationId: updateShop
+      tags: [shops]
+      summary: Update a shop (owner only)
+      parameters:
+        - name: shopId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateShopBody"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Shop"
+
+  /shops/{shopId}/bays:
+    post:
+      operationId: createBay
+      tags: [bays]
+      summary: Add a bay to a shop (owner only)
+      parameters:
+        - name: shopId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBayBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bay"
+    get:
+      operationId: listShopBays
+      tags: [bays]
+      summary: List bays for a shop
+      parameters:
+        - name: shopId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Bay"
+
+  /bays/available:
+    get:
+      operationId: listAvailableBays
+      tags: [bays]
+      summary: Search bookable bays (active mechanic only)
+      parameters:
+        - name: jobCategory
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [repair, diagnostic, maintenance, detailing]
+        - name: minTier
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [detailer, technician, senior, master]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BayWithShop"
+
+  /bays/{bayId}:
+    get:
+      operationId: getBay
+      tags: [bays]
+      summary: Get a single bay with its shop
+      parameters:
+        - name: bayId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BayWithShop"
+    patch:
+      operationId: updateBay
+      tags: [bays]
+      summary: Update a bay (owner only)
+      parameters:
+        - name: bayId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateBayBody"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bay"
+
+  /bays/{bayId}/bookings:
+    post:
+      operationId: createBayBooking
+      tags: [bookings]
+      summary: Reserve a bay for a job (active mechanic; tier and category enforced)
+      parameters:
+        - name: bayId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBayBookingBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BayBooking"
+
+  /bookings/mine:
+    get:
+      operationId: listMyBookings
+      tags: [bookings]
+      summary: List bookings for the current user (mechanic sees own; shop_owner sees own shops')
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BayBooking"
+
+  /bookings/{bookingId}/start:
+    patch:
+      operationId: startBayBooking
+      tags: [bookings]
+      summary: Mechanic marks the booking as active (work has begun)
+      parameters:
+        - name: bookingId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BayBooking"
+
+  /bookings/{bookingId}/complete:
+    patch:
+      operationId: completeBayBooking
+      tags: [bookings]
+      summary: Mechanic ends the booking; total cost is computed from elapsed time
+      parameters:
+        - name: bookingId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BayBooking"
+
+  /bookings/{bookingId}/cancel:
+    patch:
+      operationId: cancelBayBooking
+      tags: [bookings]
+      summary: Cancel a booking (mechanic or shop owner)
+      parameters:
+        - name: bookingId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BayBooking"
+
+  /jobs/{jobId}/inspections:
+    post:
+      operationId: createInspection
+      tags: [inspections]
+      summary: Submit a pre or post-service inspection (active mechanic; immutable)
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateInspectionBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Inspection"
+    get:
+      operationId: listJobInspections
+      tags: [inspections]
+      summary: List inspections for a job (admin, customer, or assigned mechanic)
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Inspection"
+
+  /jobs/{jobId}/transport-approval:
+    post:
+      operationId: approveJobTransport
+      tags: [jobs]
+      summary: Customer approves vehicle transport to a shop bay
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1009,7 +1377,7 @@ components:
           type: string
         role:
           type: string
-          enum: [customer, mechanic]
+          enum: [customer, mechanic, shop_owner]
         address:
           type: string
         city:
@@ -1062,7 +1430,7 @@ components:
           nullable: true
         role:
           type: string
-          enum: [customer, mechanic, admin]
+          enum: [customer, mechanic, admin, shop_owner]
         status:
           type: string
           enum: [active, suspended, pending]
@@ -1326,6 +1694,12 @@ components:
         requestedMechanicId:
           type: integer
           nullable: true
+        requiresGhostGarage:
+          type: boolean
+          description: True when the job needs an indoor shop bay (lift, etc). Gates work-log submission on pre + post inspections.
+        customerTransportApproved:
+          type: boolean
+          description: Whether the customer has approved their vehicle being transported to a shop bay. Always true for non-ghost-garage jobs.
       required: [id, vehicleId, vin, customerId, customerName, jobType, description, status, createdAt]
 
     CreateJobBody:
@@ -1570,10 +1944,42 @@ components:
               customerApproved:
                 type: boolean
             required: [description, amount, customerApproved]
+        laborHours:
+          type: number
+          nullable: true
+        diagnosticCodes:
+          type: array
+          items:
+            type: string
+        rootCauseDiagnosis:
+          type: string
+          nullable: true
+        repairSteps:
+          type: string
+          nullable: true
+        observedSymptoms:
+          type: string
+          nullable: true
+        recommendedMonitoring:
+          type: string
+          nullable: true
+        recurringIssueTags:
+          type: array
+          items:
+            type: string
+        bayBookingId:
+          type: integer
+          nullable: true
+        preInspectionId:
+          type: integer
+          nullable: true
+        postInspectionId:
+          type: integer
+          nullable: true
         createdAt:
           type: string
           format: date-time
-      required: [id, jobId, vehicleId, vin, mechanicId, mechanicName, customerId, serviceCategory, serviceDescription, mileageAtService, laborCost, partsCost, totalCost, partsUsed, beforeImages, afterImages, upsells, createdAt]
+      required: [id, jobId, vehicleId, vin, mechanicId, mechanicName, customerId, serviceCategory, serviceDescription, mileageAtService, laborCost, partsCost, totalCost, partsUsed, beforeImages, afterImages, upsells, diagnosticCodes, recurringIssueTags, createdAt]
 
     CreateWorkLogBody:
       type: object
@@ -1620,6 +2026,29 @@ components:
               customerApproved:
                 type: boolean
             required: [description, amount, customerApproved]
+        laborHours:
+          type: number
+        diagnosticCodes:
+          type: array
+          items:
+            type: string
+          description: OBD-II / proprietary trouble codes recorded at service.
+        rootCauseDiagnosis:
+          type: string
+        repairSteps:
+          type: string
+        observedSymptoms:
+          type: string
+        recommendedMonitoring:
+          type: string
+        recurringIssueTags:
+          type: array
+          items:
+            type: string
+          description: Free-form tags marking patterns to watch (e.g. "intermittent", "post-storm").
+        bayBookingId:
+          type: integer
+          description: Required if the job's requiresGhostGarage is true.
       required: [jobId, serviceCategory, serviceDescription, mileageAtService, laborCost, partsCost, partsUsed, beforeImages, afterImages]
 
     # Payments
@@ -1755,3 +2184,352 @@ components:
           type: ["string", "null"]
           enum: [low, medium, high, null]
       required: [reply]
+
+    # ────────────── Ghost Garage ──────────────
+    Shop:
+      type: object
+      properties:
+        id:
+          type: integer
+        ownerId:
+          type: integer
+        name:
+          type: string
+        address:
+          type: string
+        city:
+          type: string
+        region:
+          type: string
+        zipCode:
+          type: string
+        lat:
+          type: number
+          nullable: true
+        lng:
+          type: number
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        insuranceCarrier:
+          type: string
+          nullable: true
+        insurancePolicyNumber:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [active, inactive]
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, ownerId, name, address, city, region, zipCode, status, createdAt]
+
+    CreateShopBody:
+      type: object
+      properties:
+        name:
+          type: string
+        address:
+          type: string
+        city:
+          type: string
+        region:
+          type: string
+        zipCode:
+          type: string
+        lat:
+          type: number
+        lng:
+          type: number
+        phone:
+          type: string
+        insuranceCarrier:
+          type: string
+        insurancePolicyNumber:
+          type: string
+      required: [name, address, city, region, zipCode]
+
+    UpdateShopBody:
+      type: object
+      properties:
+        name:
+          type: string
+        address:
+          type: string
+        city:
+          type: string
+        region:
+          type: string
+        zipCode:
+          type: string
+        lat:
+          type: number
+        lng:
+          type: number
+        phone:
+          type: string
+        insuranceCarrier:
+          type: string
+        insurancePolicyNumber:
+          type: string
+        status:
+          type: string
+          enum: [active, inactive]
+
+    Bay:
+      type: object
+      properties:
+        id:
+          type: integer
+        shopId:
+          type: integer
+        name:
+          type: string
+        hourlyRate:
+          type: number
+        equipment:
+          type: array
+          items:
+            type: string
+        allowedJobCategories:
+          type: array
+          items:
+            type: string
+            enum: [repair, diagnostic, maintenance, detailing]
+        minMechanicTier:
+          type: string
+          enum: [detailer, technician, senior, master]
+        autoApprove:
+          type: boolean
+        status:
+          type: string
+          enum: [active, inactive]
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, shopId, name, hourlyRate, equipment, allowedJobCategories, minMechanicTier, autoApprove, status, createdAt]
+
+    ShopWithBays:
+      allOf:
+        - $ref: "#/components/schemas/Shop"
+        - type: object
+          properties:
+            bays:
+              type: array
+              items:
+                $ref: "#/components/schemas/Bay"
+          required: [bays]
+
+    BayWithShop:
+      allOf:
+        - $ref: "#/components/schemas/Bay"
+        - type: object
+          properties:
+            shop:
+              $ref: "#/components/schemas/Shop"
+          required: [shop]
+
+    CreateBayBody:
+      type: object
+      properties:
+        name:
+          type: string
+        hourlyRate:
+          type: number
+          minimum: 0
+        equipment:
+          type: array
+          items:
+            type: string
+        allowedJobCategories:
+          type: array
+          items:
+            type: string
+            enum: [repair, diagnostic, maintenance, detailing]
+        minMechanicTier:
+          type: string
+          enum: [detailer, technician, senior, master]
+        autoApprove:
+          type: boolean
+      required: [name, hourlyRate, allowedJobCategories, minMechanicTier]
+
+    UpdateBayBody:
+      type: object
+      properties:
+        name:
+          type: string
+        hourlyRate:
+          type: number
+          minimum: 0
+        equipment:
+          type: array
+          items:
+            type: string
+        allowedJobCategories:
+          type: array
+          items:
+            type: string
+            enum: [repair, diagnostic, maintenance, detailing]
+        minMechanicTier:
+          type: string
+          enum: [detailer, technician, senior, master]
+        autoApprove:
+          type: boolean
+        status:
+          type: string
+          enum: [active, inactive]
+
+    BayBooking:
+      type: object
+      properties:
+        id:
+          type: integer
+        bayId:
+          type: integer
+        jobId:
+          type: integer
+        mechanicId:
+          type: integer
+        shopId:
+          type: integer
+        startTime:
+          type: string
+          format: date-time
+        estimatedEndTime:
+          type: string
+          format: date-time
+        actualStartTime:
+          type: string
+          format: date-time
+          nullable: true
+        actualEndTime:
+          type: string
+          format: date-time
+          nullable: true
+        hourlyRateSnapshot:
+          type: number
+        estimatedHours:
+          type: number
+        totalCost:
+          type: number
+          nullable: true
+        status:
+          type: string
+          enum: [reserved, active, completed, cancelled]
+        cancellationReason:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, bayId, jobId, mechanicId, shopId, startTime, estimatedEndTime, hourlyRateSnapshot, estimatedHours, status, createdAt]
+
+    CreateBayBookingBody:
+      type: object
+      properties:
+        jobId:
+          type: integer
+        startTime:
+          type: string
+          format: date-time
+        estimatedHours:
+          type: number
+          minimum: 0.25
+      required: [jobId, startTime, estimatedHours]
+
+    DamageChecklistItem:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        notes:
+          type: string
+      required: [ok]
+
+    DamageChecklist:
+      type: object
+      properties:
+        scratches:
+          $ref: "#/components/schemas/DamageChecklistItem"
+        dents:
+          $ref: "#/components/schemas/DamageChecklistItem"
+        glass:
+          $ref: "#/components/schemas/DamageChecklistItem"
+        wheels:
+          $ref: "#/components/schemas/DamageChecklistItem"
+        lights:
+          $ref: "#/components/schemas/DamageChecklistItem"
+        interior:
+          $ref: "#/components/schemas/DamageChecklistItem"
+        fluidLeaks:
+          $ref: "#/components/schemas/DamageChecklistItem"
+        other:
+          type: string
+      required: [scratches, dents, glass, wheels, lights, interior, fluidLeaks]
+
+    Inspection:
+      type: object
+      properties:
+        id:
+          type: integer
+        jobId:
+          type: integer
+        vehicleId:
+          type: integer
+        vin:
+          type: string
+        mechanicId:
+          type: integer
+        kind:
+          type: string
+          enum: [pre, post]
+        mileage:
+          type: integer
+        mediaUrls:
+          type: array
+          items:
+            type: string
+        damageChecklist:
+          allOf:
+            - $ref: "#/components/schemas/DamageChecklist"
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        transportPickupMileage:
+          type: integer
+          nullable: true
+        transportArrivalMileage:
+          type: integer
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, jobId, vehicleId, vin, mechanicId, kind, mileage, mediaUrls, createdAt]
+
+    CreateInspectionBody:
+      type: object
+      properties:
+        kind:
+          type: string
+          enum: [pre, post]
+        mileage:
+          type: integer
+          minimum: 0
+        mediaUrls:
+          type: array
+          items:
+            type: string
+        damageChecklist:
+          $ref: "#/components/schemas/DamageChecklist"
+        notes:
+          type: string
+        transportPickupMileage:
+          type: integer
+          minimum: 0
+        transportArrivalMileage:
+          type: integer
+          minimum: 0
+      required: [kind, mileage, mediaUrls]

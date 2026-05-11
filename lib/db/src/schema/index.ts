@@ -10,3 +10,7 @@ export * from "./loyaltyV2";
 export * from "./referrals";
 export * from "./favorites";
 export * from "./flags";
+export * from "./shops";
+export * from "./bays";
+export * from "./bayBookings";
+export * from "./inspections";

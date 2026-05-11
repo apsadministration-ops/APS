@@ -22,8 +22,16 @@ import type {
   AssistantChatRequest,
   AssistantChatResponse,
   AuthResponse,
+  Bay,
+  BayBooking,
+  BayWithShop,
+  CancelBayBookingBody,
+  CreateBayBody,
+  CreateBayBookingBody,
   CreateFlagBody,
+  CreateInspectionBody,
   CreateJobBody,
+  CreateShopBody,
   CreateVehicleBody,
   CreateWorkLogBody,
   CustomerDashboard,
@@ -31,7 +39,9 @@ import type {
   Favorite,
   Flag,
   HealthStatus,
+  Inspection,
   Job,
+  ListAvailableBaysParams,
   ListJobsParams,
   ListMechanicsParams,
   ListUsersParams,
@@ -46,8 +56,12 @@ import type {
   RegisterBody,
   RemoveFavorite200,
   Review,
+  Shop,
+  ShopWithBays,
   TransferVehicleBody,
+  UpdateBayBody,
   UpdateJobStatusBody,
+  UpdateShopBody,
   UpdateUserBody,
   User,
   VehicleWithOwnership,
@@ -3544,4 +3558,1436 @@ export const useAssistantChat = <
   TContext
 > => {
   return useMutation(getAssistantChatMutationOptions(options));
+};
+
+/**
+ * @summary Create a new shop (shop_owner only)
+ */
+export const getCreateShopUrl = () => {
+  return `/api/shops`;
+};
+
+export const createShop = async (
+  createShopBody: CreateShopBody,
+  options?: RequestInit,
+): Promise<Shop> => {
+  return customFetch<Shop>(getCreateShopUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createShopBody),
+  });
+};
+
+export const getCreateShopMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createShop>>,
+    TError,
+    { data: BodyType<CreateShopBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createShop>>,
+  TError,
+  { data: BodyType<CreateShopBody> },
+  TContext
+> => {
+  const mutationKey = ["createShop"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createShop>>,
+    { data: BodyType<CreateShopBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createShop(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateShopMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createShop>>
+>;
+export type CreateShopMutationBody = BodyType<CreateShopBody>;
+export type CreateShopMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create a new shop (shop_owner only)
+ */
+export const useCreateShop = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createShop>>,
+    TError,
+    { data: BodyType<CreateShopBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createShop>>,
+  TError,
+  { data: BodyType<CreateShopBody> },
+  TContext
+> => {
+  return useMutation(getCreateShopMutationOptions(options));
+};
+
+/**
+ * @summary List shops owned by the current shop_owner
+ */
+export const getListMyShopsUrl = () => {
+  return `/api/shops/mine`;
+};
+
+export const listMyShops = async (options?: RequestInit): Promise<Shop[]> => {
+  return customFetch<Shop[]>(getListMyShopsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListMyShopsQueryKey = () => {
+  return [`/api/shops/mine`] as const;
+};
+
+export const getListMyShopsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listMyShops>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listMyShops>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListMyShopsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listMyShops>>> = ({
+    signal,
+  }) => listMyShops({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listMyShops>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListMyShopsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listMyShops>>
+>;
+export type ListMyShopsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List shops owned by the current shop_owner
+ */
+
+export function useListMyShops<
+  TData = Awaited<ReturnType<typeof listMyShops>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listMyShops>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListMyShopsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get a shop with its bays
+ */
+export const getGetShopUrl = (shopId: number) => {
+  return `/api/shops/${shopId}`;
+};
+
+export const getShop = async (
+  shopId: number,
+  options?: RequestInit,
+): Promise<ShopWithBays> => {
+  return customFetch<ShopWithBays>(getGetShopUrl(shopId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetShopQueryKey = (shopId: number) => {
+  return [`/api/shops/${shopId}`] as const;
+};
+
+export const getGetShopQueryOptions = <
+  TData = Awaited<ReturnType<typeof getShop>>,
+  TError = ErrorType<unknown>,
+>(
+  shopId: number,
+  options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getShop>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetShopQueryKey(shopId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getShop>>> = ({
+    signal,
+  }) => getShop(shopId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!shopId,
+    ...queryOptions,
+  } as UseQueryOptions<Awaited<ReturnType<typeof getShop>>, TError, TData> & {
+    queryKey: QueryKey;
+  };
+};
+
+export type GetShopQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getShop>>
+>;
+export type GetShopQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get a shop with its bays
+ */
+
+export function useGetShop<
+  TData = Awaited<ReturnType<typeof getShop>>,
+  TError = ErrorType<unknown>,
+>(
+  shopId: number,
+  options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getShop>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetShopQueryOptions(shopId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Update a shop (owner only)
+ */
+export const getUpdateShopUrl = (shopId: number) => {
+  return `/api/shops/${shopId}`;
+};
+
+export const updateShop = async (
+  shopId: number,
+  updateShopBody: UpdateShopBody,
+  options?: RequestInit,
+): Promise<Shop> => {
+  return customFetch<Shop>(getUpdateShopUrl(shopId), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateShopBody),
+  });
+};
+
+export const getUpdateShopMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateShop>>,
+    TError,
+    { shopId: number; data: BodyType<UpdateShopBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateShop>>,
+  TError,
+  { shopId: number; data: BodyType<UpdateShopBody> },
+  TContext
+> => {
+  const mutationKey = ["updateShop"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateShop>>,
+    { shopId: number; data: BodyType<UpdateShopBody> }
+  > = (props) => {
+    const { shopId, data } = props ?? {};
+
+    return updateShop(shopId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateShopMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateShop>>
+>;
+export type UpdateShopMutationBody = BodyType<UpdateShopBody>;
+export type UpdateShopMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update a shop (owner only)
+ */
+export const useUpdateShop = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateShop>>,
+    TError,
+    { shopId: number; data: BodyType<UpdateShopBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateShop>>,
+  TError,
+  { shopId: number; data: BodyType<UpdateShopBody> },
+  TContext
+> => {
+  return useMutation(getUpdateShopMutationOptions(options));
+};
+
+/**
+ * @summary Add a bay to a shop (owner only)
+ */
+export const getCreateBayUrl = (shopId: number) => {
+  return `/api/shops/${shopId}/bays`;
+};
+
+export const createBay = async (
+  shopId: number,
+  createBayBody: CreateBayBody,
+  options?: RequestInit,
+): Promise<Bay> => {
+  return customFetch<Bay>(getCreateBayUrl(shopId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createBayBody),
+  });
+};
+
+export const getCreateBayMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createBay>>,
+    TError,
+    { shopId: number; data: BodyType<CreateBayBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createBay>>,
+  TError,
+  { shopId: number; data: BodyType<CreateBayBody> },
+  TContext
+> => {
+  const mutationKey = ["createBay"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createBay>>,
+    { shopId: number; data: BodyType<CreateBayBody> }
+  > = (props) => {
+    const { shopId, data } = props ?? {};
+
+    return createBay(shopId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateBayMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createBay>>
+>;
+export type CreateBayMutationBody = BodyType<CreateBayBody>;
+export type CreateBayMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Add a bay to a shop (owner only)
+ */
+export const useCreateBay = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createBay>>,
+    TError,
+    { shopId: number; data: BodyType<CreateBayBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createBay>>,
+  TError,
+  { shopId: number; data: BodyType<CreateBayBody> },
+  TContext
+> => {
+  return useMutation(getCreateBayMutationOptions(options));
+};
+
+/**
+ * @summary List bays for a shop
+ */
+export const getListShopBaysUrl = (shopId: number) => {
+  return `/api/shops/${shopId}/bays`;
+};
+
+export const listShopBays = async (
+  shopId: number,
+  options?: RequestInit,
+): Promise<Bay[]> => {
+  return customFetch<Bay[]>(getListShopBaysUrl(shopId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListShopBaysQueryKey = (shopId: number) => {
+  return [`/api/shops/${shopId}/bays`] as const;
+};
+
+export const getListShopBaysQueryOptions = <
+  TData = Awaited<ReturnType<typeof listShopBays>>,
+  TError = ErrorType<unknown>,
+>(
+  shopId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listShopBays>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListShopBaysQueryKey(shopId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listShopBays>>> = ({
+    signal,
+  }) => listShopBays(shopId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!shopId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listShopBays>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListShopBaysQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listShopBays>>
+>;
+export type ListShopBaysQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List bays for a shop
+ */
+
+export function useListShopBays<
+  TData = Awaited<ReturnType<typeof listShopBays>>,
+  TError = ErrorType<unknown>,
+>(
+  shopId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listShopBays>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListShopBaysQueryOptions(shopId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Search bookable bays (active mechanic only)
+ */
+export const getListAvailableBaysUrl = (params?: ListAvailableBaysParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/bays/available?${stringifiedParams}`
+    : `/api/bays/available`;
+};
+
+export const listAvailableBays = async (
+  params?: ListAvailableBaysParams,
+  options?: RequestInit,
+): Promise<BayWithShop[]> => {
+  return customFetch<BayWithShop[]>(getListAvailableBaysUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListAvailableBaysQueryKey = (
+  params?: ListAvailableBaysParams,
+) => {
+  return [`/api/bays/available`, ...(params ? [params] : [])] as const;
+};
+
+export const getListAvailableBaysQueryOptions = <
+  TData = Awaited<ReturnType<typeof listAvailableBays>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListAvailableBaysParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listAvailableBays>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListAvailableBaysQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listAvailableBays>>
+  > = ({ signal }) => listAvailableBays(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listAvailableBays>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListAvailableBaysQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listAvailableBays>>
+>;
+export type ListAvailableBaysQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Search bookable bays (active mechanic only)
+ */
+
+export function useListAvailableBays<
+  TData = Awaited<ReturnType<typeof listAvailableBays>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListAvailableBaysParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listAvailableBays>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListAvailableBaysQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get a single bay with its shop
+ */
+export const getGetBayUrl = (bayId: number) => {
+  return `/api/bays/${bayId}`;
+};
+
+export const getBay = async (
+  bayId: number,
+  options?: RequestInit,
+): Promise<BayWithShop> => {
+  return customFetch<BayWithShop>(getGetBayUrl(bayId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetBayQueryKey = (bayId: number) => {
+  return [`/api/bays/${bayId}`] as const;
+};
+
+export const getGetBayQueryOptions = <
+  TData = Awaited<ReturnType<typeof getBay>>,
+  TError = ErrorType<unknown>,
+>(
+  bayId: number,
+  options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getBay>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetBayQueryKey(bayId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getBay>>> = ({
+    signal,
+  }) => getBay(bayId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!bayId,
+    ...queryOptions,
+  } as UseQueryOptions<Awaited<ReturnType<typeof getBay>>, TError, TData> & {
+    queryKey: QueryKey;
+  };
+};
+
+export type GetBayQueryResult = NonNullable<Awaited<ReturnType<typeof getBay>>>;
+export type GetBayQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get a single bay with its shop
+ */
+
+export function useGetBay<
+  TData = Awaited<ReturnType<typeof getBay>>,
+  TError = ErrorType<unknown>,
+>(
+  bayId: number,
+  options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getBay>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetBayQueryOptions(bayId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Update a bay (owner only)
+ */
+export const getUpdateBayUrl = (bayId: number) => {
+  return `/api/bays/${bayId}`;
+};
+
+export const updateBay = async (
+  bayId: number,
+  updateBayBody: UpdateBayBody,
+  options?: RequestInit,
+): Promise<Bay> => {
+  return customFetch<Bay>(getUpdateBayUrl(bayId), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateBayBody),
+  });
+};
+
+export const getUpdateBayMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateBay>>,
+    TError,
+    { bayId: number; data: BodyType<UpdateBayBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateBay>>,
+  TError,
+  { bayId: number; data: BodyType<UpdateBayBody> },
+  TContext
+> => {
+  const mutationKey = ["updateBay"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateBay>>,
+    { bayId: number; data: BodyType<UpdateBayBody> }
+  > = (props) => {
+    const { bayId, data } = props ?? {};
+
+    return updateBay(bayId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateBayMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateBay>>
+>;
+export type UpdateBayMutationBody = BodyType<UpdateBayBody>;
+export type UpdateBayMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update a bay (owner only)
+ */
+export const useUpdateBay = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateBay>>,
+    TError,
+    { bayId: number; data: BodyType<UpdateBayBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateBay>>,
+  TError,
+  { bayId: number; data: BodyType<UpdateBayBody> },
+  TContext
+> => {
+  return useMutation(getUpdateBayMutationOptions(options));
+};
+
+/**
+ * @summary Reserve a bay for a job (active mechanic; tier and category enforced)
+ */
+export const getCreateBayBookingUrl = (bayId: number) => {
+  return `/api/bays/${bayId}/bookings`;
+};
+
+export const createBayBooking = async (
+  bayId: number,
+  createBayBookingBody: CreateBayBookingBody,
+  options?: RequestInit,
+): Promise<BayBooking> => {
+  return customFetch<BayBooking>(getCreateBayBookingUrl(bayId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createBayBookingBody),
+  });
+};
+
+export const getCreateBayBookingMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createBayBooking>>,
+    TError,
+    { bayId: number; data: BodyType<CreateBayBookingBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createBayBooking>>,
+  TError,
+  { bayId: number; data: BodyType<CreateBayBookingBody> },
+  TContext
+> => {
+  const mutationKey = ["createBayBooking"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createBayBooking>>,
+    { bayId: number; data: BodyType<CreateBayBookingBody> }
+  > = (props) => {
+    const { bayId, data } = props ?? {};
+
+    return createBayBooking(bayId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateBayBookingMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createBayBooking>>
+>;
+export type CreateBayBookingMutationBody = BodyType<CreateBayBookingBody>;
+export type CreateBayBookingMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Reserve a bay for a job (active mechanic; tier and category enforced)
+ */
+export const useCreateBayBooking = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createBayBooking>>,
+    TError,
+    { bayId: number; data: BodyType<CreateBayBookingBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createBayBooking>>,
+  TError,
+  { bayId: number; data: BodyType<CreateBayBookingBody> },
+  TContext
+> => {
+  return useMutation(getCreateBayBookingMutationOptions(options));
+};
+
+/**
+ * @summary List bookings for the current user (mechanic sees own; shop_owner sees own shops')
+ */
+export const getListMyBookingsUrl = () => {
+  return `/api/bookings/mine`;
+};
+
+export const listMyBookings = async (
+  options?: RequestInit,
+): Promise<BayBooking[]> => {
+  return customFetch<BayBooking[]>(getListMyBookingsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListMyBookingsQueryKey = () => {
+  return [`/api/bookings/mine`] as const;
+};
+
+export const getListMyBookingsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listMyBookings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listMyBookings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListMyBookingsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listMyBookings>>> = ({
+    signal,
+  }) => listMyBookings({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listMyBookings>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListMyBookingsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listMyBookings>>
+>;
+export type ListMyBookingsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List bookings for the current user (mechanic sees own; shop_owner sees own shops')
+ */
+
+export function useListMyBookings<
+  TData = Awaited<ReturnType<typeof listMyBookings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listMyBookings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListMyBookingsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Mechanic marks the booking as active (work has begun)
+ */
+export const getStartBayBookingUrl = (bookingId: number) => {
+  return `/api/bookings/${bookingId}/start`;
+};
+
+export const startBayBooking = async (
+  bookingId: number,
+  options?: RequestInit,
+): Promise<BayBooking> => {
+  return customFetch<BayBooking>(getStartBayBookingUrl(bookingId), {
+    ...options,
+    method: "PATCH",
+  });
+};
+
+export const getStartBayBookingMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof startBayBooking>>,
+    TError,
+    { bookingId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof startBayBooking>>,
+  TError,
+  { bookingId: number },
+  TContext
+> => {
+  const mutationKey = ["startBayBooking"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof startBayBooking>>,
+    { bookingId: number }
+  > = (props) => {
+    const { bookingId } = props ?? {};
+
+    return startBayBooking(bookingId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type StartBayBookingMutationResult = NonNullable<
+  Awaited<ReturnType<typeof startBayBooking>>
+>;
+
+export type StartBayBookingMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Mechanic marks the booking as active (work has begun)
+ */
+export const useStartBayBooking = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof startBayBooking>>,
+    TError,
+    { bookingId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof startBayBooking>>,
+  TError,
+  { bookingId: number },
+  TContext
+> => {
+  return useMutation(getStartBayBookingMutationOptions(options));
+};
+
+/**
+ * @summary Mechanic ends the booking; total cost is computed from elapsed time
+ */
+export const getCompleteBayBookingUrl = (bookingId: number) => {
+  return `/api/bookings/${bookingId}/complete`;
+};
+
+export const completeBayBooking = async (
+  bookingId: number,
+  options?: RequestInit,
+): Promise<BayBooking> => {
+  return customFetch<BayBooking>(getCompleteBayBookingUrl(bookingId), {
+    ...options,
+    method: "PATCH",
+  });
+};
+
+export const getCompleteBayBookingMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof completeBayBooking>>,
+    TError,
+    { bookingId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof completeBayBooking>>,
+  TError,
+  { bookingId: number },
+  TContext
+> => {
+  const mutationKey = ["completeBayBooking"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof completeBayBooking>>,
+    { bookingId: number }
+  > = (props) => {
+    const { bookingId } = props ?? {};
+
+    return completeBayBooking(bookingId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CompleteBayBookingMutationResult = NonNullable<
+  Awaited<ReturnType<typeof completeBayBooking>>
+>;
+
+export type CompleteBayBookingMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Mechanic ends the booking; total cost is computed from elapsed time
+ */
+export const useCompleteBayBooking = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof completeBayBooking>>,
+    TError,
+    { bookingId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof completeBayBooking>>,
+  TError,
+  { bookingId: number },
+  TContext
+> => {
+  return useMutation(getCompleteBayBookingMutationOptions(options));
+};
+
+/**
+ * @summary Cancel a booking (mechanic or shop owner)
+ */
+export const getCancelBayBookingUrl = (bookingId: number) => {
+  return `/api/bookings/${bookingId}/cancel`;
+};
+
+export const cancelBayBooking = async (
+  bookingId: number,
+  cancelBayBookingBody?: CancelBayBookingBody,
+  options?: RequestInit,
+): Promise<BayBooking> => {
+  return customFetch<BayBooking>(getCancelBayBookingUrl(bookingId), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(cancelBayBookingBody),
+  });
+};
+
+export const getCancelBayBookingMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof cancelBayBooking>>,
+    TError,
+    { bookingId: number; data: BodyType<CancelBayBookingBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof cancelBayBooking>>,
+  TError,
+  { bookingId: number; data: BodyType<CancelBayBookingBody> },
+  TContext
+> => {
+  const mutationKey = ["cancelBayBooking"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof cancelBayBooking>>,
+    { bookingId: number; data: BodyType<CancelBayBookingBody> }
+  > = (props) => {
+    const { bookingId, data } = props ?? {};
+
+    return cancelBayBooking(bookingId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CancelBayBookingMutationResult = NonNullable<
+  Awaited<ReturnType<typeof cancelBayBooking>>
+>;
+export type CancelBayBookingMutationBody = BodyType<CancelBayBookingBody>;
+export type CancelBayBookingMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Cancel a booking (mechanic or shop owner)
+ */
+export const useCancelBayBooking = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof cancelBayBooking>>,
+    TError,
+    { bookingId: number; data: BodyType<CancelBayBookingBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof cancelBayBooking>>,
+  TError,
+  { bookingId: number; data: BodyType<CancelBayBookingBody> },
+  TContext
+> => {
+  return useMutation(getCancelBayBookingMutationOptions(options));
+};
+
+/**
+ * @summary Submit a pre or post-service inspection (active mechanic; immutable)
+ */
+export const getCreateInspectionUrl = (jobId: number) => {
+  return `/api/jobs/${jobId}/inspections`;
+};
+
+export const createInspection = async (
+  jobId: number,
+  createInspectionBody: CreateInspectionBody,
+  options?: RequestInit,
+): Promise<Inspection> => {
+  return customFetch<Inspection>(getCreateInspectionUrl(jobId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createInspectionBody),
+  });
+};
+
+export const getCreateInspectionMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createInspection>>,
+    TError,
+    { jobId: number; data: BodyType<CreateInspectionBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createInspection>>,
+  TError,
+  { jobId: number; data: BodyType<CreateInspectionBody> },
+  TContext
+> => {
+  const mutationKey = ["createInspection"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createInspection>>,
+    { jobId: number; data: BodyType<CreateInspectionBody> }
+  > = (props) => {
+    const { jobId, data } = props ?? {};
+
+    return createInspection(jobId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateInspectionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createInspection>>
+>;
+export type CreateInspectionMutationBody = BodyType<CreateInspectionBody>;
+export type CreateInspectionMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Submit a pre or post-service inspection (active mechanic; immutable)
+ */
+export const useCreateInspection = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createInspection>>,
+    TError,
+    { jobId: number; data: BodyType<CreateInspectionBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createInspection>>,
+  TError,
+  { jobId: number; data: BodyType<CreateInspectionBody> },
+  TContext
+> => {
+  return useMutation(getCreateInspectionMutationOptions(options));
+};
+
+/**
+ * @summary List inspections for a job (admin, customer, or assigned mechanic)
+ */
+export const getListJobInspectionsUrl = (jobId: number) => {
+  return `/api/jobs/${jobId}/inspections`;
+};
+
+export const listJobInspections = async (
+  jobId: number,
+  options?: RequestInit,
+): Promise<Inspection[]> => {
+  return customFetch<Inspection[]>(getListJobInspectionsUrl(jobId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListJobInspectionsQueryKey = (jobId: number) => {
+  return [`/api/jobs/${jobId}/inspections`] as const;
+};
+
+export const getListJobInspectionsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listJobInspections>>,
+  TError = ErrorType<unknown>,
+>(
+  jobId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listJobInspections>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListJobInspectionsQueryKey(jobId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listJobInspections>>
+  > = ({ signal }) => listJobInspections(jobId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!jobId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listJobInspections>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListJobInspectionsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listJobInspections>>
+>;
+export type ListJobInspectionsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List inspections for a job (admin, customer, or assigned mechanic)
+ */
+
+export function useListJobInspections<
+  TData = Awaited<ReturnType<typeof listJobInspections>>,
+  TError = ErrorType<unknown>,
+>(
+  jobId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listJobInspections>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListJobInspectionsQueryOptions(jobId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Customer approves vehicle transport to a shop bay
+ */
+export const getApproveJobTransportUrl = (jobId: number) => {
+  return `/api/jobs/${jobId}/transport-approval`;
+};
+
+export const approveJobTransport = async (
+  jobId: number,
+  options?: RequestInit,
+): Promise<Job> => {
+  return customFetch<Job>(getApproveJobTransportUrl(jobId), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getApproveJobTransportMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof approveJobTransport>>,
+    TError,
+    { jobId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof approveJobTransport>>,
+  TError,
+  { jobId: number },
+  TContext
+> => {
+  const mutationKey = ["approveJobTransport"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof approveJobTransport>>,
+    { jobId: number }
+  > = (props) => {
+    const { jobId } = props ?? {};
+
+    return approveJobTransport(jobId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ApproveJobTransportMutationResult = NonNullable<
+  Awaited<ReturnType<typeof approveJobTransport>>
+>;
+
+export type ApproveJobTransportMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Customer approves vehicle transport to a shop bay
+ */
+export const useApproveJobTransport = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof approveJobTransport>>,
+    TError,
+    { jobId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof approveJobTransport>>,
+  TError,
+  { jobId: number },
+  TContext
+> => {
+  return useMutation(getApproveJobTransportMutationOptions(options));
 };

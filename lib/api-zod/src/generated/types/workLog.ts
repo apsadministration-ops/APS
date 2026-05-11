@@ -28,5 +28,15 @@ export interface WorkLog {
   afterImages: string[];
   /** Optional upsells/recommendations logged on job completion. Only items with customerApproved=true earn mechanic upsell points. */
   upsells: WorkLogUpsellsItem[];
+  laborHours?: number | null;
+  diagnosticCodes: string[];
+  rootCauseDiagnosis?: string | null;
+  repairSteps?: string | null;
+  observedSymptoms?: string | null;
+  recommendedMonitoring?: string | null;
+  recurringIssueTags: string[];
+  bayBookingId?: number | null;
+  preInspectionId?: number | null;
+  postInspectionId?: number | null;
   createdAt: Date;
 }

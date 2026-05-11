@@ -15,6 +15,10 @@ import assistantRouter from "./assistant";
 import favoritesRouter from "./favorites";
 import flagsRouter from "./flags";
 import mechanicsRouter from "./mechanics";
+import shopsRouter from "./shops";
+import baysRouter from "./bays";
+import bookingsRouter from "./bookings";
+import inspectionsRouter from "./inspections";
 
 const router: IRouter = Router();
 
@@ -34,5 +38,9 @@ router.use(assistantRouter);
 router.use(favoritesRouter);
 router.use(flagsRouter);
 router.use(mechanicsRouter);
+router.use(shopsRouter);
+router.use(baysRouter);
+router.use(bookingsRouter);
+router.use(inspectionsRouter);
 
 export default router;

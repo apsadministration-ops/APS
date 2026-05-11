@@ -31,6 +31,23 @@ export const workLogsTable = pgTable("work_logs", {
   // log time (defense-in-depth: customer can dispute via flag → refund path
   // also reverses upsell points).
   upsells: json("upsells").$type<{ description: string; amount: number; customerApproved: boolean }[]>().notNull().default([]),
+  // ────────────────────────────────────────────────────────────────────
+  // Mechanic technical-intelligence fields. All optional/nullable for
+  // backward compatibility with logs created before Ghost Garage shipped.
+  // These power the mechanic's deeper VIN-history view (recurring failures,
+  // diagnostic patterns) without changing what the customer sees by default.
+  // ────────────────────────────────────────────────────────────────────
+  laborHours: real("labor_hours"),
+  diagnosticCodes: json("diagnostic_codes").$type<string[]>().notNull().default([]),
+  rootCauseDiagnosis: text("root_cause_diagnosis"),
+  repairSteps: text("repair_steps"),
+  observedSymptoms: text("observed_symptoms"),
+  recommendedMonitoring: text("recommended_monitoring"),
+  recurringIssueTags: json("recurring_issue_tags").$type<string[]>().notNull().default([]),
+  // Ghost Garage links — set on jobs that ran through a shop bay.
+  bayBookingId: integer("bay_booking_id"),
+  preInspectionId: integer("pre_inspection_id"),
+  postInspectionId: integer("post_inspection_id"),
   immutableFlag: boolean("immutable_flag").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [

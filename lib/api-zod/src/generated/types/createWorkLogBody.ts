@@ -25,4 +25,15 @@ export interface CreateWorkLogBody {
   afterImages: string[];
   /** Optional upsells/recommendations. Only items with customerApproved=true earn mechanic points. */
   upsells?: CreateWorkLogBodyUpsellsItem[];
+  laborHours?: number;
+  /** OBD-II / proprietary trouble codes recorded at service. */
+  diagnosticCodes?: string[];
+  rootCauseDiagnosis?: string;
+  repairSteps?: string;
+  observedSymptoms?: string;
+  recommendedMonitoring?: string;
+  /** Free-form tags marking patterns to watch (e.g. "intermittent", "post-storm"). */
+  recurringIssueTags?: string[];
+  /** Required if the job's requiresGhostGarage is true. */
+  bayBookingId?: number;
 }
