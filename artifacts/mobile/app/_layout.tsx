@@ -8,10 +8,14 @@ import {
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
+import * as SystemUI from "expo-system-ui";
+import { StatusBar } from "expo-status-bar";
 import React, { useEffect } from "react";
+import { useColorScheme } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import colors from "@/constants/colors";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import AIAssistantWidget from "@/components/AIAssistantWidget";
@@ -90,12 +94,22 @@ function RootLayoutNav() {
 }
 
 export default function RootLayout() {
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === "dark";
   const [fontsLoaded, fontError] = useFonts({
     Inter_400Regular,
     Inter_500Medium,
     Inter_600SemiBold,
     Inter_700Bold,
   });
+
+  // Set the native window background color BEFORE first paint so Android
+  // doesn't flash white between the splash teardown and the first JS frame
+  // (most visible on dark mode). Safe to call on every theme change.
+  useEffect(() => {
+    SystemUI.setBackgroundColorAsync(isDark ? colors.dark.background : colors.light.background)
+      .catch(() => undefined);
+  }, [isDark]);
 
   useEffect(() => {
     if (fontsLoaded || fontError) {
@@ -109,9 +123,13 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
-          <GestureHandlerRootView>
+          <GestureHandlerRootView style={{ flex: 1 }}>
             <KeyboardProvider>
               <AuthProvider>
+                {/* `style="auto"` follows system theme on iOS/Android.
+                    `translucent` lets content draw under the status bar on
+                    Android (works with edgeToEdgeEnabled in app.json). */}
+                <StatusBar style="auto" translucent />
                 <RootLayoutNav />
               </AuthProvider>
             </KeyboardProvider>

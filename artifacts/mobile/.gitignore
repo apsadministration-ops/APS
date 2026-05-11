@@ -19,6 +19,12 @@ android/
 *.key
 *.mobileprovision
 
+# Store credentials — NEVER commit
+google-services.json
+google-play-service-account.json
+GoogleService-Info.plist
+AuthKey_*.p8
+
 # Metro
 .metro-health-check*
 

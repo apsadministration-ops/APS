@@ -1,0 +1,10 @@
+# Files to exclude from EAS Build uploads.
+# (Inherits .gitignore semantics — only list ADDITIONAL excludes here.)
+node_modules
+.expo
+dist
+web-build
+server
+scripts
+*.log
+.env*.local

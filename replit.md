@@ -35,6 +35,9 @@ artifacts/mobile/context/AuthContext.tsx — auth state + token persistence
 artifacts/mobile/data/obd2Codes.ts — comprehensive OBD2 code database
 artifacts/mobile/constants/colors.ts    — design tokens
 artifacts/mobile/components/AIAssistantWidget.tsx — draggable floating AI chat widget
+artifacts/mobile/utils/haptics.ts  — cross-platform haptic feedback wrapper (no-op on web, safe on native)
+artifacts/mobile/STORE_RELEASE.md  — Apple App Store + Google Play Store release guide
+artifacts/mobile/eas.json          — EAS Build/Submit profiles (development, preview, production)
 artifacts/mobile/app/loyalty.tsx   — unified loyalty screen (branches by role)
 artifacts/mobile/app/job/[id]/approve.tsx — 60s customer-approval screen
 artifacts/mobile/app/review/[jobId].tsx   — categorized review submit screen
@@ -99,6 +102,17 @@ lib/integrations-anthropic-ai/    — Replit AI Integrations Anthropic client
 ## User preferences
 
 _None recorded yet._
+
+## Store release (mobile)
+
+- **Bundle IDs:** iOS `com.aps.autoservice`, Android `com.aps.autoservice`. Don't change these post-launch — Apple/Google treat the bundle ID as the app's permanent identity.
+- **Permission strings:** All iOS `NSxxxUsageDescription` keys are declared in `app.json` → `expo.ios.infoPlist`, mirrored on Android via the `expo-image-picker` and `expo-location` plugin config. App Store rejects builds that hit a native permission API without a matching `NSxxxUsageDescription` — keep these in sync if a new native API is added.
+- **Edge-to-edge Android:** `android.edgeToEdgeEnabled: true` + `<StatusBar translucent />` in the root layout. Screens MUST use `useSafeAreaInsets()` (not legacy `<SafeAreaView>` only) for top/bottom padding because content draws under the status & nav bars.
+- **System-UI flash:** Root `_layout.tsx` calls `SystemUI.setBackgroundColorAsync()` on theme changes so Android doesn't flash white between splash teardown and first JS frame in dark mode.
+- **Versioning:** EAS production profile uses `autoIncrement: true` — iOS `buildNumber` and Android `versionCode` bump server-side per build. Bump `expo.version` (the marketing version, e.g. `1.0.0` → `1.0.1`) manually in `app.json` for any user-visible release.
+- **Credentials:** Never commit `google-services.json`, `google-play-service-account.json`, `GoogleService-Info.plist`, or `AuthKey_*.p8` — all gitignored. Place them locally before running `eas build` / `eas submit`.
+- **Haptics:** Use `import { tap, success, warning, error, selection } from "@/utils/haptics"` — never import `expo-haptics` directly. The wrapper no-ops on web and swallows errors so haptics never break the UI.
+- **EAS project setup:** Three TODOs to fill BEFORE first build — `app.json` → `expo.owner` and `expo.extra.eas.projectId` (from `eas init`), and `eas.json` → `submit.production.ios.{appleId,ascAppId,appleTeamId}`. Full walkthrough in `artifacts/mobile/STORE_RELEASE.md`.
 
 ## Gotchas
 
