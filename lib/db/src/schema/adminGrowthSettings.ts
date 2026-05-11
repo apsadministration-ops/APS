@@ -12,12 +12,28 @@
  *     calendar day across all platforms.
  */
 
-import { pgTable, integer, boolean, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, integer, boolean, timestamp, text } from "drizzle-orm/pg-core";
 
 export const adminGrowthSettingsTable = pgTable("admin_growth_settings", {
   id: integer("id").primaryKey(),                                           // always 1
   aiContentGenerationPaused: boolean("ai_content_generation_paused").notNull().default(false),
   maxDailyDrafts: integer("max_daily_drafts").notNull().default(100),
+  // Platform-level (APS business) social presence — surfaced to users + AI CTAs.
+  // URL fields hold the canonical full URL; handle fields hold the @handle (without @)
+  // for inline mentions / hashtag generation.
+  businessName: text("business_name"),
+  websiteUrl: text("website_url"),
+  facebookUrl: text("facebook_url"),
+  instagramUrl: text("instagram_url"),
+  instagramHandle: text("instagram_handle"),
+  tiktokUrl: text("tiktok_url"),
+  tiktokHandle: text("tiktok_handle"),
+  twitterUrl: text("twitter_url"),
+  twitterHandle: text("twitter_handle"),
+  youtubeUrl: text("youtube_url"),
+  linkedinUrl: text("linkedin_url"),
+  contactEmail: text("contact_email"),
+  contactPhone: text("contact_phone"),
   updatedById: integer("updated_by_id"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
