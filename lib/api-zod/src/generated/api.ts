@@ -479,6 +479,167 @@ export const GetVehicleHistoryResponse = zod.array(
 );
 
 /**
+ * @summary VIN-derived component specs (tires, wipers, suspension) for the Vehicle Workbench
+ */
+export const GetVehicleComponentSpecsParams = zod.object({
+  vehicleId: zod.coerce.number(),
+});
+
+export const GetVehicleComponentSpecsQueryParams = zod.object({
+  jobId: zod.coerce
+    .number()
+    .describe(
+      "Active job that authorizes Workbench access (assigned mechanic only).",
+    ),
+});
+
+export const GetVehicleComponentSpecsResponse = zod.object({
+  source: zod.enum(["vin-database", "model-default", "generic"]),
+  tires: zod.object({
+    front: zod.string(),
+    rear: zod.string(),
+    recommended: zod.string(),
+    notes: zod.string().optional(),
+  }),
+  wipers: zod.object({
+    driver: zod.string(),
+    passenger: zod.string(),
+    rear: zod.string().optional(),
+    partNumbers: zod.array(zod.string()).optional(),
+  }),
+  suspension: zod.object({
+    cvAxle: zod.string().optional(),
+    tieRod: zod.string().optional(),
+    controlArm: zod.string().optional(),
+    knownFailures: zod.array(zod.string()).optional(),
+  }),
+  notes: zod.string().optional(),
+});
+
+/**
+ * @summary VIN-compatible parts catalog with supplier deep-links
+ */
+export const GetVehiclePartsCatalogParams = zod.object({
+  vehicleId: zod.coerce.number(),
+});
+
+export const GetVehiclePartsCatalogQueryParams = zod.object({
+  jobId: zod.coerce
+    .number()
+    .describe(
+      "Active job that authorizes Workbench access (assigned mechanic only).",
+    ),
+  category: zod
+    .enum([
+      "all",
+      "engine",
+      "brakes",
+      "suspension",
+      "filters",
+      "fluids",
+      "electrical",
+      "wipers",
+      "tires",
+    ])
+    .optional(),
+});
+
+export const GetVehiclePartsCatalogResponse = zod.object({
+  vehicle: zod.object({
+    id: zod.number(),
+    vin: zod.string(),
+    make: zod.string(),
+    model: zod.string(),
+    year: zod.number(),
+  }),
+  category: zod.enum([
+    "all",
+    "engine",
+    "brakes",
+    "suspension",
+    "filters",
+    "fluids",
+    "electrical",
+    "wipers",
+    "tires",
+  ]),
+  parts: zod.array(
+    zod.object({
+      id: zod.string(),
+      category: zod.enum([
+        "engine",
+        "brakes",
+        "suspension",
+        "filters",
+        "fluids",
+        "electrical",
+        "wipers",
+        "tires",
+      ]),
+      name: zod.string(),
+      partNumber: zod.string(),
+      brand: zod.string(),
+      oemEquivalent: zod.boolean(),
+      estimatedPriceUsd: zod.number(),
+      availability: zod.enum([
+        "in-stock",
+        "ships-1-2-days",
+        "ships-3-5-days",
+        "special-order",
+      ]),
+      etaDays: zod.number(),
+      supplierLinks: zod.array(
+        zod.object({
+          supplier: zod.enum(["RockAuto", "AutoZone", "NAPA", "AdvanceAuto"]),
+          url: zod.string(),
+        }),
+      ),
+      notes: zod.string().optional(),
+    }),
+  ),
+});
+
+/**
+ * @summary Service recommendations from mileage rules + history + known failure points
+ */
+export const GetVehicleRecommendationsParams = zod.object({
+  vehicleId: zod.coerce.number(),
+});
+
+export const GetVehicleRecommendationsQueryParams = zod.object({
+  jobId: zod.coerce
+    .number()
+    .describe(
+      "Active job that authorizes Workbench access (assigned mechanic only).",
+    ),
+});
+
+export const getVehicleRecommendationsResponseEstimatedCostRangeUsdMin = 2;
+export const getVehicleRecommendationsResponseEstimatedCostRangeUsdMax = 2;
+
+export const GetVehicleRecommendationsResponseItem = zod.object({
+  id: zod.string(),
+  title: zod.string(),
+  detail: zod.string(),
+  severity: zod.enum(["info", "due-soon", "overdue", "safety"]),
+  source: zod.enum([
+    "mileage-interval",
+    "history-pattern",
+    "known-failure",
+    "recurring-tag",
+  ]),
+  suggestedAction: zod.string(),
+  estimatedCostRangeUsd: zod
+    .array(zod.number())
+    .min(getVehicleRecommendationsResponseEstimatedCostRangeUsdMin)
+    .max(getVehicleRecommendationsResponseEstimatedCostRangeUsdMax)
+    .optional(),
+});
+export const GetVehicleRecommendationsResponse = zod.array(
+  GetVehicleRecommendationsResponseItem,
+);
+
+/**
  * @summary Initiate vehicle ownership transfer
  */
 export const TransferVehicleParams = zod.object({

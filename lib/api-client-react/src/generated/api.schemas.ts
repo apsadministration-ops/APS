@@ -856,6 +856,160 @@ export interface CreateInspectionBody {
   transportArrivalMileage?: number;
 }
 
+export type ComponentSpecsSource =
+  (typeof ComponentSpecsSource)[keyof typeof ComponentSpecsSource];
+
+export const ComponentSpecsSource = {
+  "vin-database": "vin-database",
+  "model-default": "model-default",
+  generic: "generic",
+} as const;
+
+export type ComponentSpecsTires = {
+  front: string;
+  rear: string;
+  recommended: string;
+  notes?: string;
+};
+
+export type ComponentSpecsWipers = {
+  driver: string;
+  passenger: string;
+  rear?: string;
+  partNumbers?: string[];
+};
+
+export type ComponentSpecsSuspension = {
+  cvAxle?: string;
+  tieRod?: string;
+  controlArm?: string;
+  knownFailures?: string[];
+};
+
+export interface ComponentSpecs {
+  source: ComponentSpecsSource;
+  tires: ComponentSpecsTires;
+  wipers: ComponentSpecsWipers;
+  suspension: ComponentSpecsSuspension;
+  notes?: string;
+}
+
+export type CatalogPartCategory =
+  (typeof CatalogPartCategory)[keyof typeof CatalogPartCategory];
+
+export const CatalogPartCategory = {
+  engine: "engine",
+  brakes: "brakes",
+  suspension: "suspension",
+  filters: "filters",
+  fluids: "fluids",
+  electrical: "electrical",
+  wipers: "wipers",
+  tires: "tires",
+} as const;
+
+export type CatalogPartAvailability =
+  (typeof CatalogPartAvailability)[keyof typeof CatalogPartAvailability];
+
+export const CatalogPartAvailability = {
+  "in-stock": "in-stock",
+  "ships-1-2-days": "ships-1-2-days",
+  "ships-3-5-days": "ships-3-5-days",
+  "special-order": "special-order",
+} as const;
+
+export type CatalogPartSupplierLinksItemSupplier =
+  (typeof CatalogPartSupplierLinksItemSupplier)[keyof typeof CatalogPartSupplierLinksItemSupplier];
+
+export const CatalogPartSupplierLinksItemSupplier = {
+  RockAuto: "RockAuto",
+  AutoZone: "AutoZone",
+  NAPA: "NAPA",
+  AdvanceAuto: "AdvanceAuto",
+} as const;
+
+export type CatalogPartSupplierLinksItem = {
+  supplier: CatalogPartSupplierLinksItemSupplier;
+  url: string;
+};
+
+export interface CatalogPart {
+  id: string;
+  category: CatalogPartCategory;
+  name: string;
+  partNumber: string;
+  brand: string;
+  oemEquivalent: boolean;
+  estimatedPriceUsd: number;
+  availability: CatalogPartAvailability;
+  etaDays: number;
+  supplierLinks: CatalogPartSupplierLinksItem[];
+  notes?: string;
+}
+
+export type PartsCatalogResponseVehicle = {
+  id: number;
+  vin: string;
+  make: string;
+  model: string;
+  year: number;
+};
+
+export type PartsCatalogResponseCategory =
+  (typeof PartsCatalogResponseCategory)[keyof typeof PartsCatalogResponseCategory];
+
+export const PartsCatalogResponseCategory = {
+  all: "all",
+  engine: "engine",
+  brakes: "brakes",
+  suspension: "suspension",
+  filters: "filters",
+  fluids: "fluids",
+  electrical: "electrical",
+  wipers: "wipers",
+  tires: "tires",
+} as const;
+
+export interface PartsCatalogResponse {
+  vehicle: PartsCatalogResponseVehicle;
+  category: PartsCatalogResponseCategory;
+  parts: CatalogPart[];
+}
+
+export type ServiceRecommendationSeverity =
+  (typeof ServiceRecommendationSeverity)[keyof typeof ServiceRecommendationSeverity];
+
+export const ServiceRecommendationSeverity = {
+  info: "info",
+  "due-soon": "due-soon",
+  overdue: "overdue",
+  safety: "safety",
+} as const;
+
+export type ServiceRecommendationSource =
+  (typeof ServiceRecommendationSource)[keyof typeof ServiceRecommendationSource];
+
+export const ServiceRecommendationSource = {
+  "mileage-interval": "mileage-interval",
+  "history-pattern": "history-pattern",
+  "known-failure": "known-failure",
+  "recurring-tag": "recurring-tag",
+} as const;
+
+export interface ServiceRecommendation {
+  id: string;
+  title: string;
+  detail: string;
+  severity: ServiceRecommendationSeverity;
+  source: ServiceRecommendationSource;
+  suggestedAction: string;
+  /**
+   * @minItems 2
+   * @maxItems 2
+   */
+  estimatedCostRangeUsd?: number[];
+}
+
 export type ListUsersParams = {
   role?: ListUsersRole;
   status?: ListUsersStatus;
@@ -877,6 +1031,43 @@ export const ListUsersStatus = {
   suspended: "suspended",
   pending: "pending",
 } as const;
+
+export type GetVehicleComponentSpecsParams = {
+  /**
+   * Active job that authorizes Workbench access (assigned mechanic only).
+   */
+  jobId: number;
+};
+
+export type GetVehiclePartsCatalogParams = {
+  /**
+   * Active job that authorizes Workbench access (assigned mechanic only).
+   */
+  jobId: number;
+  category?: GetVehiclePartsCatalogCategory;
+};
+
+export type GetVehiclePartsCatalogCategory =
+  (typeof GetVehiclePartsCatalogCategory)[keyof typeof GetVehiclePartsCatalogCategory];
+
+export const GetVehiclePartsCatalogCategory = {
+  all: "all",
+  engine: "engine",
+  brakes: "brakes",
+  suspension: "suspension",
+  filters: "filters",
+  fluids: "fluids",
+  electrical: "electrical",
+  wipers: "wipers",
+  tires: "tires",
+} as const;
+
+export type GetVehicleRecommendationsParams = {
+  /**
+   * Active job that authorizes Workbench access (assigned mechanic only).
+   */
+  jobId: number;
+};
 
 export type ListJobsParams = {
   status?: ListJobsStatus;

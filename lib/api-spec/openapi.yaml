@@ -353,6 +353,95 @@ paths:
                 items:
                   $ref: "#/components/schemas/WorkLog"
 
+  /vehicles/{vehicleId}/component-specs:
+    get:
+      operationId: getVehicleComponentSpecs
+      tags: [vehicles]
+      summary: VIN-derived component specs (tires, wipers, suspension) for the Vehicle Workbench
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: vehicleId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: jobId
+          in: query
+          required: true
+          description: Active job that authorizes Workbench access (assigned mechanic only).
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Component specs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComponentSpecs"
+
+  /vehicles/{vehicleId}/parts-catalog:
+    get:
+      operationId: getVehiclePartsCatalog
+      tags: [vehicles]
+      summary: VIN-compatible parts catalog with supplier deep-links
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: vehicleId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: jobId
+          in: query
+          required: true
+          description: Active job that authorizes Workbench access (assigned mechanic only).
+          schema:
+            type: integer
+        - name: category
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [all, engine, brakes, suspension, filters, fluids, electrical, wipers, tires]
+      responses:
+        "200":
+          description: Catalog response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartsCatalogResponse"
+
+  /vehicles/{vehicleId}/recommendations:
+    get:
+      operationId: getVehicleRecommendations
+      tags: [vehicles]
+      summary: Service recommendations from mileage rules + history + known failure points
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: vehicleId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: jobId
+          in: query
+          required: true
+          description: Active job that authorizes Workbench access (assigned mechanic only).
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Recommendations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ServiceRecommendation"
+
   /vehicles/{vehicleId}/transfer:
     post:
       operationId: transferVehicle
@@ -2536,3 +2625,110 @@ components:
           type: integer
           minimum: 0
       required: [kind, mileage, mediaUrls]
+
+    ComponentSpecs:
+      type: object
+      properties:
+        source:
+          type: string
+          enum: [vin-database, model-default, generic]
+        tires:
+          type: object
+          properties:
+            front: { type: string }
+            rear: { type: string }
+            recommended: { type: string }
+            notes: { type: string }
+          required: [front, rear, recommended]
+        wipers:
+          type: object
+          properties:
+            driver: { type: string }
+            passenger: { type: string }
+            rear: { type: string }
+            partNumbers:
+              type: array
+              items: { type: string }
+          required: [driver, passenger]
+        suspension:
+          type: object
+          properties:
+            cvAxle: { type: string }
+            tieRod: { type: string }
+            controlArm: { type: string }
+            knownFailures:
+              type: array
+              items: { type: string }
+        notes:
+          type: string
+      required: [source, tires, wipers, suspension]
+
+    CatalogPart:
+      type: object
+      properties:
+        id: { type: string }
+        category:
+          type: string
+          enum: [engine, brakes, suspension, filters, fluids, electrical, wipers, tires]
+        name: { type: string }
+        partNumber: { type: string }
+        brand: { type: string }
+        oemEquivalent: { type: boolean }
+        estimatedPriceUsd: { type: number }
+        availability:
+          type: string
+          enum: [in-stock, ships-1-2-days, ships-3-5-days, special-order]
+        etaDays: { type: integer }
+        supplierLinks:
+          type: array
+          items:
+            type: object
+            properties:
+              supplier:
+                type: string
+                enum: [RockAuto, AutoZone, NAPA, AdvanceAuto]
+              url: { type: string }
+            required: [supplier, url]
+        notes: { type: string }
+      required: [id, category, name, partNumber, brand, oemEquivalent, estimatedPriceUsd, availability, etaDays, supplierLinks]
+
+    PartsCatalogResponse:
+      type: object
+      properties:
+        vehicle:
+          type: object
+          properties:
+            id: { type: integer }
+            vin: { type: string }
+            make: { type: string }
+            model: { type: string }
+            year: { type: integer }
+          required: [id, vin, make, model, year]
+        category:
+          type: string
+          enum: [all, engine, brakes, suspension, filters, fluids, electrical, wipers, tires]
+        parts:
+          type: array
+          items:
+            $ref: "#/components/schemas/CatalogPart"
+      required: [vehicle, category, parts]
+
+    ServiceRecommendation:
+      type: object
+      properties:
+        id: { type: string }
+        title: { type: string }
+        detail: { type: string }
+        severity:
+          type: string
+          enum: [info, due-soon, overdue, safety]
+        source:
+          type: string
+          enum: [mileage-interval, history-pattern, known-failure, recurring-tag]
+        suggestedAction: { type: string }
+        estimatedCostRangeUsd:
+          type: array
+          items: { type: number }
+          minItems: 2
+          maxItems: 2
+      required: [id, title, detail, severity, source, suggestedAction]

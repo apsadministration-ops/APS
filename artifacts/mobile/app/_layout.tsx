@@ -76,6 +76,7 @@ function RootLayoutNav() {
         <Stack.Screen name="transfer/[vehicleId]" options={{ presentation: "modal" }} />
         <Stack.Screen name="history/[vehicleId]" options={{ presentation: "card" }} />
         <Stack.Screen name="worklog/[jobId]" options={{ presentation: "modal" }} />
+        <Stack.Screen name="workbench/[jobId]" options={{ presentation: "card", headerShown: false }} />
         <Stack.Screen name="parts/[vehicleId]" options={{ presentation: "card" }} />
         <Stack.Screen name="tracker/[jobId]" options={{ presentation: "card" }} />
         <Stack.Screen name="obd2/[vehicleId]" options={{ presentation: "card" }} />

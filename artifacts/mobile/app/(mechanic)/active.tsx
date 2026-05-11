@@ -73,6 +73,14 @@ function ActiveJobCard({ job }: { job: Job }) {
         </View>
       </Pressable>
 
+      <Pressable
+        style={[styles.workbenchBtn, { backgroundColor: colors.primary + "14", borderColor: colors.primary + "55" }]}
+        onPress={() => router.push(`/workbench/${job.id}`)}
+      >
+        <Feather name="tool" size={16} color={colors.primary} />
+        <Text style={[styles.workbenchText, { color: colors.primary }]}>Open Vehicle Workbench</Text>
+      </Pressable>
+
       {flow && (
         <Pressable
           style={[styles.nextBtn, { backgroundColor: colors.primary }, updateMutation.isPending && { opacity: 0.6 }]}
@@ -162,6 +170,11 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   nextText: { color: "white", fontWeight: "700", fontSize: 15 },
+  workbenchBtn: {
+    height: 42, borderRadius: 10, borderWidth: 1, alignItems: "center",
+    justifyContent: "center", flexDirection: "row", gap: 8,
+  },
+  workbenchText: { fontWeight: "700", fontSize: 14 },
   emptyState: {
     padding: 40,
     alignItems: "center",

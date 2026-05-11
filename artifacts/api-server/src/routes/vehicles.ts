@@ -2,6 +2,9 @@ import { Router, type IRouter } from "express";
 import { eq, and, isNull, count, inArray } from "drizzle-orm";
 import { db, vehiclesTable, ownershipTable, usersTable, workLogsTable, jobsTable } from "@workspace/db";
 import { authenticate, type AuthRequest } from "../middlewares/authenticate";
+import { lookupComponentSpecs } from "../lib/componentSpecs";
+import { lookupParts, type PartCategory } from "../lib/partsCatalog";
+import { generateRecommendations } from "../lib/recommendationsEngine";
 
 /**
  * Returns true if `userId` may view the given vehicle's data:
@@ -237,6 +240,80 @@ router.get("/vehicles/:vehicleId/history", authenticate, async (req: AuthRequest
     return { ...log, partsUsed: (log.partsUsed as string[]) ?? [], beforeImages: (log.beforeImages as string[]) ?? [], afterImages: (log.afterImages as string[]) ?? [], mechanicName: mechanic?.name ?? "Unknown" };
   }));
   res.json(result);
+});
+
+/**
+ * Workbench endpoints have a stricter access model than general vehicle reads:
+ * the caller MUST be either an admin OR the mechanic currently assigned to a
+ * non-cancelled/non-refused job on this exact vehicle. Owners and past
+ * mechanics cannot use these endpoints — the workbench is a live tool for the
+ * mechanic on the active job only. The required `jobId` query param ties the
+ * request to a specific job so a mechanic with a different job on the same
+ * vehicle still cannot access it from a stale context.
+ */
+async function resolveWorkbenchAccess(
+  req: AuthRequest,
+  vehicleId: number,
+): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+  const rawJobId = Array.isArray(req.query.jobId) ? req.query.jobId[0] : req.query.jobId;
+  const jobId = typeof rawJobId === "string" ? parseInt(rawJobId, 10) : NaN;
+  if (!Number.isFinite(jobId)) {
+    return { ok: false, status: 400, error: "jobId query param is required" };
+  }
+  const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, jobId));
+  if (!job || job.vehicleId !== vehicleId) {
+    return { ok: false, status: 404, error: "Job not found for this vehicle" };
+  }
+  if (req.userRole === "admin") return { ok: true };
+  if (req.userRole !== "mechanic" || job.mechanicId !== req.userId) {
+    return { ok: false, status: 403, error: "Workbench is restricted to the assigned mechanic" };
+  }
+  if (!["ACCEPTED", "EN_ROUTE", "IN_PROGRESS", "COMPLETED", "PAID"].includes(job.status)) {
+    return { ok: false, status: 403, error: "Workbench requires an active or completed job" };
+  }
+  return { ok: true };
+}
+
+router.get("/vehicles/:vehicleId/component-specs", authenticate, async (req: AuthRequest, res): Promise<void> => {
+  const rawId = Array.isArray(req.params.vehicleId) ? req.params.vehicleId[0] : req.params.vehicleId;
+  const vehicleId = parseInt(rawId, 10);
+  if (isNaN(vehicleId)) { res.status(400).json({ error: "Invalid vehicle ID" }); return; }
+  const [vehicle] = await db.select().from(vehiclesTable).where(eq(vehiclesTable.id, vehicleId));
+  if (!vehicle) { res.status(404).json({ error: "Vehicle not found" }); return; }
+  const access = await resolveWorkbenchAccess(req, vehicleId);
+  if (!access.ok) { res.status(access.status).json({ error: access.error }); return; }
+  res.json(lookupComponentSpecs({ make: vehicle.make, model: vehicle.model, year: vehicle.year }));
+});
+
+router.get("/vehicles/:vehicleId/parts-catalog", authenticate, async (req: AuthRequest, res): Promise<void> => {
+  const rawId = Array.isArray(req.params.vehicleId) ? req.params.vehicleId[0] : req.params.vehicleId;
+  const vehicleId = parseInt(rawId, 10);
+  if (isNaN(vehicleId)) { res.status(400).json({ error: "Invalid vehicle ID" }); return; }
+  const [vehicle] = await db.select().from(vehiclesTable).where(eq(vehiclesTable.id, vehicleId));
+  if (!vehicle) { res.status(404).json({ error: "Vehicle not found" }); return; }
+  const access = await resolveWorkbenchAccess(req, vehicleId);
+  if (!access.ok) { res.status(access.status).json({ error: access.error }); return; }
+  const rawCat = Array.isArray(req.query.category) ? req.query.category[0] : req.query.category;
+  const validCats: PartCategory[] = ["all", "engine", "brakes", "suspension", "filters", "fluids", "electrical", "wipers", "tires"];
+  const category = (typeof rawCat === "string" && (validCats as string[]).includes(rawCat) ? rawCat : "all") as PartCategory;
+  const parts = lookupParts({ make: vehicle.make, model: vehicle.model, year: vehicle.year }, category);
+  res.json({
+    vehicle: { id: vehicle.id, vin: vehicle.vin, make: vehicle.make, model: vehicle.model, year: vehicle.year },
+    category,
+    parts,
+  });
+});
+
+router.get("/vehicles/:vehicleId/recommendations", authenticate, async (req: AuthRequest, res): Promise<void> => {
+  const rawId = Array.isArray(req.params.vehicleId) ? req.params.vehicleId[0] : req.params.vehicleId;
+  const vehicleId = parseInt(rawId, 10);
+  if (isNaN(vehicleId)) { res.status(400).json({ error: "Invalid vehicle ID" }); return; }
+  const [vehicle] = await db.select().from(vehiclesTable).where(eq(vehiclesTable.id, vehicleId));
+  if (!vehicle) { res.status(404).json({ error: "Vehicle not found" }); return; }
+  const access = await resolveWorkbenchAccess(req, vehicleId);
+  if (!access.ok) { res.status(access.status).json({ error: access.error }); return; }
+  const history = await db.select().from(workLogsTable).where(eq(workLogsTable.vehicleId, vehicleId));
+  res.json(generateRecommendations(vehicle, history));
 });
 
 router.post("/vehicles/:vehicleId/transfer", authenticate, async (req: AuthRequest, res): Promise<void> => {

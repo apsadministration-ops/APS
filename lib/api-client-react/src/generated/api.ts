@@ -26,6 +26,7 @@ import type {
   BayBooking,
   BayWithShop,
   CancelBayBookingBody,
+  ComponentSpecs,
   CreateBayBody,
   CreateBayBookingBody,
   CreateFlagBody,
@@ -38,6 +39,9 @@ import type {
   ErrorResponse,
   Favorite,
   Flag,
+  GetVehicleComponentSpecsParams,
+  GetVehiclePartsCatalogParams,
+  GetVehicleRecommendationsParams,
   HealthStatus,
   Inspection,
   Job,
@@ -50,12 +54,14 @@ import type {
   MechanicProfile,
   MechanicSummary,
   OwnershipRecord,
+  PartsCatalogResponse,
   Payment,
   RateCustomerBody,
   RateJobBody,
   RegisterBody,
   RemoveFavorite200,
   Review,
+  ServiceRecommendation,
   Shop,
   ShopWithBays,
   TransferVehicleBody,
@@ -1149,6 +1155,369 @@ export function useGetVehicleHistory<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetVehicleHistoryQueryOptions(vehicleId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary VIN-derived component specs (tires, wipers, suspension) for the Vehicle Workbench
+ */
+export const getGetVehicleComponentSpecsUrl = (
+  vehicleId: number,
+  params: GetVehicleComponentSpecsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/vehicles/${vehicleId}/component-specs?${stringifiedParams}`
+    : `/api/vehicles/${vehicleId}/component-specs`;
+};
+
+export const getVehicleComponentSpecs = async (
+  vehicleId: number,
+  params: GetVehicleComponentSpecsParams,
+  options?: RequestInit,
+): Promise<ComponentSpecs> => {
+  return customFetch<ComponentSpecs>(
+    getGetVehicleComponentSpecsUrl(vehicleId, params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetVehicleComponentSpecsQueryKey = (
+  vehicleId: number,
+  params?: GetVehicleComponentSpecsParams,
+) => {
+  return [
+    `/api/vehicles/${vehicleId}/component-specs`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getGetVehicleComponentSpecsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getVehicleComponentSpecs>>,
+  TError = ErrorType<unknown>,
+>(
+  vehicleId: number,
+  params: GetVehicleComponentSpecsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getVehicleComponentSpecs>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getGetVehicleComponentSpecsQueryKey(vehicleId, params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getVehicleComponentSpecs>>
+  > = ({ signal }) =>
+    getVehicleComponentSpecs(vehicleId, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!vehicleId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getVehicleComponentSpecs>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetVehicleComponentSpecsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getVehicleComponentSpecs>>
+>;
+export type GetVehicleComponentSpecsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary VIN-derived component specs (tires, wipers, suspension) for the Vehicle Workbench
+ */
+
+export function useGetVehicleComponentSpecs<
+  TData = Awaited<ReturnType<typeof getVehicleComponentSpecs>>,
+  TError = ErrorType<unknown>,
+>(
+  vehicleId: number,
+  params: GetVehicleComponentSpecsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getVehicleComponentSpecs>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetVehicleComponentSpecsQueryOptions(
+    vehicleId,
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary VIN-compatible parts catalog with supplier deep-links
+ */
+export const getGetVehiclePartsCatalogUrl = (
+  vehicleId: number,
+  params: GetVehiclePartsCatalogParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/vehicles/${vehicleId}/parts-catalog?${stringifiedParams}`
+    : `/api/vehicles/${vehicleId}/parts-catalog`;
+};
+
+export const getVehiclePartsCatalog = async (
+  vehicleId: number,
+  params: GetVehiclePartsCatalogParams,
+  options?: RequestInit,
+): Promise<PartsCatalogResponse> => {
+  return customFetch<PartsCatalogResponse>(
+    getGetVehiclePartsCatalogUrl(vehicleId, params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetVehiclePartsCatalogQueryKey = (
+  vehicleId: number,
+  params?: GetVehiclePartsCatalogParams,
+) => {
+  return [
+    `/api/vehicles/${vehicleId}/parts-catalog`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getGetVehiclePartsCatalogQueryOptions = <
+  TData = Awaited<ReturnType<typeof getVehiclePartsCatalog>>,
+  TError = ErrorType<unknown>,
+>(
+  vehicleId: number,
+  params: GetVehiclePartsCatalogParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getVehiclePartsCatalog>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getGetVehiclePartsCatalogQueryKey(vehicleId, params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getVehiclePartsCatalog>>
+  > = ({ signal }) =>
+    getVehiclePartsCatalog(vehicleId, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!vehicleId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getVehiclePartsCatalog>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetVehiclePartsCatalogQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getVehiclePartsCatalog>>
+>;
+export type GetVehiclePartsCatalogQueryError = ErrorType<unknown>;
+
+/**
+ * @summary VIN-compatible parts catalog with supplier deep-links
+ */
+
+export function useGetVehiclePartsCatalog<
+  TData = Awaited<ReturnType<typeof getVehiclePartsCatalog>>,
+  TError = ErrorType<unknown>,
+>(
+  vehicleId: number,
+  params: GetVehiclePartsCatalogParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getVehiclePartsCatalog>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetVehiclePartsCatalogQueryOptions(
+    vehicleId,
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Service recommendations from mileage rules + history + known failure points
+ */
+export const getGetVehicleRecommendationsUrl = (
+  vehicleId: number,
+  params: GetVehicleRecommendationsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/vehicles/${vehicleId}/recommendations?${stringifiedParams}`
+    : `/api/vehicles/${vehicleId}/recommendations`;
+};
+
+export const getVehicleRecommendations = async (
+  vehicleId: number,
+  params: GetVehicleRecommendationsParams,
+  options?: RequestInit,
+): Promise<ServiceRecommendation[]> => {
+  return customFetch<ServiceRecommendation[]>(
+    getGetVehicleRecommendationsUrl(vehicleId, params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetVehicleRecommendationsQueryKey = (
+  vehicleId: number,
+  params?: GetVehicleRecommendationsParams,
+) => {
+  return [
+    `/api/vehicles/${vehicleId}/recommendations`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getGetVehicleRecommendationsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getVehicleRecommendations>>,
+  TError = ErrorType<unknown>,
+>(
+  vehicleId: number,
+  params: GetVehicleRecommendationsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getVehicleRecommendations>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getGetVehicleRecommendationsQueryKey(vehicleId, params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getVehicleRecommendations>>
+  > = ({ signal }) =>
+    getVehicleRecommendations(vehicleId, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!vehicleId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getVehicleRecommendations>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetVehicleRecommendationsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getVehicleRecommendations>>
+>;
+export type GetVehicleRecommendationsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Service recommendations from mileage rules + history + known failure points
+ */
+
+export function useGetVehicleRecommendations<
+  TData = Awaited<ReturnType<typeof getVehicleRecommendations>>,
+  TError = ErrorType<unknown>,
+>(
+  vehicleId: number,
+  params: GetVehicleRecommendationsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getVehicleRecommendations>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetVehicleRecommendationsQueryOptions(
+    vehicleId,
+    params,
+    options,
+  );
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

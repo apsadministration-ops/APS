@@ -410,6 +410,18 @@ export default function JobDetailScreen() {
             </View>
           )}
 
+          {/* Mechanic: Vehicle Workbench primary CTA — only for active assigned jobs */}
+          {isMechanic && job.mechanicId === user?.id && job.vehicleId &&
+            ["ACCEPTED", "EN_ROUTE", "IN_PROGRESS"].includes(job.status) && (
+            <Pressable
+              style={[styles.partsBtn, { backgroundColor: colors.primary + "18", borderColor: colors.primary + "55" }]}
+              onPress={() => router.push(`/workbench/${job.id}`)}
+            >
+              <Feather name="tool" size={18} color={colors.primary} />
+              <Text style={[styles.partsBtnText, { color: colors.primary, fontWeight: "700" }]}>Open Vehicle Workbench</Text>
+            </Pressable>
+          )}
+
           {/* Mechanic tools row */}
           {isMechanic && job.vehicleId && (
             <View style={styles.toolsRow}>
