@@ -6,6 +6,7 @@ import { notifyMechanics, notifyCustomerApprovalPending } from "../lib/notificat
 import { getUncachableStripeClient } from "../lib/stripeClient";
 import { awardCustomerPoints, awardMechanicPoints, RULES } from "../lib/loyaltyEngine";
 import { startCustomerApproval } from "../lib/customerApprovalEngine";
+import { requiresLiftFromDescription } from "../lib/transportKeywords";
 import { customerApprovalsTable } from "@workspace/db";
 
 /**
@@ -138,11 +139,10 @@ router.post("/jobs", authenticate, async (req: AuthRequest, res): Promise<void> 
   if (req.userRole !== "customer" && req.userRole !== "admin") {
     res.status(403).json({ error: "Only customers can create jobs" }); return;
   }
-  const { vehicleId, jobType, description, locationLat, locationLng, locationAddress, estimatedPrice, requestedMechanicId, requiresGhostGarage } = req.body as {
+  const { vehicleId, jobType, description, locationLat, locationLng, locationAddress, estimatedPrice, requestedMechanicId } = req.body as {
     vehicleId: number; jobType: string; description: string;
     locationLat?: number; locationLng?: number; locationAddress?: string; estimatedPrice?: number;
     requestedMechanicId?: number;
-    requiresGhostGarage?: boolean;
   };
   if (!vehicleId || !jobType || !description) {
     res.status(400).json({ error: "vehicleId, jobType, and description are required" }); return;
@@ -159,11 +159,11 @@ router.post("/jobs", authenticate, async (req: AuthRequest, res): Promise<void> 
     validatedReqMech = requestedMechanicId;
   }
 
-  // Ghost Garage flag is opt-in at job creation. When true the customer
-  // hasn't yet approved transport — they'll do that once they pick a bay
-  // (POST /jobs/:id/transport-approval). When false, we keep the default
-  // (true) so non-ghost jobs aren't blocked by the transport gate.
-  const ghostGarage = requiresGhostGarage === true;
+  // Lift requirement is auto-derived from the description (tires, exhaust,
+  // transmission, suspension, etc). The customer no longer toggles this
+  // manually — keyword detection is the single source of truth so the same
+  // job description always classifies the same way regardless of UI version.
+  const ghostGarage = requiresLiftFromDescription(description);
 
   const [job] = await db.insert(jobsTable).values({
     vehicleId, vin: vehicle.vin, customerId: req.userId!,

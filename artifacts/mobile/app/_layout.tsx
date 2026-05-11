@@ -19,6 +19,7 @@ import colors from "@/constants/colors";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import AIAssistantWidget from "@/components/AIAssistantWidget";
+import { MileagePromptHost } from "@/app/transport/[jobId]";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { setBaseUrl } from "@workspace/api-client-react";
@@ -83,6 +84,7 @@ function RootLayoutNav() {
         <Stack.Screen name="workbench/[jobId]" options={{ presentation: "card", headerShown: false }} />
         <Stack.Screen name="parts/[vehicleId]" options={{ presentation: "card" }} />
         <Stack.Screen name="tracker/[jobId]" options={{ presentation: "card" }} />
+        <Stack.Screen name="transport/[jobId]" options={{ presentation: "card" }} />
         <Stack.Screen name="obd2/[vehicleId]" options={{ presentation: "card" }} />
         <Stack.Screen name="messages/[jobId]" options={{ presentation: "card", headerShown: false }} />
         <Stack.Screen name="referral" options={{ presentation: "card", headerShown: false }} />
@@ -131,6 +133,10 @@ export default function RootLayout() {
                     Android (works with edgeToEdgeEnabled in app.json). */}
                 <StatusBar style="auto" translucent />
                 <RootLayoutNav />
+                {/* Android mileage prompt host — see app/transport/[jobId].tsx.
+                    iOS uses Alert.prompt and web uses window.prompt; on Android
+                    the AndroidMileagePrompt singleton calls into this host. */}
+                <MileagePromptHost />
               </AuthProvider>
             </KeyboardProvider>
           </GestureHandlerRootView>

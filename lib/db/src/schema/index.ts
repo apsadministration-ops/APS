@@ -25,3 +25,4 @@ export * from "./customerApprovals";
 export * from "./badges";
 export * from "./userReputation";
 export * from "./mechanicWorkspace";
+export * from "./transportLegs";

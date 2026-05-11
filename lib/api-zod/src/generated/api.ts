@@ -783,10 +783,6 @@ export const CreateJobBody = zod.object({
     .number()
     .optional()
     .describe("If set, only this mechanic sees the job in Available."),
-  requiresGhostGarage: zod
-    .boolean()
-    .optional()
-    .describe("True if the job needs an indoor shop bay (lift, etc)."),
 });
 
 /**
@@ -2562,6 +2558,135 @@ export const ApproveJobTransportResponse = zod.object({
     .describe(
       "Whether the customer has approved their vehicle being transported to a shop bay. Always true for non-ghost-garage jobs.",
     ),
+});
+
+/**
+ * @summary List vehicle transport legs for a job (outbound + return)
+ */
+export const ListTransportLegsParams = zod.object({
+  jobId: zod.coerce.number(),
+});
+
+export const ListTransportLegsResponseItem = zod.object({
+  id: zod.number(),
+  jobId: zod.number(),
+  driverId: zod.number(),
+  direction: zod.enum(["outbound", "return"]),
+  status: zod.enum(["in_progress", "completed", "cancelled"]),
+  startMileage: zod.number(),
+  endMileage: zod.number().nullish(),
+  miles: zod
+    .number()
+    .nullish()
+    .describe("endMileage - startMileage when completed"),
+  startedAt: zod.coerce.date(),
+  completedAt: zod.coerce.date().nullish(),
+  startLat: zod.number().nullish(),
+  startLng: zod.number().nullish(),
+  endLat: zod.number().nullish(),
+  endLng: zod.number().nullish(),
+  lastLat: zod.number().nullish(),
+  lastLng: zod.number().nullish(),
+  lastLocationAt: zod.coerce.date().nullish(),
+  notes: zod.string().nullish(),
+});
+export const ListTransportLegsResponse = zod.array(
+  ListTransportLegsResponseItem,
+);
+
+/**
+ * @summary Mechanic starts a transport leg (must log start mileage)
+ */
+export const StartTransportLegParams = zod.object({
+  jobId: zod.coerce.number(),
+});
+
+export const startTransportLegBodyStartMileageMin = 0;
+
+export const StartTransportLegBody = zod.object({
+  direction: zod.enum(["outbound", "return"]),
+  startMileage: zod.number().min(startTransportLegBodyStartMileageMin),
+  startLat: zod.number().optional(),
+  startLng: zod.number().optional(),
+  notes: zod.string().optional(),
+});
+
+/**
+ * @summary Mechanic completes the leg with end mileage
+ */
+export const FinishTransportLegParams = zod.object({
+  jobId: zod.coerce.number(),
+  legId: zod.coerce.number(),
+});
+
+export const finishTransportLegBodyEndMileageMin = 0;
+
+export const FinishTransportLegBody = zod.object({
+  endMileage: zod.number().min(finishTransportLegBodyEndMileageMin),
+  endLat: zod.number().optional(),
+  endLng: zod.number().optional(),
+  notes: zod.string().optional(),
+});
+
+export const FinishTransportLegResponse = zod.object({
+  id: zod.number(),
+  jobId: zod.number(),
+  driverId: zod.number(),
+  direction: zod.enum(["outbound", "return"]),
+  status: zod.enum(["in_progress", "completed", "cancelled"]),
+  startMileage: zod.number(),
+  endMileage: zod.number().nullish(),
+  miles: zod
+    .number()
+    .nullish()
+    .describe("endMileage - startMileage when completed"),
+  startedAt: zod.coerce.date(),
+  completedAt: zod.coerce.date().nullish(),
+  startLat: zod.number().nullish(),
+  startLng: zod.number().nullish(),
+  endLat: zod.number().nullish(),
+  endLng: zod.number().nullish(),
+  lastLat: zod.number().nullish(),
+  lastLng: zod.number().nullish(),
+  lastLocationAt: zod.coerce.date().nullish(),
+  notes: zod.string().nullish(),
+});
+
+/**
+ * @summary Mechanic GPS heartbeat while driving the customer's vehicle
+ */
+export const UpdateTransportLegLocationParams = zod.object({
+  jobId: zod.coerce.number(),
+  legId: zod.coerce.number(),
+});
+
+export const UpdateTransportLegLocationBody = zod.object({
+  lat: zod.number(),
+  lng: zod.number(),
+});
+
+export const UpdateTransportLegLocationResponse = zod.object({
+  id: zod.number(),
+  jobId: zod.number(),
+  driverId: zod.number(),
+  direction: zod.enum(["outbound", "return"]),
+  status: zod.enum(["in_progress", "completed", "cancelled"]),
+  startMileage: zod.number(),
+  endMileage: zod.number().nullish(),
+  miles: zod
+    .number()
+    .nullish()
+    .describe("endMileage - startMileage when completed"),
+  startedAt: zod.coerce.date(),
+  completedAt: zod.coerce.date().nullish(),
+  startLat: zod.number().nullish(),
+  startLng: zod.number().nullish(),
+  endLat: zod.number().nullish(),
+  endLng: zod.number().nullish(),
+  lastLat: zod.number().nullish(),
+  lastLng: zod.number().nullish(),
+  lastLocationAt: zod.coerce.date().nullish(),
+  notes: zod.string().nullish(),
 });
 
 /**

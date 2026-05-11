@@ -266,8 +266,70 @@ export interface CreateJobBody {
   estimatedPrice?: number;
   /** If set, only this mechanic sees the job in Available. */
   requestedMechanicId?: number;
-  /** True if the job needs an indoor shop bay (lift, etc). */
-  requiresGhostGarage?: boolean;
+}
+
+export type TransportLegDirection =
+  (typeof TransportLegDirection)[keyof typeof TransportLegDirection];
+
+export const TransportLegDirection = {
+  outbound: "outbound",
+  return: "return",
+} as const;
+
+export type TransportLegStatus =
+  (typeof TransportLegStatus)[keyof typeof TransportLegStatus];
+
+export const TransportLegStatus = {
+  in_progress: "in_progress",
+  completed: "completed",
+  cancelled: "cancelled",
+} as const;
+
+export interface TransportLeg {
+  id: number;
+  jobId: number;
+  driverId: number;
+  direction: TransportLegDirection;
+  status: TransportLegStatus;
+  startMileage: number;
+  endMileage?: number | null;
+  /** endMileage - startMileage when completed */
+  miles?: number | null;
+  startedAt: string;
+  completedAt?: string | null;
+  startLat?: number | null;
+  startLng?: number | null;
+  endLat?: number | null;
+  endLng?: number | null;
+  lastLat?: number | null;
+  lastLng?: number | null;
+  lastLocationAt?: string | null;
+  notes?: string | null;
+}
+
+export type StartTransportLegBodyDirection =
+  (typeof StartTransportLegBodyDirection)[keyof typeof StartTransportLegBodyDirection];
+
+export const StartTransportLegBodyDirection = {
+  outbound: "outbound",
+  return: "return",
+} as const;
+
+export interface StartTransportLegBody {
+  direction: StartTransportLegBodyDirection;
+  /** @minimum 0 */
+  startMileage: number;
+  startLat?: number;
+  startLng?: number;
+  notes?: string;
+}
+
+export interface FinishTransportLegBody {
+  /** @minimum 0 */
+  endMileage: number;
+  endLat?: number;
+  endLng?: number;
+  notes?: string;
 }
 
 export type UpdateJobStatusBodyStatus =
@@ -1337,6 +1399,11 @@ export const ListAvailableBaysMinTier = {
 
 export type CancelBayBookingBody = {
   reason?: string;
+};
+
+export type UpdateTransportLegLocationBody = {
+  lat: number;
+  lng: number;
 };
 
 export type ListAdminCertificationsParams = {

@@ -501,14 +501,23 @@ export default function JobDetailScreen() {
             </View>
           )}
 
-          {/* Ghost Garage: transport approved badge */}
+          {/* Ghost Garage: transport approved badge + tracker entry */}
           {job.requiresGhostGarage && job.customerTransportApproved && (
-            <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 10 }]}>
-              <Feather name="check-circle" size={18} color={colors.primary} />
-              <Text style={{ color: colors.foreground, fontSize: 13, fontWeight: "600", flex: 1 }}>
-                Transport approved — vehicle may be driven to a shop bay.
-              </Text>
-            </View>
+            <Pressable
+              style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 10 }]}
+              onPress={() => router.push(`/transport/${job.id}`)}
+            >
+              <Feather name="truck" size={18} color={colors.primary} />
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: colors.foreground, fontSize: 13, fontWeight: "700" }}>
+                  Vehicle Transport
+                </Text>
+                <Text style={{ color: colors.mutedForeground, fontSize: 12, marginTop: 2 }}>
+                  Track both legs · live GPS + mileage logs
+                </Text>
+              </View>
+              <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+            </Pressable>
           )}
 
           {/* Inspections viewer */}

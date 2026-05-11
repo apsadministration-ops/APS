@@ -132,20 +132,8 @@ export default function CustomerDashboard() {
               <Feather name="users" size={18} color="white" />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.quickActionLabel, { color: colors.foreground }]}>Browse Mechanics</Text>
-              <Text style={[styles.quickActionSub, { color: colors.mutedForeground }]}>Reviews · favorites</Text>
-            </View>
-          </Pressable>
-          <Pressable
-            style={[styles.quickAction, { backgroundColor: "#22C55E12", borderColor: "#22C55E40" }]}
-            onPress={() => router.push("/mechanics?select=1")}
-          >
-            <View style={[styles.quickActionIcon, { backgroundColor: "#22C55E" }]}>
-              <Feather name="user-check" size={18} color="white" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.quickActionLabel, { color: colors.foreground }]}>Pick a Mechanic</Text>
-              <Text style={[styles.quickActionSub, { color: colors.mutedForeground }]}>Then request</Text>
+              <Text style={[styles.quickActionLabel, { color: colors.foreground }]}>Find a Mechanic</Text>
+              <Text style={[styles.quickActionSub, { color: colors.mutedForeground }]}>Browse · favorite · request</Text>
             </View>
           </Pressable>
         </View>

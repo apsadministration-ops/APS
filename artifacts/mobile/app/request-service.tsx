@@ -1,15 +1,27 @@
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, ScrollView, TextInput, Platform } from "react-native";
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, TextInput, Platform } from "react-native";
 import { alertMessage } from "@/utils/confirm";
 import { useColors } from "@/hooks/useColors";
 import { useListVehicles, useCreateJob } from "@workspace/api-client-react";
 import { useRouter, Stack, useLocalSearchParams } from "expo-router";
 import { Feather } from "@expo/vector-icons";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import * as Location from "expo-location";
-import * as Haptics from "expo-haptics";
+import { success as hapticSuccess } from "@/utils/haptics";
 
 const JOB_TYPES = ["repair", "diagnostic", "maintenance", "detailing"] as const;
+
+// Mirrors artifacts/api-server/src/lib/transportKeywords.ts so the customer
+// sees the same lift-detection result the server will compute. The server
+// remains the source of truth — this is just an inline UX hint.
+function detectLiftReason(description: string): string | null {
+  const text = description.toLowerCase();
+  if (/\btire/.test(text) || /\bwheel\s+(mount|balance)/.test(text)) return "New tires / wheel work";
+  if (/\bexhaust|muffler|catalytic|cat[-\s]?back/.test(text)) return "Exhaust work";
+  if (/\btransmission|clutch|differential|driveshaft/.test(text)) return "Transmission / drivetrain";
+  if (/\bsuspension|strut|shock|control\s+arm|ball\s+joint|tie\s+rod|sway\s+bar|coilover|alignment/.test(text)) return "Suspension / alignment";
+  return null;
+}
 
 export default function RequestServiceScreen() {
   const colors = useColors();
@@ -29,8 +41,9 @@ export default function RequestServiceScreen() {
   const [zipCode, setZipCode] = useState("");
   const [locating, setLocating] = useState(false);
   const [lookingUpZip, setLookingUpZip] = useState(false);
-  const [requiresGhostGarage, setRequiresGhostGarage] = useState(false);
   const [error, setError] = useState("");
+
+  const liftReason = useMemo(() => detectLiftReason(description), [description]);
 
   const fetchWithTimeout = async (url: string, ms = 8000): Promise<Response | null> => {
     const ctrl = new AbortController();
@@ -45,8 +58,6 @@ export default function RequestServiceScreen() {
   };
 
   const getCurrentCoords = async (): Promise<{ lat: number; lng: number } | null> => {
-    // On web, expo-location's reverse-geocode is unsupported and the permission
-    // dialog can be blocked inside iframes. Use navigator.geolocation directly.
     if (Platform.OS === "web") {
       if (typeof navigator === "undefined" || !navigator.geolocation) return null;
       return await new Promise((resolve) => {
@@ -132,14 +143,8 @@ export default function RequestServiceScreen() {
 
   const handleSubmit = () => {
     setError("");
-    if (!selectedVehicleId) {
-      setError("Please select a vehicle.");
-      return;
-    }
-    if (!description.trim()) {
-      setError("Please describe the issue.");
-      return;
-    }
+    if (!selectedVehicleId) { setError("Please select a vehicle."); return; }
+    if (!description.trim()) { setError("Please describe the issue."); return; }
     if (!locationAddress.trim() && !zipCode.trim() && locationLat == null) {
       setError("Please share your location: tap the arrow, enter your ZIP code, or type an address.");
       return;
@@ -155,12 +160,11 @@ export default function RequestServiceScreen() {
           locationLat: locationLat ?? undefined,
           locationLng: locationLng ?? undefined,
           requestedMechanicId: requestedMechanicId ?? undefined,
-          requiresGhostGarage: requiresGhostGarage || undefined,
         },
       },
       {
         onSuccess: (job) => {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          hapticSuccess();
           router.replace(`/job/${job.id}`);
         },
         onError: (e: any) => {
@@ -263,6 +267,15 @@ export default function RequestServiceScreen() {
             textAlignVertical="top"
           />
 
+          {liftReason ? (
+            <View style={[styles.liftHit, { backgroundColor: "#F9731612", borderColor: "#F97316" }]}>
+              <Feather name="zap" size={16} color="#F97316" />
+              <Text style={[styles.liftHitText, { color: colors.foreground }]}>
+                <Text style={{ fontWeight: "800" }}>{liftReason}</Text> looks like a shop-bay job — we'll route it to one of our approved shops automatically.
+              </Text>
+            </View>
+          ) : null}
+
           <Text style={[styles.sectionLabel, { color: colors.mutedForeground, marginTop: 20 }]}>LOCATION</Text>
           <View style={styles.locationRow}>
             <TextInput
@@ -316,28 +329,36 @@ export default function RequestServiceScreen() {
             </View>
           ) : null}
 
-          <Pressable
-            onPress={() => setRequiresGhostGarage((v) => !v)}
-            style={[styles.ghostToggle, {
-              backgroundColor: requiresGhostGarage ? colors.primary + "18" : colors.card,
-              borderColor: requiresGhostGarage ? colors.primary : colors.border,
-            }]}
-          >
-            <Feather
-              name={requiresGhostGarage ? "check-square" : "square"}
-              size={20}
-              color={requiresGhostGarage ? colors.primary : colors.mutedForeground}
-            />
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.ghostToggleTitle, { color: colors.foreground }]}>
-                Needs an indoor shop bay (Ghost Garage)
-              </Text>
-              <Text style={[styles.ghostToggleSub, { color: colors.mutedForeground }]}>
-                For lifts, alignments, AC work, and other shop-only repairs. Mechanic will book a bay
-                and you'll be asked to approve the vehicle being driven there.
-              </Text>
+          {/* Static reassurance card — replaces the old "Needs an indoor shop bay" toggle. */}
+          <View style={[styles.shopCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.shopCardHeader}>
+              <View style={[styles.shopCardIcon, { backgroundColor: colors.primary + "1F" }]}>
+                <Feather name="shield" size={18} color={colors.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.shopCardTitle, { color: colors.foreground }]}>
+                  Some jobs need a lift
+                </Text>
+                <Text style={[styles.shopCardSub, { color: colors.mutedForeground }]}>
+                  New tires, exhaust, transmission, and suspension work are performed at one of our approved shops.
+                </Text>
+              </View>
             </View>
-          </Pressable>
+            <View style={styles.shopCardBullets}>
+              <View style={styles.bulletRow}>
+                <Feather name="check-circle" size={14} color="#22C55E" />
+                <Text style={[styles.bulletText, { color: colors.foreground }]}>Fully licensed and insured mechanics</Text>
+              </View>
+              <View style={styles.bulletRow}>
+                <Feather name="check-circle" size={14} color="#22C55E" />
+                <Text style={[styles.bulletText, { color: colors.foreground }]}>Your vehicle is treated with respect, end to end</Text>
+              </View>
+              <View style={styles.bulletRow}>
+                <Feather name="check-circle" size={14} color="#22C55E" />
+                <Text style={[styles.bulletText, { color: colors.foreground }]}>Live GPS tracking from pickup → shop → return, with mileage logged on every leg</Text>
+              </View>
+            </View>
+          </View>
 
           {error ? <Text style={[styles.error, { color: colors.destructive }]}>{error}</Text> : null}
 
@@ -361,90 +382,49 @@ const styles = StyleSheet.create({
   sectionLabel: { fontSize: 11, fontWeight: "700", letterSpacing: 1, marginBottom: 8 },
   vehicleList: { gap: 8 },
   vehicleOption: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    padding: 14,
-    borderRadius: 12,
-    borderWidth: 2,
+    flexDirection: "row", alignItems: "center", gap: 12,
+    padding: 14, borderRadius: 12, borderWidth: 2,
   },
   vehicleInfo: { flex: 1 },
   vehicleName: { fontSize: 15, fontWeight: "600" },
   vehicleVin: { fontSize: 12, fontFamily: "monospace" },
   emptyVehicles: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
+    flexDirection: "row", alignItems: "center", gap: 12,
+    padding: 16, borderRadius: 12, borderWidth: 1,
   },
   emptyVehiclesText: { fontSize: 14, flex: 1 },
   typeGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  typeOption: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: 1.5,
-  },
+  typeOption: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10, borderWidth: 1.5 },
   typeText: { fontSize: 14, fontWeight: "600" },
-  textarea: {
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 14,
-    fontSize: 15,
-    minHeight: 120,
+  textarea: { borderWidth: 1, borderRadius: 12, padding: 14, fontSize: 15, minHeight: 120 },
+  liftHit: {
+    flexDirection: "row", alignItems: "flex-start", gap: 10,
+    padding: 12, borderRadius: 12, borderWidth: 1.5, marginTop: 10,
   },
+  liftHitText: { flex: 1, fontSize: 13, lineHeight: 18 },
   locationRow: { flexDirection: "row", gap: 8 },
-  input: {
-    height: 48,
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    fontSize: 15,
-  },
-  locateBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 10,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  zipBtn: {
-    height: 48,
-    paddingHorizontal: 16,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  input: { height: 48, borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, fontSize: 15 },
+  locateBtn: { width: 48, height: 48, borderRadius: 10, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  zipBtn: { height: 48, paddingHorizontal: 16, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   zipBtnText: { color: "white", fontWeight: "700", fontSize: 14 },
   helper: { fontSize: 12, marginTop: 6 },
   locBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-    alignSelf: "flex-start",
-    marginTop: 10,
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8,
+    borderWidth: 1, alignSelf: "flex-start", marginTop: 10,
   },
   locBadgeText: { fontSize: 12, fontWeight: "600" },
-  ghostToggle: {
-    flexDirection: "row", alignItems: "flex-start", gap: 12,
-    padding: 14, borderRadius: 12, borderWidth: 1.5, marginTop: 20,
+  shopCard: {
+    marginTop: 24, padding: 14, borderRadius: 14, borderWidth: 1,
   },
-  ghostToggleTitle: { fontSize: 14, fontWeight: "700", marginBottom: 4 },
-  ghostToggleSub: { fontSize: 12, lineHeight: 16 },
+  shopCardHeader: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
+  shopCardIcon: { width: 38, height: 38, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  shopCardTitle: { fontSize: 15, fontWeight: "800", marginBottom: 4 },
+  shopCardSub: { fontSize: 12, lineHeight: 17 },
+  shopCardBullets: { gap: 8, marginTop: 12, paddingLeft: 4 },
+  bulletRow: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
+  bulletText: { flex: 1, fontSize: 13, lineHeight: 18 },
   error: { fontSize: 14, marginTop: 8 },
-  submitBtn: {
-    height: 56,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 24,
-  },
+  submitBtn: { height: 56, borderRadius: 14, alignItems: "center", justifyContent: "center", marginTop: 24 },
   submitText: { color: "white", fontWeight: "700", fontSize: 17 },
 });

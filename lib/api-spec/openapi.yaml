@@ -1431,6 +1431,90 @@ paths:
               schema:
                 $ref: "#/components/schemas/Job"
 
+  /jobs/{jobId}/transport:
+    get:
+      operationId: listTransportLegs
+      tags: [transport]
+      summary: List vehicle transport legs for a job (outbound + return)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: jobId, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Transport legs ordered newest-first
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TransportLeg" }
+
+  /jobs/{jobId}/transport/legs:
+    post:
+      operationId: startTransportLeg
+      tags: [transport]
+      summary: Mechanic starts a transport leg (must log start mileage)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: jobId, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StartTransportLegBody" }
+      responses:
+        "201":
+          description: Leg started
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TransportLeg" }
+
+  /jobs/{jobId}/transport/legs/{legId}/finish:
+    patch:
+      operationId: finishTransportLeg
+      tags: [transport]
+      summary: Mechanic completes the leg with end mileage
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: jobId, in: path, required: true, schema: { type: integer } }
+        - { name: legId, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FinishTransportLegBody" }
+      responses:
+        "200":
+          description: Leg finished
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TransportLeg" }
+
+  /jobs/{jobId}/transport/legs/{legId}/location:
+    patch:
+      operationId: updateTransportLegLocation
+      tags: [transport]
+      summary: Mechanic GPS heartbeat while driving the customer's vehicle
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: jobId, in: path, required: true, schema: { type: integer } }
+        - { name: legId, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                lat: { type: number }
+                lng: { type: number }
+              required: [lat, lng]
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TransportLeg" }
+
   /mechanic/me/progression:
     get:
       operationId: getMyProgression
@@ -1977,10 +2061,49 @@ components:
         requestedMechanicId:
           type: integer
           description: If set, only this mechanic sees the job in Available.
-        requiresGhostGarage:
-          type: boolean
-          description: True if the job needs an indoor shop bay (lift, etc).
       required: [vehicleId, jobType, description]
+
+    TransportLeg:
+      type: object
+      properties:
+        id: { type: integer }
+        jobId: { type: integer }
+        driverId: { type: integer }
+        direction: { type: string, enum: [outbound, return] }
+        status: { type: string, enum: [in_progress, completed, cancelled] }
+        startMileage: { type: integer }
+        endMileage: { type: integer, nullable: true }
+        miles: { type: integer, nullable: true, description: "endMileage - startMileage when completed" }
+        startedAt: { type: string, format: date-time }
+        completedAt: { type: string, format: date-time, nullable: true }
+        startLat: { type: number, nullable: true }
+        startLng: { type: number, nullable: true }
+        endLat: { type: number, nullable: true }
+        endLng: { type: number, nullable: true }
+        lastLat: { type: number, nullable: true }
+        lastLng: { type: number, nullable: true }
+        lastLocationAt: { type: string, format: date-time, nullable: true }
+        notes: { type: string, nullable: true }
+      required: [id, jobId, driverId, direction, status, startMileage, startedAt]
+
+    StartTransportLegBody:
+      type: object
+      properties:
+        direction: { type: string, enum: [outbound, return] }
+        startMileage: { type: integer, minimum: 0 }
+        startLat: { type: number }
+        startLng: { type: number }
+        notes: { type: string }
+      required: [direction, startMileage]
+
+    FinishTransportLegBody:
+      type: object
+      properties:
+        endMileage: { type: integer, minimum: 0 }
+        endLat: { type: number }
+        endLng: { type: number }
+        notes: { type: string }
+      required: [endMileage]
 
     UpdateJobStatusBody:
       type: object

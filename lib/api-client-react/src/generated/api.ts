@@ -40,6 +40,7 @@ import type {
   CustomerDashboard,
   ErrorResponse,
   Favorite,
+  FinishTransportLegBody,
   Flag,
   GetVehicleComponentSpecsParams,
   GetVehiclePartsCatalogParams,
@@ -74,11 +75,14 @@ import type {
   ServiceRecommendation,
   Shop,
   ShopWithBays,
+  StartTransportLegBody,
   TierPromotion,
   TransferVehicleBody,
+  TransportLeg,
   UpdateBayBody,
   UpdateJobStatusBody,
   UpdateShopBody,
+  UpdateTransportLegLocationBody,
   UpdateUserBody,
   User,
   VehicleWithOwnership,
@@ -5370,6 +5374,384 @@ export const useApproveJobTransport = <
   TContext
 > => {
   return useMutation(getApproveJobTransportMutationOptions(options));
+};
+
+/**
+ * @summary List vehicle transport legs for a job (outbound + return)
+ */
+export const getListTransportLegsUrl = (jobId: number) => {
+  return `/api/jobs/${jobId}/transport`;
+};
+
+export const listTransportLegs = async (
+  jobId: number,
+  options?: RequestInit,
+): Promise<TransportLeg[]> => {
+  return customFetch<TransportLeg[]>(getListTransportLegsUrl(jobId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListTransportLegsQueryKey = (jobId: number) => {
+  return [`/api/jobs/${jobId}/transport`] as const;
+};
+
+export const getListTransportLegsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listTransportLegs>>,
+  TError = ErrorType<unknown>,
+>(
+  jobId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listTransportLegs>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListTransportLegsQueryKey(jobId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listTransportLegs>>
+  > = ({ signal }) => listTransportLegs(jobId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!jobId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listTransportLegs>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListTransportLegsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listTransportLegs>>
+>;
+export type ListTransportLegsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List vehicle transport legs for a job (outbound + return)
+ */
+
+export function useListTransportLegs<
+  TData = Awaited<ReturnType<typeof listTransportLegs>>,
+  TError = ErrorType<unknown>,
+>(
+  jobId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listTransportLegs>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListTransportLegsQueryOptions(jobId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Mechanic starts a transport leg (must log start mileage)
+ */
+export const getStartTransportLegUrl = (jobId: number) => {
+  return `/api/jobs/${jobId}/transport/legs`;
+};
+
+export const startTransportLeg = async (
+  jobId: number,
+  startTransportLegBody: StartTransportLegBody,
+  options?: RequestInit,
+): Promise<TransportLeg> => {
+  return customFetch<TransportLeg>(getStartTransportLegUrl(jobId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(startTransportLegBody),
+  });
+};
+
+export const getStartTransportLegMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof startTransportLeg>>,
+    TError,
+    { jobId: number; data: BodyType<StartTransportLegBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof startTransportLeg>>,
+  TError,
+  { jobId: number; data: BodyType<StartTransportLegBody> },
+  TContext
+> => {
+  const mutationKey = ["startTransportLeg"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof startTransportLeg>>,
+    { jobId: number; data: BodyType<StartTransportLegBody> }
+  > = (props) => {
+    const { jobId, data } = props ?? {};
+
+    return startTransportLeg(jobId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type StartTransportLegMutationResult = NonNullable<
+  Awaited<ReturnType<typeof startTransportLeg>>
+>;
+export type StartTransportLegMutationBody = BodyType<StartTransportLegBody>;
+export type StartTransportLegMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Mechanic starts a transport leg (must log start mileage)
+ */
+export const useStartTransportLeg = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof startTransportLeg>>,
+    TError,
+    { jobId: number; data: BodyType<StartTransportLegBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof startTransportLeg>>,
+  TError,
+  { jobId: number; data: BodyType<StartTransportLegBody> },
+  TContext
+> => {
+  return useMutation(getStartTransportLegMutationOptions(options));
+};
+
+/**
+ * @summary Mechanic completes the leg with end mileage
+ */
+export const getFinishTransportLegUrl = (jobId: number, legId: number) => {
+  return `/api/jobs/${jobId}/transport/legs/${legId}/finish`;
+};
+
+export const finishTransportLeg = async (
+  jobId: number,
+  legId: number,
+  finishTransportLegBody: FinishTransportLegBody,
+  options?: RequestInit,
+): Promise<TransportLeg> => {
+  return customFetch<TransportLeg>(getFinishTransportLegUrl(jobId, legId), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(finishTransportLegBody),
+  });
+};
+
+export const getFinishTransportLegMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof finishTransportLeg>>,
+    TError,
+    { jobId: number; legId: number; data: BodyType<FinishTransportLegBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof finishTransportLeg>>,
+  TError,
+  { jobId: number; legId: number; data: BodyType<FinishTransportLegBody> },
+  TContext
+> => {
+  const mutationKey = ["finishTransportLeg"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof finishTransportLeg>>,
+    { jobId: number; legId: number; data: BodyType<FinishTransportLegBody> }
+  > = (props) => {
+    const { jobId, legId, data } = props ?? {};
+
+    return finishTransportLeg(jobId, legId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type FinishTransportLegMutationResult = NonNullable<
+  Awaited<ReturnType<typeof finishTransportLeg>>
+>;
+export type FinishTransportLegMutationBody = BodyType<FinishTransportLegBody>;
+export type FinishTransportLegMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Mechanic completes the leg with end mileage
+ */
+export const useFinishTransportLeg = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof finishTransportLeg>>,
+    TError,
+    { jobId: number; legId: number; data: BodyType<FinishTransportLegBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof finishTransportLeg>>,
+  TError,
+  { jobId: number; legId: number; data: BodyType<FinishTransportLegBody> },
+  TContext
+> => {
+  return useMutation(getFinishTransportLegMutationOptions(options));
+};
+
+/**
+ * @summary Mechanic GPS heartbeat while driving the customer's vehicle
+ */
+export const getUpdateTransportLegLocationUrl = (
+  jobId: number,
+  legId: number,
+) => {
+  return `/api/jobs/${jobId}/transport/legs/${legId}/location`;
+};
+
+export const updateTransportLegLocation = async (
+  jobId: number,
+  legId: number,
+  updateTransportLegLocationBody: UpdateTransportLegLocationBody,
+  options?: RequestInit,
+): Promise<TransportLeg> => {
+  return customFetch<TransportLeg>(
+    getUpdateTransportLegLocationUrl(jobId, legId),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(updateTransportLegLocationBody),
+    },
+  );
+};
+
+export const getUpdateTransportLegLocationMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateTransportLegLocation>>,
+    TError,
+    {
+      jobId: number;
+      legId: number;
+      data: BodyType<UpdateTransportLegLocationBody>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateTransportLegLocation>>,
+  TError,
+  {
+    jobId: number;
+    legId: number;
+    data: BodyType<UpdateTransportLegLocationBody>;
+  },
+  TContext
+> => {
+  const mutationKey = ["updateTransportLegLocation"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateTransportLegLocation>>,
+    {
+      jobId: number;
+      legId: number;
+      data: BodyType<UpdateTransportLegLocationBody>;
+    }
+  > = (props) => {
+    const { jobId, legId, data } = props ?? {};
+
+    return updateTransportLegLocation(jobId, legId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateTransportLegLocationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateTransportLegLocation>>
+>;
+export type UpdateTransportLegLocationMutationBody =
+  BodyType<UpdateTransportLegLocationBody>;
+export type UpdateTransportLegLocationMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Mechanic GPS heartbeat while driving the customer's vehicle
+ */
+export const useUpdateTransportLegLocation = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateTransportLegLocation>>,
+    TError,
+    {
+      jobId: number;
+      legId: number;
+      data: BodyType<UpdateTransportLegLocationBody>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateTransportLegLocation>>,
+  TError,
+  {
+    jobId: number;
+    legId: number;
+    data: BodyType<UpdateTransportLegLocationBody>;
+  },
+  TContext
+> => {
+  return useMutation(getUpdateTransportLegLocationMutationOptions(options));
 };
 
 /**
