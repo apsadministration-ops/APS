@@ -16,7 +16,7 @@ export const jobsTable = pgTable("jobs", {
   locationLng: real("location_lng"),
   locationAddress: text("location_address"),
   status: text("status", {
-    enum: ["REQUESTED", "OFFERED", "ACCEPTED", "EN_ROUTE", "IN_PROGRESS", "COMPLETED", "PAID", "CANCELLED"],
+    enum: ["REQUESTED", "OFFERED", "PENDING_APPROVAL", "ACCEPTED", "EN_ROUTE", "IN_PROGRESS", "COMPLETED", "PAID", "CANCELLED", "REFUSED", "NO_SHOW"],
   }).notNull().default("REQUESTED"),
   mechanicLat: real("mechanic_lat"),
   mechanicLng: real("mechanic_lng"),

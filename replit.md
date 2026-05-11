@@ -36,6 +36,19 @@ artifacts/mobile/data/obd2Codes.ts — comprehensive OBD2 code database
 artifacts/mobile/constants/colors.ts    — design tokens
 artifacts/mobile/components/AIAssistantWidget.tsx — draggable floating AI chat widget
 artifacts/mobile/app/loyalty.tsx   — unified loyalty screen (branches by role)
+artifacts/mobile/app/job/[id]/approve.tsx — 60s customer-approval screen
+artifacts/mobile/app/review/[jobId].tsx   — categorized review submit screen
+artifacts/api-server/src/routes/reviews.ts            — reviews API (submit, list, edit, moderate, /reputation, /badges/catalog)
+artifacts/api-server/src/routes/customerApprovals.ts  — /approvals/* endpoints
+artifacts/api-server/src/lib/reviewCategories.ts      — 8 categories per direction
+artifacts/api-server/src/lib/reviewVisibility.ts      — 72h lock + reciprocation publish
+artifacts/api-server/src/lib/reputationEngine.ts      — full per-user reputation recompute + trust score
+artifacts/api-server/src/lib/badgeEngine.ts           — code-defined badge auto-award/revoke
+artifacts/api-server/src/lib/customerApprovalEngine.ts — 60s approve/decline/auto-approve state machine
+lib/db/src/schema/reviews.ts          — reviews + review_audit_logs tables
+lib/db/src/schema/customerApprovals.ts — customer_approvals table (unique per job)
+lib/db/src/schema/badges.ts           — user_badges (partial unique on active rows)
+lib/db/src/schema/userReputation.ts   — cached reputation aggregates per user
 artifacts/api-server/src/lib/loyaltyEngine.ts — dual-ledger points engine (single source of truth)
 artifacts/api-server/src/lib/referralEngine.ts — standalone referral system (isolated from loyalty)
 lib/db/src/schema/loyaltyV2.ts     — customer/mechanic ledger + redemption tables
@@ -62,7 +75,10 @@ lib/integrations-anthropic-ai/    — Replit AI Integrations Anthropic client
 - **Standalone referral system:** Isolated user-acquisition engine in `referralEngine.ts`. Writes ONLY `source_type="referral"` rows to the customer ledger via `awardCustomerPoints` — does not compute spending/review/survey/mechanic/tier points. Codes use `APS-XXXXXX` format. Conversion gates: referred user's FIRST captured payment + no refund. Atomic via `SELECT … FOR UPDATE` row lock; `pointsAwarded` is only stamped after the loyalty ledger insert succeeds (UI shows `pending` → `converted` → `rewarded`). `unique(referred_id)` enforces one referral per referred user. Refund path calls `revertReferralForJob` to un-convert + reverse points. Self-referral and same-address abuse heuristics block at signup.
 - **User home address & Mechanic service radius:** Captured at registration and verified via Nominatim for location-based services.
 - **AI Assistant:** Floating widget with ephemeral chat history, providing context-aware assistance via Anthropic.
-- **Bidirectional reviews:** Customers and mechanics rate each other, with aggregate ratings and review lists.
+- **Bidirectional reviews (Trust System v2):** 8 categories per direction, 1-5 star scale, optional text + photos. Visibility lock: every review is `hidden` until either the counterpart submits OR `submittedAt + 72h` passes — eliminates retaliation reviews. Edits create append-only `review_audit_logs` entries with full before/after snapshots. Admin moderate-remove logs the actor + reason and triggers reputation+badge recompute. Authors always see their own hidden reviews; admins see everything.
+- **Customer mechanic-approval flow:** `/jobs/:id/accept` flips job to `PENDING_APPROVAL` (not `ACCEPTED`) and inserts a 60s `customer_approvals` row. Customer screen `/job/[id]/approve` shows the mechanic's full reputation snapshot + badges with a live countdown. Approve → ACCEPTED. Decline → REQUESTED + mechanic cleared (re-dispatched). Silence past 60s → server sweeper auto-approves. State changes use `FOR UPDATE` row locks inside a transaction so approve/decline/sweep races are impossible.
+- **Reputation engine:** `recomputeUserReputation(userId)` does a full recompute over visible reviews where the user is the subject + behavioural metrics from jobs (completion / cancellation / no-show / repeat-customer rates). Trust score 0..100 with documented weighting: base 50, +up to 30 from rating avg, +10 from completion, +10 from review-volume saturation, −25× cancellation rate, −15× no-show rate. Recomputed after every visibility flip / edit / moderation. Cached in `user_reputation`.
+- **Badge engine:** Definitions in code (`badgeEngine.ts`), not DB — adding a badge ships without migrations. Auto-award/revoke runs after every reputation recompute. `user_badges` partial unique index `(user_id, badge_key) WHERE revoked_at IS NULL` prevents double-active rows; revoking inserts `revoked_at` so award history is preserved.
 - **Stripe payments:** PCI-compliant via Stripe Checkout with manual capture, 10% platform fee, and Connect Express onboarding for mechanics.
 
 ## Product

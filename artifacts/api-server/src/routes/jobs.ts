@@ -5,6 +5,8 @@ import { authenticate, requireActiveMechanic, type AuthRequest } from "../middle
 import { notifyMechanics, notifyCustomerJobAccepted } from "../lib/notifications";
 import { getUncachableStripeClient } from "../lib/stripeClient";
 import { awardCustomerPoints, awardMechanicPoints, RULES } from "../lib/loyaltyEngine";
+import { startCustomerApproval } from "../lib/customerApprovalEngine";
+import { customerApprovalsTable } from "@workspace/db";
 
 /**
  * If the job has an uncaptured Stripe authorization, void it so the
@@ -263,19 +265,56 @@ router.post("/jobs/:jobId/transport-approval", authenticate, async (req: AuthReq
 
 router.post("/jobs/:jobId/accept", authenticate, requireActiveMechanic, async (req: AuthRequest, res): Promise<void> => {
   const jobId = parseInt(String(req.params.jobId), 10);
-  const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, jobId));
-  if (!job) { res.status(404).json({ error: "Job not found" }); return; }
-  if (job.status !== "REQUESTED" && job.status !== "OFFERED") {
-    res.status(400).json({ error: "Job cannot be accepted in its current state" }); return;
-  }
-  const [updated] = await db.update(jobsTable)
-    .set({ status: "ACCEPTED", mechanicId: req.userId!, acceptedAt: new Date() })
-    .where(eq(jobsTable.id, jobId)).returning();
+  // Atomic accept: lock the job row, conditionally update only if it's still
+  // in an acceptable status, and start the approval row in the SAME tx so we
+  // never leave a job in PENDING_APPROVAL without a matching approval row.
+  const result = await db.transaction(async (tx) => {
+    const locked = await tx.execute(
+      sql`SELECT id, status, customer_id FROM jobs WHERE id = ${jobId} FOR UPDATE`,
+    );
+    const job = (locked.rows[0] ?? null) as { id: number; status: string; customer_id: number } | null;
+    if (!job) return { ok: false as const, status: 404, error: "Job not found" };
+    if (job.status !== "REQUESTED" && job.status !== "OFFERED") {
+      return { ok: false as const, status: 409, error: "Job cannot be accepted in its current state" };
+    }
+    const updatedRows = await tx.update(jobsTable)
+      .set({ status: "PENDING_APPROVAL", mechanicId: req.userId!, acceptedAt: new Date() })
+      .where(and(
+        eq(jobsTable.id, jobId),
+        sql`${jobsTable.status} IN ('REQUESTED','OFFERED')`,
+      ))
+      .returning();
+    if (updatedRows.length !== 1) {
+      // Lost the race to another mechanic between the lock and the update —
+      // shouldn't happen under FOR UPDATE but guard defensively anyway.
+      return { ok: false as const, status: 409, error: "Job was just accepted by someone else" };
+    }
+    await tx.insert(customerApprovalsTable).values({
+      jobId,
+      mechanicId: req.userId!,
+      customerId: job.customer_id,
+      status: "pending",
+      expiresAt: new Date(Date.now() + 60 * 1000),
+    }).onConflictDoUpdate({
+      target: customerApprovalsTable.jobId,
+      set: {
+        mechanicId: req.userId!,
+        customerId: job.customer_id,
+        status: "pending",
+        expiresAt: new Date(Date.now() + 60 * 1000),
+        respondedAt: null,
+        declineReason: null,
+      },
+    });
+    return { ok: true as const, updated: updatedRows[0]! };
+  });
+  if (!result.ok) { res.status(result.status).json({ error: result.error }); return; }
+  const updated = result.updated;
 
   // Notify customer their job was accepted (fire-and-forget)
   const [mechanic] = await db.select().from(usersTable).where(eq(usersTable.id, req.userId!));
-  const [customer] = await db.select().from(usersTable).where(eq(usersTable.id, job.customerId));
-  const [vehicle] = await db.select().from(vehiclesTable).where(eq(vehiclesTable.id, job.vehicleId));
+  const [customer] = await db.select().from(usersTable).where(eq(usersTable.id, updated.customerId));
+  const [vehicle] = await db.select().from(vehiclesTable).where(eq(vehiclesTable.id, updated.vehicleId));
   if (customer?.pushToken && mechanic && vehicle) {
     notifyCustomerJobAccepted(
       customer.pushToken,

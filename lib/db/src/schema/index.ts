@@ -20,3 +20,7 @@ export * from "./socialPosts";
 export * from "./mechanicAmplification";
 export * from "./adminGrowthSettings";
 export * from "./passwordResetTokens";
+export * from "./reviews";
+export * from "./customerApprovals";
+export * from "./badges";
+export * from "./userReputation";

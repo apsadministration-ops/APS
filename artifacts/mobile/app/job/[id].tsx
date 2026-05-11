@@ -11,7 +11,7 @@ import { useLocalSearchParams, useRouter, Stack } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useAuth } from "@/context/AuthContext";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import * as Haptics from "expo-haptics";
 import * as WebBrowser from "expo-web-browser";
 import { Platform } from "react-native";
@@ -59,6 +59,16 @@ export default function JobDetailScreen() {
   const [custRating, setCustRating] = useState(0);
   const [custReviewText, setCustReviewText] = useState("");
   const [payLoading, setPayLoading] = useState(false);
+
+  // Trust system: when a customer lands on a job that's still awaiting their
+  // 60s approval of the assigned mechanic, route them straight to the
+  // approval screen. Mechanic and admin keep the regular detail view.
+  useEffect(() => {
+    // Cast: openapi.yaml status enum hasn't been regenerated for PENDING_APPROVAL yet (tracked for Phase 3 codegen sweep).
+    if ((job?.status as string) === "PENDING_APPROVAL" && user?.role === "customer" && job?.customerId === user.id) {
+      router.replace(`/job/${jobId}/approve`);
+    }
+  }, [job?.status, job?.customerId, user?.role, user?.id, jobId, router]);
 
   const handlePay = async () => {
     setPayLoading(true);
