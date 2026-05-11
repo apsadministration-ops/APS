@@ -125,8 +125,14 @@ router.get("/jobs", authenticate, async (req: AuthRequest, res): Promise<void> =
 });
 
 router.get("/jobs/available", authenticate, async (req: AuthRequest, res): Promise<void> => {
-  // Only approved mechanics (and admins) may browse the open bid pool —
-  // pending mechanics shouldn't be able to scrape customer addresses while
+  // Only approved mechanics (and admins) may browse the open bid pool. The
+  // payload includes customer addresses + lat/lng — exposing it to customers
+  // or shop owners would leak every requesting customer's home address to
+  // anyone who signs up.
+  if (req.userRole !== "mechanic" && req.userRole !== "admin") {
+    res.status(403).json({ error: "Forbidden" }); return;
+  }
+  // Pending mechanics shouldn't be able to scrape customer addresses while
   // their account is awaiting review.
   if (req.userRole === "mechanic" && req.user?.status !== "active") {
     res.status(403).json({ error: "Your mechanic account is pending admin approval." }); return;
