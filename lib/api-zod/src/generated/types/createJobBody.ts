@@ -9,7 +9,10 @@ import type { CreateJobBodyJobType } from "./createJobBodyJobType";
 
 export interface CreateJobBody {
   vehicleId: number;
-  jobType: CreateJobBodyJobType;
+  /** Optional when `serviceSlug` is supplied — server derives jobType from the catalog entry. */
+  jobType?: CreateJobBodyJobType;
+  /** Preferred. Slug from /tier-catalog. Server uses this to set `jobType` and `requiredTier`. */
+  serviceSlug?: string;
   description: string;
   locationLat?: number;
   locationLng?: number;

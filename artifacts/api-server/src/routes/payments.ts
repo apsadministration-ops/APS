@@ -6,10 +6,9 @@ import { authenticate, requireRole, requireActiveMechanic, type AuthRequest } fr
 import { awardCustomerPoints } from "../lib/loyaltyEngine";
 import { runProgression } from "../lib/tierProgressionEngine";
 import { getStripePublishableKey, getUncachableStripeClient } from "../lib/stripeClient";
+import { commissionForJob, splitCents, type TierKey, type ServiceCategory } from "@workspace/tier-catalog";
 
 const router: IRouter = Router();
-
-const PLATFORM_FEE_RATE = 0.1; // 10% APS commission
 
 /* -------------------------------------------------------------------------- */
 /* CONFIG                                                                     */
@@ -111,8 +110,16 @@ router.post("/payments/jobs/:jobId/checkout", authenticate, async (req: AuthRequ
   }
 
   const amountCents = Math.round(job.estimatedPrice * 100);
-  const platformFeeCents = Math.round(amountCents * PLATFORM_FEE_RATE);
-  const mechanicPayoutCents = amountCents - platformFeeCents;
+  // Tier-aware commission: detailing → 15/85; same-tier → 20/80; mechanic
+  // working down a level (or more) → 25/75. Single source of truth in
+  // `@workspace/tier-catalog`. Legacy jobs without a `requiredTier` fall back
+  // to detailer (the lowest tier) which gives mechanics the normal split.
+  const commission = commissionForJob({
+    category: job.jobType as ServiceCategory,
+    jobTier: ((job.requiredTier ?? "detailer") as TierKey),
+    mechanicTier: (mechanic.mechanicTier ?? "detailer") as TierKey,
+  });
+  const { platformFeeCents, mechanicPayoutCents } = splitCents(amountCents, commission);
 
   const baseUrl = `https://${(process.env["REPLIT_DOMAINS"] ?? "").split(",")[0] ?? ""}`;
   const session = await stripe.checkout.sessions.create({

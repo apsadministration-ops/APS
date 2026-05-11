@@ -8,8 +8,7 @@ import { useMemo, useState } from "react";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import * as Location from "expo-location";
 import { success as hapticSuccess } from "@/utils/haptics";
-
-const JOB_TYPES = ["repair", "diagnostic", "maintenance", "detailing"] as const;
+import { JOB_CATALOG, TIERS, tierLabel, type ServiceDef, type TierKey } from "@workspace/tier-catalog";
 
 // Mirrors artifacts/api-server/src/lib/transportKeywords.ts so the customer
 // sees the same lift-detection result the server will compute. The server
@@ -33,7 +32,8 @@ export default function RequestServiceScreen() {
   const requestedMechanicName = params.mechanicName ?? null;
 
   const [selectedVehicleId, setSelectedVehicleId] = useState<number | null>(null);
-  const [jobType, setJobType] = useState<string>("repair");
+  const [serviceSlug, setServiceSlug] = useState<string | null>(null);
+  const [serviceQuery, setServiceQuery] = useState("");
   const [description, setDescription] = useState("");
   const [locationAddress, setLocationAddress] = useState("");
   const [locationLat, setLocationLat] = useState<number | null>(null);
@@ -44,6 +44,18 @@ export default function RequestServiceScreen() {
   const [error, setError] = useState("");
 
   const liftReason = useMemo(() => detectLiftReason(description), [description]);
+  const selectedService = useMemo<ServiceDef | null>(
+    () => JOB_CATALOG.find((s) => s.slug === serviceSlug) ?? null,
+    [serviceSlug],
+  );
+  // Group services by tier for the picker. Filtered by free-text query.
+  const grouped = useMemo(() => {
+    const q = serviceQuery.trim().toLowerCase();
+    return TIERS.map((t) => ({
+      tier: t,
+      services: JOB_CATALOG.filter((s) => s.tier === t.key && (q === "" || s.name.toLowerCase().includes(q))),
+    })).filter((g) => g.services.length > 0);
+  }, [serviceQuery]);
 
   const fetchWithTimeout = async (url: string, ms = 8000): Promise<Response | null> => {
     const ctrl = new AbortController();
@@ -144,6 +156,7 @@ export default function RequestServiceScreen() {
   const handleSubmit = () => {
     setError("");
     if (!selectedVehicleId) { setError("Please select a vehicle."); return; }
+    if (!selectedService) { setError("Please pick the service you need."); return; }
     if (!description.trim()) { setError("Please describe the issue."); return; }
     if (!locationAddress.trim() && !zipCode.trim() && locationLat == null) {
       setError("Please share your location: tap the arrow, enter your ZIP code, or type an address.");
@@ -154,7 +167,11 @@ export default function RequestServiceScreen() {
       {
         data: {
           vehicleId: selectedVehicleId,
-          jobType: jobType as "repair" | "diagnostic" | "maintenance" | "detailing",
+          // serviceSlug is the source of truth — the server derives jobType +
+          // requiredTier from the catalog. We still send jobType for older
+          // server builds that haven't shipped the catalog yet.
+          serviceSlug: selectedService.slug,
+          jobType: selectedService.category,
           description,
           locationAddress: finalAddress || undefined,
           locationLat: locationLat ?? undefined,
@@ -237,28 +254,62 @@ export default function RequestServiceScreen() {
             </View>
           )}
 
-          <Text style={[styles.sectionLabel, { color: colors.mutedForeground, marginTop: 20 }]}>SERVICE TYPE</Text>
-          <View style={styles.typeGrid}>
-            {JOB_TYPES.map((t) => (
-              <Pressable
-                key={t}
-                style={[
-                  styles.typeOption,
-                  { backgroundColor: jobType === t ? colors.primary : colors.card, borderColor: jobType === t ? colors.primary : colors.border },
-                ]}
-                onPress={() => setJobType(t)}
-              >
-                <Text style={[styles.typeText, { color: jobType === t ? "white" : colors.foreground }]}>
-                  {t.charAt(0).toUpperCase() + t.slice(1)}
+          <Text style={[styles.sectionLabel, { color: colors.mutedForeground, marginTop: 20 }]}>SERVICE</Text>
+          {selectedService ? (
+            <View style={[styles.selectedSvc, { backgroundColor: colors.primary + "12", borderColor: colors.primary }]}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.selectedSvcName, { color: colors.foreground }]}>{selectedService.name}</Text>
+                <Text style={[styles.selectedSvcMeta, { color: colors.mutedForeground }]}>
+                  {tierLabel(selectedService.tier as TierKey)} · {selectedService.category}
                 </Text>
+              </View>
+              <Pressable onPress={() => setServiceSlug(null)} hitSlop={8} style={[styles.changeBtn, { borderColor: colors.primary }]}>
+                <Text style={[styles.changeBtnText, { color: colors.primary }]}>Change</Text>
               </Pressable>
-            ))}
-          </View>
+            </View>
+          ) : (
+            <>
+              <TextInput
+                style={[styles.input, { backgroundColor: colors.card, color: colors.foreground, borderColor: colors.border }]}
+                placeholder="Search services (e.g. oil change, brakes, detail)…"
+                placeholderTextColor={colors.mutedForeground}
+                value={serviceQuery}
+                onChangeText={setServiceQuery}
+                autoCapitalize="none"
+              />
+              <View style={styles.svcList}>
+                {grouped.map((g) => (
+                  <View key={g.tier.key} style={{ marginTop: 14 }}>
+                    <Text style={[styles.tierHeader, { color: colors.mutedForeground }]}>
+                      Tier {g.tier.level} · {g.tier.label}
+                    </Text>
+                    <View style={{ gap: 6, marginTop: 6 }}>
+                      {g.services.map((s) => (
+                        <Pressable
+                          key={s.slug}
+                          style={[styles.svcRow, { backgroundColor: colors.card, borderColor: colors.border }]}
+                          onPress={() => setServiceSlug(s.slug)}
+                        >
+                          <Text style={[styles.svcName, { color: colors.foreground }]}>{s.name}</Text>
+                          <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+                        </Pressable>
+                      ))}
+                    </View>
+                  </View>
+                ))}
+                {grouped.length === 0 ? (
+                  <Text style={[styles.helper, { color: colors.mutedForeground, marginTop: 12 }]}>
+                    No service matches "{serviceQuery}". Clear the search to browse all.
+                  </Text>
+                ) : null}
+              </View>
+            </>
+          )}
 
           <Text style={[styles.sectionLabel, { color: colors.mutedForeground, marginTop: 20 }]}>DESCRIPTION</Text>
           <TextInput
             style={[styles.textarea, { backgroundColor: colors.card, color: colors.foreground, borderColor: colors.border }]}
-            placeholder="Describe the issue or service needed..."
+            placeholder="Tell the mechanic anything specific they should know…"
             placeholderTextColor={colors.mutedForeground}
             multiline
             numberOfLines={5}
@@ -393,9 +444,23 @@ const styles = StyleSheet.create({
     padding: 16, borderRadius: 12, borderWidth: 1,
   },
   emptyVehiclesText: { fontSize: 14, flex: 1 },
-  typeGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  typeOption: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10, borderWidth: 1.5 },
-  typeText: { fontSize: 14, fontWeight: "600" },
+  selectedSvc: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    padding: 14, borderRadius: 12, borderWidth: 2,
+  },
+  selectedSvcName: { fontSize: 15, fontWeight: "700" },
+  selectedSvcMeta: { fontSize: 12, marginTop: 2 },
+  changeBtn: {
+    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1.5,
+  },
+  changeBtnText: { fontSize: 12, fontWeight: "700" },
+  svcList: {},
+  tierHeader: { fontSize: 11, fontWeight: "700", letterSpacing: 0.6 },
+  svcRow: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    padding: 12, borderRadius: 10, borderWidth: 1,
+  },
+  svcName: { flex: 1, fontSize: 14, fontWeight: "500" },
   textarea: { borderWidth: 1, borderRadius: 12, padding: 14, fontSize: 15, minHeight: 120 },
   liftHit: {
     flexDirection: "row", alignItems: "flex-start", gap: 10,

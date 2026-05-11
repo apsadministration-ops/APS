@@ -211,6 +211,21 @@ export const JobStatus = {
   CANCELLED: "CANCELLED",
 } as const;
 
+/**
+ * Minimum mechanic tier required to accept. Derived server-side from serviceSlug. Null = legacy job (treated as `detailer`).
+ */
+export type JobRequiredTier =
+  | (typeof JobRequiredTier)[keyof typeof JobRequiredTier]
+  | null;
+
+export const JobRequiredTier = {
+  detailer: "detailer",
+  technician: "technician",
+  senior: "senior",
+  advanced: "advanced",
+  master: "master",
+} as const;
+
 export interface Job {
   id: number;
   vehicleId: number;
@@ -244,8 +259,15 @@ export interface Job {
   requiresGhostGarage?: boolean;
   /** Whether the customer has approved their vehicle being transported to a shop bay. Always true for non-ghost-garage jobs. */
   customerTransportApproved?: boolean;
+  /** Catalog slug from /tier-catalog. Null for legacy / free-text jobs. */
+  serviceSlug?: string | null;
+  /** Minimum mechanic tier required to accept. Derived server-side from serviceSlug. Null = legacy job (treated as `detailer`). */
+  requiredTier?: JobRequiredTier;
 }
 
+/**
+ * Optional when `serviceSlug` is supplied — server derives jobType from the catalog entry.
+ */
 export type CreateJobBodyJobType =
   (typeof CreateJobBodyJobType)[keyof typeof CreateJobBodyJobType];
 
@@ -258,7 +280,10 @@ export const CreateJobBodyJobType = {
 
 export interface CreateJobBody {
   vehicleId: number;
-  jobType: CreateJobBodyJobType;
+  /** Optional when `serviceSlug` is supplied — server derives jobType from the catalog entry. */
+  jobType?: CreateJobBodyJobType;
+  /** Preferred. Slug from /tier-catalog. Server uses this to set `jobType` and `requiredTier`. */
+  serviceSlug?: string;
   description: string;
   locationLat?: number;
   locationLng?: number;
@@ -266,6 +291,83 @@ export interface CreateJobBody {
   estimatedPrice?: number;
   /** If set, only this mechanic sees the job in Available. */
   requestedMechanicId?: number;
+}
+
+export type TierCatalogTiersItemKey =
+  (typeof TierCatalogTiersItemKey)[keyof typeof TierCatalogTiersItemKey];
+
+export const TierCatalogTiersItemKey = {
+  detailer: "detailer",
+  technician: "technician",
+  senior: "senior",
+  advanced: "advanced",
+  master: "master",
+} as const;
+
+export type TierCatalogTiersItem = {
+  key: TierCatalogTiersItemKey;
+  /**
+   * @minimum 1
+   * @maximum 5
+   */
+  level: number;
+  label: string;
+  blurb: string;
+};
+
+export type TierCatalogServicesItemTier =
+  (typeof TierCatalogServicesItemTier)[keyof typeof TierCatalogServicesItemTier];
+
+export const TierCatalogServicesItemTier = {
+  detailer: "detailer",
+  technician: "technician",
+  senior: "senior",
+  advanced: "advanced",
+  master: "master",
+} as const;
+
+export type TierCatalogServicesItemCategory =
+  (typeof TierCatalogServicesItemCategory)[keyof typeof TierCatalogServicesItemCategory];
+
+export const TierCatalogServicesItemCategory = {
+  repair: "repair",
+  diagnostic: "diagnostic",
+  maintenance: "maintenance",
+  detailing: "detailing",
+} as const;
+
+export type TierCatalogServicesItem = {
+  slug: string;
+  name: string;
+  tier: TierCatalogServicesItemTier;
+  category: TierCatalogServicesItemCategory;
+};
+
+export type TierCatalogCommissionNormal = {
+  platformPct: number;
+  mechanicPct: number;
+};
+
+export type TierCatalogCommissionWorkingDown = {
+  platformPct: number;
+  mechanicPct: number;
+};
+
+export type TierCatalogCommissionDetailing = {
+  platformPct: number;
+  mechanicPct: number;
+};
+
+export type TierCatalogCommission = {
+  normal: TierCatalogCommissionNormal;
+  workingDown: TierCatalogCommissionWorkingDown;
+  detailing: TierCatalogCommissionDetailing;
+};
+
+export interface TierCatalog {
+  tiers: TierCatalogTiersItem[];
+  services: TierCatalogServicesItem[];
+  commission: TierCatalogCommission;
 }
 
 export type TransportLegDirection =
@@ -1351,6 +1453,23 @@ export const ListJobsStatus = {
   COMPLETED: "COMPLETED",
   PAID: "PAID",
   CANCELLED: "CANCELLED",
+} as const;
+
+export type ListAvailableJobsParams = {
+  /**
+ * `my_tier` (default) — only jobs at the mechanic's exact tier (or null/legacy).
+`work_down` — also include lower-tier jobs (paid at 75/25 split, see /tier-catalog).
+
+ */
+  mode?: ListAvailableJobsMode;
+};
+
+export type ListAvailableJobsMode =
+  (typeof ListAvailableJobsMode)[keyof typeof ListAvailableJobsMode];
+
+export const ListAvailableJobsMode = {
+  my_tier: "my_tier",
+  work_down: "work_down",
 } as const;
 
 export type ListMechanicsParams = {

@@ -11,6 +11,15 @@ export const jobsTable = pgTable("jobs", {
   customerId: integer("customer_id").notNull().references(() => usersTable.id),
   mechanicId: integer("mechanic_id").references(() => usersTable.id),
   jobType: text("job_type", { enum: ["repair", "diagnostic", "maintenance", "detailing"] }).notNull(),
+  // Stable slug from `lib/tier-catalog` JOB_CATALOG. Nullable for legacy rows
+  // and free-text custom jobs; the required tier below is the authoritative
+  // gate for visibility/accept.
+  serviceSlug: text("service_slug"),
+  // Catalog-derived minimum tier required to accept this job. Mirrors
+  // `users.mechanic_tier` enum so we can compare directly. Nullable for
+  // legacy rows; legacy fallback below treats null as "detailer" for
+  // backward-compatible visibility.
+  requiredTier: text("required_tier", { enum: ["detailer", "technician", "senior", "advanced", "master"] }),
   description: text("description").notNull(),
   locationLat: real("location_lat"),
   locationLng: real("location_lng"),

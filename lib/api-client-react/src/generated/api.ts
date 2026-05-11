@@ -50,6 +50,7 @@ import type {
   Job,
   ListAdminCertificationsParams,
   ListAvailableBaysParams,
+  ListAvailableJobsParams,
   ListJobsParams,
   ListMechanicsParams,
   ListUsersParams,
@@ -76,6 +77,7 @@ import type {
   Shop,
   ShopWithBays,
   StartTransportLegBody,
+  TierCatalog,
   TierPromotion,
   TransferVehicleBody,
   TransportLeg,
@@ -1900,41 +1902,60 @@ export const useCreateJob = <
 /**
  * @summary List available jobs for mechanics
  */
-export const getListAvailableJobsUrl = () => {
-  return `/api/jobs/available`;
+export const getListAvailableJobsUrl = (params?: ListAvailableJobsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/jobs/available?${stringifiedParams}`
+    : `/api/jobs/available`;
 };
 
 export const listAvailableJobs = async (
+  params?: ListAvailableJobsParams,
   options?: RequestInit,
 ): Promise<Job[]> => {
-  return customFetch<Job[]>(getListAvailableJobsUrl(), {
+  return customFetch<Job[]>(getListAvailableJobsUrl(params), {
     ...options,
     method: "GET",
   });
 };
 
-export const getListAvailableJobsQueryKey = () => {
-  return [`/api/jobs/available`] as const;
+export const getListAvailableJobsQueryKey = (
+  params?: ListAvailableJobsParams,
+) => {
+  return [`/api/jobs/available`, ...(params ? [params] : [])] as const;
 };
 
 export const getListAvailableJobsQueryOptions = <
   TData = Awaited<ReturnType<typeof listAvailableJobs>>,
   TError = ErrorType<unknown>,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof listAvailableJobs>>,
-    TError,
-    TData
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}) => {
+>(
+  params?: ListAvailableJobsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listAvailableJobs>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
   const { query: queryOptions, request: requestOptions } = options ?? {};
 
-  const queryKey = queryOptions?.queryKey ?? getListAvailableJobsQueryKey();
+  const queryKey =
+    queryOptions?.queryKey ?? getListAvailableJobsQueryKey(params);
 
   const queryFn: QueryFunction<
     Awaited<ReturnType<typeof listAvailableJobs>>
-  > = ({ signal }) => listAvailableJobs({ signal, ...requestOptions });
+  > = ({ signal }) => listAvailableJobs(params, { signal, ...requestOptions });
 
   return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
     Awaited<ReturnType<typeof listAvailableJobs>>,
@@ -1955,15 +1976,94 @@ export type ListAvailableJobsQueryError = ErrorType<unknown>;
 export function useListAvailableJobs<
   TData = Awaited<ReturnType<typeof listAvailableJobs>>,
   TError = ErrorType<unknown>,
+>(
+  params?: ListAvailableJobsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listAvailableJobs>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListAvailableJobsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Public, cacheable. Single source of truth for tiers, services, and commission percentages.
+ * @summary Full mechanic tier ladder + service catalog + commission rules
+ */
+export const getGetTierCatalogUrl = () => {
+  return `/api/tier-catalog`;
+};
+
+export const getTierCatalog = async (
+  options?: RequestInit,
+): Promise<TierCatalog> => {
+  return customFetch<TierCatalog>(getGetTierCatalogUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetTierCatalogQueryKey = () => {
+  return [`/api/tier-catalog`] as const;
+};
+
+export const getGetTierCatalogQueryOptions = <
+  TData = Awaited<ReturnType<typeof getTierCatalog>>,
+  TError = ErrorType<unknown>,
 >(options?: {
   query?: UseQueryOptions<
-    Awaited<ReturnType<typeof listAvailableJobs>>,
+    Awaited<ReturnType<typeof getTierCatalog>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetTierCatalogQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getTierCatalog>>> = ({
+    signal,
+  }) => getTierCatalog({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getTierCatalog>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetTierCatalogQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getTierCatalog>>
+>;
+export type GetTierCatalogQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Full mechanic tier ladder + service catalog + commission rules
+ */
+
+export function useGetTierCatalog<
+  TData = Awaited<ReturnType<typeof getTierCatalog>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getTierCatalog>>,
     TError,
     TData
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getListAvailableJobsQueryOptions(options);
+  const queryOptions = getGetTierCatalogQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

@@ -8,6 +8,14 @@ import { awardCustomerPoints, awardMechanicPoints, RULES } from "../lib/loyaltyE
 import { startCustomerApproval } from "../lib/customerApprovalEngine";
 import { requiresLiftFromDescription } from "../lib/transportKeywords";
 import { customerApprovalsTable } from "@workspace/db";
+import {
+  findServiceBySlug,
+  tierLevel,
+  mechanicQualifiedFor,
+  commissionForJob,
+  type TierKey,
+  type ServiceCategory,
+} from "@workspace/tier-catalog";
 
 /**
  * If the job has an uncaptured Stripe authorization, void it so the
@@ -88,6 +96,8 @@ async function formatJob(job: typeof jobsTable.$inferSelect) {
     requestedMechanicId: job.requestedMechanicId ?? null,
     requiresGhostGarage: job.requiresGhostGarage,
     customerTransportApproved: job.customerTransportApproved,
+    serviceSlug: job.serviceSlug ?? null,
+    requiredTier: (job.requiredTier ?? null) as TierKey | null,
     vehicle: vehicle ? {
       id: vehicle.id, vin: vehicle.vin, make: vehicle.make, model: vehicle.model,
       year: vehicle.year, trim: vehicle.trim ?? null, color: vehicle.color ?? null, createdAt: vehicle.createdAt,
@@ -127,9 +137,24 @@ router.get("/jobs/available", authenticate, async (req: AuthRequest, res): Promi
   if (req.userRole === "mechanic") {
     jobs = jobs.filter((j) => j.requestedMechanicId == null || j.requestedMechanicId === req.userId);
     const [mechanic] = await db.select({ mechanicTier: usersTable.mechanicTier }).from(usersTable).where(eq(usersTable.id, req.userId!));
-    if (mechanic?.mechanicTier === "detailer") {
-      jobs = jobs.filter((j) => j.jobType === "detailing");
-    }
+    const myTier = (mechanic?.mechanicTier ?? "detailer") as TierKey;
+    const myLevel = tierLevel(myTier);
+    const mode = String((req.query as { mode?: string }).mode ?? "my_tier");
+
+    jobs = jobs.filter((j) => {
+      // Legacy fallback: jobs without `requiredTier` (created before the
+      // catalog rollout) are treated as detailer-tier so existing behaviour
+      // is preserved (visible to anyone who could see them before).
+      const reqTier = (j.requiredTier as TierKey | null) ?? "detailer";
+      const reqLevel = tierLevel(reqTier);
+      // Mechanics may NEVER see jobs above their tier — they couldn't
+      // accept them anyway and the address/customer info is sensitive.
+      if (reqLevel > myLevel) return false;
+      if (mode === "work_down") return true;
+      // Default "my_tier": exact-tier-match only (or legacy detailer rows
+      // for everyone who's at-or-above detailer, which is everyone).
+      return reqLevel === myLevel || j.requiredTier == null;
+    });
   }
 
   res.json(await Promise.all(jobs.map(formatJob)));
@@ -139,14 +164,26 @@ router.post("/jobs", authenticate, async (req: AuthRequest, res): Promise<void> 
   if (req.userRole !== "customer" && req.userRole !== "admin") {
     res.status(403).json({ error: "Only customers can create jobs" }); return;
   }
-  const { vehicleId, jobType, description, locationLat, locationLng, locationAddress, estimatedPrice, requestedMechanicId } = req.body as {
-    vehicleId: number; jobType: string; description: string;
+  const { vehicleId, jobType, serviceSlug, description, locationLat, locationLng, locationAddress, estimatedPrice, requestedMechanicId } = req.body as {
+    vehicleId: number; jobType?: string; serviceSlug?: string; description: string;
     locationLat?: number; locationLng?: number; locationAddress?: string; estimatedPrice?: number;
     requestedMechanicId?: number;
   };
-  if (!vehicleId || !jobType || !description) {
-    res.status(400).json({ error: "vehicleId, jobType, and description are required" }); return;
+  if (!vehicleId || !description) {
+    res.status(400).json({ error: "vehicleId and description are required" }); return;
   }
+  // Resolve catalog entry. `serviceSlug` is preferred — when present we use
+  // the catalog's category + tier as the source of truth so visibility and
+  // commission can never disagree with what the customer actually picked.
+  const catalogEntry = findServiceBySlug(serviceSlug);
+  if (serviceSlug && !catalogEntry) {
+    res.status(400).json({ error: `Unknown serviceSlug: ${serviceSlug}` }); return;
+  }
+  const finalJobType = (catalogEntry?.category ?? jobType) as ServiceCategory | undefined;
+  if (!finalJobType || !["repair", "diagnostic", "maintenance", "detailing"].includes(finalJobType)) {
+    res.status(400).json({ error: "jobType (or serviceSlug) is required" }); return;
+  }
+  const finalRequiredTier: TierKey = catalogEntry?.tier ?? "detailer";
   const [vehicle] = await db.select().from(vehiclesTable).where(eq(vehiclesTable.id, vehicleId));
   if (!vehicle) { res.status(404).json({ error: "Vehicle not found" }); return; }
 
@@ -167,7 +204,9 @@ router.post("/jobs", authenticate, async (req: AuthRequest, res): Promise<void> 
 
   const [job] = await db.insert(jobsTable).values({
     vehicleId, vin: vehicle.vin, customerId: req.userId!,
-    jobType: jobType as "repair" | "diagnostic" | "maintenance" | "detailing",
+    jobType: finalJobType,
+    serviceSlug: catalogEntry?.slug ?? null,
+    requiredTier: finalRequiredTier,
     description, locationLat: locationLat ?? null, locationLng: locationLng ?? null,
     locationAddress: locationAddress ?? null, estimatedPrice: estimatedPrice ?? null,
     requestedMechanicId: validatedReqMech, status: "REQUESTED",
@@ -182,7 +221,7 @@ router.post("/jobs", authenticate, async (req: AuthRequest, res): Promise<void> 
   db.select({ pushToken: usersTable.pushToken }).from(usersTable).where(mechWhere)
     .then((mechanics) => {
       const tokens = mechanics.map((m) => m.pushToken).filter(Boolean) as string[];
-      notifyMechanics(tokens, jobType, description, job.id).catch(() => {});
+      notifyMechanics(tokens, finalJobType, description, job.id).catch(() => {});
     })
     .catch(() => {});
 
@@ -265,17 +304,25 @@ router.post("/jobs/:jobId/transport-approval", authenticate, async (req: AuthReq
 
 router.post("/jobs/:jobId/accept", authenticate, requireActiveMechanic, async (req: AuthRequest, res): Promise<void> => {
   const jobId = parseInt(String(req.params.jobId), 10);
+  // Tier gate: load the mechanic's tier ONCE outside the tx so we can fail
+  // fast with a clean 403 before locking the job row.
+  const [me] = await db.select({ mechanicTier: usersTable.mechanicTier }).from(usersTable).where(eq(usersTable.id, req.userId!));
+  const myTier = (me?.mechanicTier ?? "detailer") as TierKey;
   // Atomic accept: lock the job row, conditionally update only if it's still
   // in an acceptable status, and start the approval row in the SAME tx so we
   // never leave a job in PENDING_APPROVAL without a matching approval row.
   const result = await db.transaction(async (tx) => {
     const locked = await tx.execute(
-      sql`SELECT id, status, customer_id FROM jobs WHERE id = ${jobId} FOR UPDATE`,
+      sql`SELECT id, status, customer_id, required_tier FROM jobs WHERE id = ${jobId} FOR UPDATE`,
     );
-    const job = (locked.rows[0] ?? null) as { id: number; status: string; customer_id: number } | null;
+    const job = (locked.rows[0] ?? null) as { id: number; status: string; customer_id: number; required_tier: string | null } | null;
     if (!job) return { ok: false as const, status: 404, error: "Job not found" };
     if (job.status !== "REQUESTED" && job.status !== "OFFERED") {
       return { ok: false as const, status: 409, error: "Job cannot be accepted in its current state" };
+    }
+    const reqTier = (job.required_tier as TierKey | null) ?? "detailer";
+    if (!mechanicQualifiedFor(myTier, reqTier)) {
+      return { ok: false as const, status: 403, error: `This job requires ${reqTier} tier or higher.` };
     }
     const updatedRows = await tx.update(jobsTable)
       .set({ status: "PENDING_APPROVAL", mechanicId: req.userId!, acceptedAt: new Date() })

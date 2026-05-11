@@ -69,6 +69,9 @@ artifacts/api-server/src/lib/referralEngine.ts — standalone referral system (i
 lib/db/src/schema/loyaltyV2.ts     — customer/mechanic ledger + redemption tables
 lib/db/src/schema/referrals.ts     — referrals + referral_events tables
 lib/integrations-anthropic-ai/    — Replit AI Integrations Anthropic client
+lib/tier-catalog/src/index.ts     — TIERS (5), full ~64-service JOB_CATALOG, COMMISSION rates, commissionForJob/splitCents/mechanicQualifiedFor/isWorkingDown helpers (single source of truth shared by api-server + mobile)
+artifacts/api-server/src/routes/tierCatalog.ts — public GET /tier-catalog (tiers + services + commission)
+artifacts/mobile/app/mechanic/earnings.tsx     — "How Much Can You Earn?" page (rate cards + live calculator + tier ladder + service catalog)
 ```
 
 ## Auth & access control
@@ -85,7 +88,7 @@ lib/integrations-anthropic-ai/    — Replit AI Integrations Anthropic client
 - **Role-based navigation:** Root layout redirects based on `user.role` to `/(customer)`, `/(mechanic)`, or `/(admin)`.
 - **Payment escrow:** `payments` records are `held` until admin releases them upon work log submission.
 - **Auth token flow:** JWT stored in AsyncStorage and injected into all API requests.
-- **Mechanic tiers:** Progressive tiers (detailer → technician → senior → master), impacting job visibility.
+- **Mechanic tiers (5-tier ladder):** detailer → technician → senior → advanced → master. The shared `@workspace/tier-catalog` lib is the single source of truth for tier definitions, the ~64-service catalog, and the three commission rates: same-tier 20/80, working-down 25/75, detailing always 15/85. Visibility on `/jobs/available?mode=my_tier|work_down` is strict — mechanics NEVER see jobs above their tier; default mode shows only exact-tier (+ legacy null-tier rows treated as detailer); `mode=work_down` shows everything at-or-below. `POST /jobs/:id/accept` re-checks tier with `mechanicQualifiedFor` inside the same `FOR UPDATE` tx (returns 403). Commission is computed via `commissionForJob({category, jobTier, mechanicTier})` + `splitCents()` in BOTH `payments.ts` (authorization) and `worklogs.ts` (capture) so the mechanic's payout always matches the rule that was visible at accept time. Customer service picker writes `serviceSlug` and the server derives `jobType` + `requiredTier` from the catalog — clients can't disagree with the server about what tier a job is.
 - **Dual loyalty system:** Two parallel ledgers (`customer_points_ledger`, `mechanic_points_ledger`) driven by a single engine. Idempotency via partial unique index `(user/mechanic, job_id, source_type) WHERE points>0 AND job_id IS NOT NULL` + `onConflictDoNothing`. Refund webhooks reverse both ledgers. Redemptions are atomic (`SELECT … FOR UPDATE` + in-tx balance check). Mechanic upsells only earn points when `customerApproved === true`.
 - **Standalone referral system:** Isolated user-acquisition engine in `referralEngine.ts`. Writes ONLY `source_type="referral"` rows to the customer ledger via `awardCustomerPoints` — does not compute spending/review/survey/mechanic/tier points. Codes use `APS-XXXXXX` format. Conversion gates: referred user's FIRST captured payment + no refund. Atomic via `SELECT … FOR UPDATE` row lock; `pointsAwarded` is only stamped after the loyalty ledger insert succeeds (UI shows `pending` → `converted` → `rewarded`). `unique(referred_id)` enforces one referral per referred user. Refund path calls `revertReferralForJob` to un-convert + reverse points. Self-referral and same-address abuse heuristics block at signup.
 - **User home address & Mechanic service radius:** Captured at registration and verified via Nominatim for location-based services.

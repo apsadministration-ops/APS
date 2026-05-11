@@ -6,13 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-/**
- * Optional when `serviceSlug` is supplied — server derives jobType from the catalog entry.
- */
-export type CreateJobBodyJobType =
-  (typeof CreateJobBodyJobType)[keyof typeof CreateJobBodyJobType];
+export type TierCatalogServicesItemCategory =
+  (typeof TierCatalogServicesItemCategory)[keyof typeof TierCatalogServicesItemCategory];
 
-export const CreateJobBodyJobType = {
+export const TierCatalogServicesItemCategory = {
   repair: "repair",
   diagnostic: "diagnostic",
   maintenance: "maintenance",

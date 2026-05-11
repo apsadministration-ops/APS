@@ -5,6 +5,7 @@ import { authenticate, requireActiveMechanic, type AuthRequest } from "../middle
 import { notifyCustomerJobComplete } from "../lib/notifications";
 import { getUncachableStripeClient } from "../lib/stripeClient";
 import { awardMechanicPoints, RULES } from "../lib/loyaltyEngine";
+import { commissionForJob, splitCents, type TierKey, type ServiceCategory } from "@workspace/tier-catalog";
 
 const router: IRouter = Router();
 
@@ -210,8 +211,15 @@ router.post("/worklogs", authenticate, requireActiveMechanic, async (req: AuthRe
       // application_fee_amount at the original (estimate-based) figure, Stripe
       // would either reject a small capture (fee > capture) or take a larger
       // cut than 10% — shorting the mechanic.
-      const newFeeCents = Math.round(captureCents * 0.1);
-      const newPayoutCents = captureCents - newFeeCents;
+      // Recompute the commission split using the same tier-aware rules used
+      // at authorization. Detailing stays 15%, working-down stays 25%, etc.
+      const [mechRow] = await db.select({ mechanicTier: usersTable.mechanicTier }).from(usersTable).where(eq(usersTable.id, job.mechanicId!));
+      const commission = commissionForJob({
+        category: job.jobType as ServiceCategory,
+        jobTier: ((job.requiredTier ?? "detailer") as TierKey),
+        mechanicTier: (mechRow?.mechanicTier ?? "detailer") as TierKey,
+      });
+      const { platformFeeCents: newFeeCents, mechanicPayoutCents: newPayoutCents } = splitCents(captureCents, commission);
       await stripe.paymentIntents.capture(existingPayment!.providerPaymentIntentId, {
         amount_to_capture: captureCents,
         application_fee_amount: newFeeCents,

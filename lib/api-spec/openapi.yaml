@@ -554,6 +554,16 @@ paths:
       summary: List available jobs for mechanics
       security:
         - bearerAuth: []
+      parameters:
+        - name: mode
+          in: query
+          required: false
+          description: |
+            `my_tier` (default) — only jobs at the mechanic's exact tier (or null/legacy).
+            `work_down` — also include lower-tier jobs (paid at 75/25 split, see /tier-catalog).
+          schema:
+            type: string
+            enum: [my_tier, work_down]
       responses:
         "200":
           description: Available jobs
@@ -563,6 +573,20 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Job"
+
+  /tier-catalog:
+    get:
+      operationId: getTierCatalog
+      tags: [jobs]
+      summary: Full mechanic tier ladder + service catalog + commission rules
+      description: Public, cacheable. Single source of truth for tiers, services, and commission percentages.
+      responses:
+        "200":
+          description: Catalog
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TierCatalog"
 
   /jobs/{jobId}:
     get:
@@ -2038,6 +2062,15 @@ components:
         customerTransportApproved:
           type: boolean
           description: Whether the customer has approved their vehicle being transported to a shop bay. Always true for non-ghost-garage jobs.
+        serviceSlug:
+          type: string
+          nullable: true
+          description: Catalog slug from /tier-catalog. Null for legacy / free-text jobs.
+        requiredTier:
+          type: string
+          enum: [detailer, technician, senior, advanced, master]
+          nullable: true
+          description: Minimum mechanic tier required to accept. Derived server-side from serviceSlug. Null = legacy job (treated as `detailer`).
       required: [id, vehicleId, vin, customerId, customerName, jobType, description, status, createdAt]
 
     CreateJobBody:
@@ -2048,6 +2081,10 @@ components:
         jobType:
           type: string
           enum: [repair, diagnostic, maintenance, detailing]
+          description: Optional when `serviceSlug` is supplied — server derives jobType from the catalog entry.
+        serviceSlug:
+          type: string
+          description: Preferred. Slug from /tier-catalog. Server uses this to set `jobType` and `requiredTier`.
         description:
           type: string
         locationLat:
@@ -2061,7 +2098,54 @@ components:
         requestedMechanicId:
           type: integer
           description: If set, only this mechanic sees the job in Available.
-      required: [vehicleId, jobType, description]
+      required: [vehicleId, description]
+
+    TierCatalog:
+      type: object
+      properties:
+        tiers:
+          type: array
+          items:
+            type: object
+            required: [key, level, label, blurb]
+            properties:
+              key: { type: string, enum: [detailer, technician, senior, advanced, master] }
+              level: { type: integer, minimum: 1, maximum: 5 }
+              label: { type: string }
+              blurb: { type: string }
+        services:
+          type: array
+          items:
+            type: object
+            required: [slug, name, tier, category]
+            properties:
+              slug: { type: string }
+              name: { type: string }
+              tier: { type: string, enum: [detailer, technician, senior, advanced, master] }
+              category: { type: string, enum: [repair, diagnostic, maintenance, detailing] }
+        commission:
+          type: object
+          required: [normal, workingDown, detailing]
+          properties:
+            normal:
+              type: object
+              required: [platformPct, mechanicPct]
+              properties:
+                platformPct: { type: integer }
+                mechanicPct: { type: integer }
+            workingDown:
+              type: object
+              required: [platformPct, mechanicPct]
+              properties:
+                platformPct: { type: integer }
+                mechanicPct: { type: integer }
+            detailing:
+              type: object
+              required: [platformPct, mechanicPct]
+              properties:
+                platformPct: { type: integer }
+                mechanicPct: { type: integer }
+      required: [tiers, services, commission]
 
     TransportLeg:
       type: object

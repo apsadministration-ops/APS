@@ -27,6 +27,7 @@ import growthRouter from "./growth";
 import amplificationRouter from "./amplification";
 import mechanicWorkspaceRouter from "./mechanicWorkspace";
 import transportRouter from "./transport";
+import tierCatalogRouter from "./tierCatalog";
 
 const router: IRouter = Router();
 
@@ -58,5 +59,6 @@ router.use(growthRouter);
 router.use(amplificationRouter);
 router.use(mechanicWorkspaceRouter);
 router.use(transportRouter);
+router.use(tierCatalogRouter);
 
 export default router;

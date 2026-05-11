@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { JobJobType } from "./jobJobType";
+import type { JobRequiredTier } from "./jobRequiredTier";
 import type { JobStatus } from "./jobStatus";
 import type { Vehicle } from "./vehicle";
 
@@ -42,4 +43,8 @@ export interface Job {
   requiresGhostGarage?: boolean;
   /** Whether the customer has approved their vehicle being transported to a shop bay. Always true for non-ghost-garage jobs. */
   customerTransportApproved?: boolean;
+  /** Catalog slug from /tier-catalog. Null for legacy / free-text jobs. */
+  serviceSlug?: string | null;
+  /** Minimum mechanic tier required to accept. Derived server-side from serviceSlug. Null = legacy job (treated as `detailer`). */
+  requiredTier?: JobRequiredTier;
 }

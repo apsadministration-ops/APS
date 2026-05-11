@@ -765,6 +765,18 @@ export const ListJobsResponseItem = zod.object({
     .describe(
       "Whether the customer has approved their vehicle being transported to a shop bay. Always true for non-ghost-garage jobs.",
     ),
+  serviceSlug: zod
+    .string()
+    .nullish()
+    .describe(
+      "Catalog slug from \/tier-catalog. Null for legacy \/ free-text jobs.",
+    ),
+  requiredTier: zod
+    .enum(["detailer", "technician", "senior", "advanced", "master"])
+    .nullish()
+    .describe(
+      "Minimum mechanic tier required to accept. Derived server-side from serviceSlug. Null = legacy job (treated as `detailer`).",
+    ),
 });
 export const ListJobsResponse = zod.array(ListJobsResponseItem);
 
@@ -773,7 +785,18 @@ export const ListJobsResponse = zod.array(ListJobsResponseItem);
  */
 export const CreateJobBody = zod.object({
   vehicleId: zod.number(),
-  jobType: zod.enum(["repair", "diagnostic", "maintenance", "detailing"]),
+  jobType: zod
+    .enum(["repair", "diagnostic", "maintenance", "detailing"])
+    .optional()
+    .describe(
+      "Optional when `serviceSlug` is supplied — server derives jobType from the catalog entry.",
+    ),
+  serviceSlug: zod
+    .string()
+    .optional()
+    .describe(
+      "Preferred. Slug from \/tier-catalog. Server uses this to set `jobType` and `requiredTier`.",
+    ),
   description: zod.string(),
   locationLat: zod.number().optional(),
   locationLng: zod.number().optional(),
@@ -788,6 +811,15 @@ export const CreateJobBody = zod.object({
 /**
  * @summary List available jobs for mechanics
  */
+export const ListAvailableJobsQueryParams = zod.object({
+  mode: zod
+    .enum(["my_tier", "work_down"])
+    .optional()
+    .describe(
+      "`my_tier` (default) — only jobs at the mechanic's exact tier (or null\/legacy).\n`work_down` — also include lower-tier jobs (paid at 75\/25 split, see \/tier-catalog).\n",
+    ),
+});
+
 export const ListAvailableJobsResponseItem = zod.object({
   id: zod.number(),
   vehicleId: zod.number(),
@@ -851,10 +883,67 @@ export const ListAvailableJobsResponseItem = zod.object({
     .describe(
       "Whether the customer has approved their vehicle being transported to a shop bay. Always true for non-ghost-garage jobs.",
     ),
+  serviceSlug: zod
+    .string()
+    .nullish()
+    .describe(
+      "Catalog slug from \/tier-catalog. Null for legacy \/ free-text jobs.",
+    ),
+  requiredTier: zod
+    .enum(["detailer", "technician", "senior", "advanced", "master"])
+    .nullish()
+    .describe(
+      "Minimum mechanic tier required to accept. Derived server-side from serviceSlug. Null = legacy job (treated as `detailer`).",
+    ),
 });
 export const ListAvailableJobsResponse = zod.array(
   ListAvailableJobsResponseItem,
 );
+
+/**
+ * Public, cacheable. Single source of truth for tiers, services, and commission percentages.
+ * @summary Full mechanic tier ladder + service catalog + commission rules
+ */
+export const getTierCatalogResponseTiersItemLevelMax = 5;
+
+export const GetTierCatalogResponse = zod.object({
+  tiers: zod.array(
+    zod.object({
+      key: zod.enum(["detailer", "technician", "senior", "advanced", "master"]),
+      level: zod.number().min(1).max(getTierCatalogResponseTiersItemLevelMax),
+      label: zod.string(),
+      blurb: zod.string(),
+    }),
+  ),
+  services: zod.array(
+    zod.object({
+      slug: zod.string(),
+      name: zod.string(),
+      tier: zod.enum([
+        "detailer",
+        "technician",
+        "senior",
+        "advanced",
+        "master",
+      ]),
+      category: zod.enum(["repair", "diagnostic", "maintenance", "detailing"]),
+    }),
+  ),
+  commission: zod.object({
+    normal: zod.object({
+      platformPct: zod.number(),
+      mechanicPct: zod.number(),
+    }),
+    workingDown: zod.object({
+      platformPct: zod.number(),
+      mechanicPct: zod.number(),
+    }),
+    detailing: zod.object({
+      platformPct: zod.number(),
+      mechanicPct: zod.number(),
+    }),
+  }),
+});
 
 /**
  * @summary Get job by ID
@@ -925,6 +1014,18 @@ export const GetJobResponse = zod.object({
     .optional()
     .describe(
       "Whether the customer has approved their vehicle being transported to a shop bay. Always true for non-ghost-garage jobs.",
+    ),
+  serviceSlug: zod
+    .string()
+    .nullish()
+    .describe(
+      "Catalog slug from \/tier-catalog. Null for legacy \/ free-text jobs.",
+    ),
+  requiredTier: zod
+    .enum(["detailer", "technician", "senior", "advanced", "master"])
+    .nullish()
+    .describe(
+      "Minimum mechanic tier required to accept. Derived server-side from serviceSlug. Null = legacy job (treated as `detailer`).",
     ),
 });
 
@@ -1012,6 +1113,18 @@ export const UpdateJobStatusResponse = zod.object({
     .describe(
       "Whether the customer has approved their vehicle being transported to a shop bay. Always true for non-ghost-garage jobs.",
     ),
+  serviceSlug: zod
+    .string()
+    .nullish()
+    .describe(
+      "Catalog slug from \/tier-catalog. Null for legacy \/ free-text jobs.",
+    ),
+  requiredTier: zod
+    .enum(["detailer", "technician", "senior", "advanced", "master"])
+    .nullish()
+    .describe(
+      "Minimum mechanic tier required to accept. Derived server-side from serviceSlug. Null = legacy job (treated as `detailer`).",
+    ),
 });
 
 /**
@@ -1084,6 +1197,18 @@ export const AcceptJobResponse = zod.object({
     .describe(
       "Whether the customer has approved their vehicle being transported to a shop bay. Always true for non-ghost-garage jobs.",
     ),
+  serviceSlug: zod
+    .string()
+    .nullish()
+    .describe(
+      "Catalog slug from \/tier-catalog. Null for legacy \/ free-text jobs.",
+    ),
+  requiredTier: zod
+    .enum(["detailer", "technician", "senior", "advanced", "master"])
+    .nullish()
+    .describe(
+      "Minimum mechanic tier required to accept. Derived server-side from serviceSlug. Null = legacy job (treated as `detailer`).",
+    ),
 });
 
 /**
@@ -1155,6 +1280,18 @@ export const CancelJobResponse = zod.object({
     .optional()
     .describe(
       "Whether the customer has approved their vehicle being transported to a shop bay. Always true for non-ghost-garage jobs.",
+    ),
+  serviceSlug: zod
+    .string()
+    .nullish()
+    .describe(
+      "Catalog slug from \/tier-catalog. Null for legacy \/ free-text jobs.",
+    ),
+  requiredTier: zod
+    .enum(["detailer", "technician", "senior", "advanced", "master"])
+    .nullish()
+    .describe(
+      "Minimum mechanic tier required to accept. Derived server-side from serviceSlug. Null = legacy job (treated as `detailer`).",
     ),
 });
 
@@ -1235,6 +1372,18 @@ export const RateCustomerResponse = zod.object({
     .describe(
       "Whether the customer has approved their vehicle being transported to a shop bay. Always true for non-ghost-garage jobs.",
     ),
+  serviceSlug: zod
+    .string()
+    .nullish()
+    .describe(
+      "Catalog slug from \/tier-catalog. Null for legacy \/ free-text jobs.",
+    ),
+  requiredTier: zod
+    .enum(["detailer", "technician", "senior", "advanced", "master"])
+    .nullish()
+    .describe(
+      "Minimum mechanic tier required to accept. Derived server-side from serviceSlug. Null = legacy job (treated as `detailer`).",
+    ),
 });
 
 /**
@@ -1314,6 +1463,18 @@ export const RateJobResponse = zod.object({
     .optional()
     .describe(
       "Whether the customer has approved their vehicle being transported to a shop bay. Always true for non-ghost-garage jobs.",
+    ),
+  serviceSlug: zod
+    .string()
+    .nullish()
+    .describe(
+      "Catalog slug from \/tier-catalog. Null for legacy \/ free-text jobs.",
+    ),
+  requiredTier: zod
+    .enum(["detailer", "technician", "senior", "advanced", "master"])
+    .nullish()
+    .describe(
+      "Minimum mechanic tier required to accept. Derived server-side from serviceSlug. Null = legacy job (treated as `detailer`).",
     ),
 });
 
@@ -1587,6 +1748,18 @@ export const GetCustomerDashboardResponse = zod.object({
         .describe(
           "Whether the customer has approved their vehicle being transported to a shop bay. Always true for non-ghost-garage jobs.",
         ),
+      serviceSlug: zod
+        .string()
+        .nullish()
+        .describe(
+          "Catalog slug from \/tier-catalog. Null for legacy \/ free-text jobs.",
+        ),
+      requiredTier: zod
+        .enum(["detailer", "technician", "senior", "advanced", "master"])
+        .nullish()
+        .describe(
+          "Minimum mechanic tier required to accept. Derived server-side from serviceSlug. Null = legacy job (treated as `detailer`).",
+        ),
     }),
   ),
   totalSpent: zod.number(),
@@ -1666,6 +1839,18 @@ export const GetMechanicDashboardResponse = zod.object({
         .describe(
           "Whether the customer has approved their vehicle being transported to a shop bay. Always true for non-ghost-garage jobs.",
         ),
+      serviceSlug: zod
+        .string()
+        .nullish()
+        .describe(
+          "Catalog slug from \/tier-catalog. Null for legacy \/ free-text jobs.",
+        ),
+      requiredTier: zod
+        .enum(["detailer", "technician", "senior", "advanced", "master"])
+        .nullish()
+        .describe(
+          "Minimum mechanic tier required to accept. Derived server-side from serviceSlug. Null = legacy job (treated as `detailer`).",
+        ),
     }),
   ),
 });
@@ -1744,6 +1929,18 @@ export const GetAdminDashboardResponse = zod.object({
         .optional()
         .describe(
           "Whether the customer has approved their vehicle being transported to a shop bay. Always true for non-ghost-garage jobs.",
+        ),
+      serviceSlug: zod
+        .string()
+        .nullish()
+        .describe(
+          "Catalog slug from \/tier-catalog. Null for legacy \/ free-text jobs.",
+        ),
+      requiredTier: zod
+        .enum(["detailer", "technician", "senior", "advanced", "master"])
+        .nullish()
+        .describe(
+          "Minimum mechanic tier required to accept. Derived server-side from serviceSlug. Null = legacy job (treated as `detailer`).",
         ),
     }),
   ),
@@ -2557,6 +2754,18 @@ export const ApproveJobTransportResponse = zod.object({
     .optional()
     .describe(
       "Whether the customer has approved their vehicle being transported to a shop bay. Always true for non-ghost-garage jobs.",
+    ),
+  serviceSlug: zod
+    .string()
+    .nullish()
+    .describe(
+      "Catalog slug from \/tier-catalog. Null for legacy \/ free-text jobs.",
+    ),
+  requiredTier: zod
+    .enum(["detailer", "technician", "senior", "advanced", "master"])
+    .nullish()
+    .describe(
+      "Minimum mechanic tier required to accept. Derived server-side from serviceSlug. Null = legacy job (treated as `detailer`).",
     ),
 });
 

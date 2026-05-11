@@ -89,6 +89,23 @@ export default function MechanicDashboard() {
           </View>
         </View>
 
+        {/* Tier & earnings explainer */}
+        <Pressable
+          style={[styles.alertCta, { backgroundColor: "#22C55E12", borderColor: "#22C55E40" }]}
+          onPress={() => router.push("/mechanic/earnings" as never)}
+        >
+          <View style={[styles.alertIcon, { backgroundColor: "#22C55E" }]}>
+            <Feather name="trending-up" size={18} color="white" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.alertTitle, { color: colors.foreground }]}>How much can you earn?</Text>
+            <Text style={[styles.alertSub, { color: colors.mutedForeground }]}>
+              Tier ladder, commission rates, and a live take-home calculator.
+            </Text>
+          </View>
+          <Feather name="chevron-right" size={20} color={colors.mutedForeground} />
+        </Pressable>
+
         {/* Vehicle Intelligence Workspace entrypoint */}
         <Pressable
           style={[styles.alertCta, { backgroundColor: "#7C3AED12", borderColor: "#7C3AED40" }]}
