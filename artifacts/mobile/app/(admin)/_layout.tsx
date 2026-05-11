@@ -82,6 +82,13 @@ export default function AdminTabLayout() {
           tabBarIcon: ({ color }) => <Feather name="flag" size={22} color={color} />,
         }}
       />
+      <Tabs.Screen
+        name="certifications"
+        options={{
+          title: "Certs",
+          tabBarIcon: ({ color }) => <Feather name="award" size={22} color={color} />,
+        }}
+      />
     </Tabs>
   );
 }

@@ -14,6 +14,7 @@ import {
   RULES,
 } from "../lib/loyaltyEngine";
 import { logger } from "../lib/logger";
+import { runProgression } from "../lib/tierProgressionEngine";
 
 export async function stripeWebhookHandler(req: Request, res: Response): Promise<void> {
   const secret = getWebhookSecret();
@@ -112,6 +113,11 @@ async function handleEvent(event: Stripe.Event): Promise<void> {
       const payment = updated[0]!;
       await db.update(jobsTable).set({ status: "PAID" }).where(eq(jobsTable.id, payment.jobId));
       const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, payment.jobId));
+      // Trigger tier-progression evaluation now that the mechanic has another paid job.
+      if (job?.mechanicId) {
+        runProgression(job.mechanicId, "job_paid", { logger })
+          .catch((err) => logger.error({ err, mechanicId: job.mechanicId }, "tier progression failed"));
+      }
       if (job?.customerId) {
         // CUSTOMER: spending points (1 pt per $1 captured).
         const spendingPoints = Math.floor((payment.amountCents ?? 0) / 100) * RULES.customer.pointsPerDollar;

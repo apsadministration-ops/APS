@@ -13,7 +13,7 @@ import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollV
 import { alertMessage } from "@/utils/confirm";
 
 const CATEGORIES: CreateBayBodyAllowedJobCategoriesItem[] = ["repair", "diagnostic", "maintenance", "detailing"];
-const TIERS: CreateBayBodyMinMechanicTier[] = ["detailer", "technician", "senior", "master"];
+const TIERS: CreateBayBodyMinMechanicTier[] = ["detailer", "technician", "senior", "advanced", "master"];
 
 export default function ShopDetailScreen() {
   const colors = useColors();

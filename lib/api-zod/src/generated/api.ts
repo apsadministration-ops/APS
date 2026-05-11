@@ -53,7 +53,7 @@ export const LoginResponse = zod.object({
     avatarUrl: zod.string().nullish(),
     referralCode: zod.string().nullish(),
     mechanicTier: zod
-      .enum(["detailer", "technician", "senior", "master"])
+      .enum(["detailer", "technician", "senior", "advanced", "master"])
       .nullish(),
     certifications: zod.string().nullish(),
     loyaltyPoints: zod.number().optional(),
@@ -82,7 +82,7 @@ export const GetMeResponse = zod.object({
   avatarUrl: zod.string().nullish(),
   referralCode: zod.string().nullish(),
   mechanicTier: zod
-    .enum(["detailer", "technician", "senior", "master"])
+    .enum(["detailer", "technician", "senior", "advanced", "master"])
     .nullish(),
   certifications: zod.string().nullish(),
   loyaltyPoints: zod.number().optional(),
@@ -115,7 +115,7 @@ export const ListUsersResponseItem = zod.object({
   avatarUrl: zod.string().nullish(),
   referralCode: zod.string().nullish(),
   mechanicTier: zod
-    .enum(["detailer", "technician", "senior", "master"])
+    .enum(["detailer", "technician", "senior", "advanced", "master"])
     .nullish(),
   certifications: zod.string().nullish(),
   loyaltyPoints: zod.number().optional(),
@@ -148,7 +148,7 @@ export const GetUserResponse = zod.object({
   avatarUrl: zod.string().nullish(),
   referralCode: zod.string().nullish(),
   mechanicTier: zod
-    .enum(["detailer", "technician", "senior", "master"])
+    .enum(["detailer", "technician", "senior", "advanced", "master"])
     .nullish(),
   certifications: zod.string().nullish(),
   loyaltyPoints: zod.number().optional(),
@@ -175,7 +175,7 @@ export const UpdateUserBody = zod.object({
   name: zod.string().optional(),
   phone: zod.string().optional(),
   mechanicTier: zod
-    .enum(["detailer", "technician", "senior", "master"])
+    .enum(["detailer", "technician", "senior", "advanced", "master"])
     .optional(),
   certifications: zod.string().optional(),
 });
@@ -190,7 +190,7 @@ export const UpdateUserResponse = zod.object({
   avatarUrl: zod.string().nullish(),
   referralCode: zod.string().nullish(),
   mechanicTier: zod
-    .enum(["detailer", "technician", "senior", "master"])
+    .enum(["detailer", "technician", "senior", "advanced", "master"])
     .nullish(),
   certifications: zod.string().nullish(),
   loyaltyPoints: zod.number().optional(),
@@ -223,7 +223,7 @@ export const GetMechanicProfileResponse = zod.object({
     avatarUrl: zod.string().nullish(),
     referralCode: zod.string().nullish(),
     mechanicTier: zod
-      .enum(["detailer", "technician", "senior", "master"])
+      .enum(["detailer", "technician", "senior", "advanced", "master"])
       .nullish(),
     certifications: zod.string().nullish(),
     loyaltyPoints: zod.number().optional(),
@@ -272,7 +272,7 @@ export const ListVehiclesResponseItem = zod
           avatarUrl: zod.string().nullish(),
           referralCode: zod.string().nullish(),
           mechanicTier: zod
-            .enum(["detailer", "technician", "senior", "master"])
+            .enum(["detailer", "technician", "senior", "advanced", "master"])
             .nullish(),
           certifications: zod.string().nullish(),
           loyaltyPoints: zod.number().optional(),
@@ -348,7 +348,7 @@ export const GetVehicleByVinResponse = zod
           avatarUrl: zod.string().nullish(),
           referralCode: zod.string().nullish(),
           mechanicTier: zod
-            .enum(["detailer", "technician", "senior", "master"])
+            .enum(["detailer", "technician", "senior", "advanced", "master"])
             .nullish(),
           certifications: zod.string().nullish(),
           loyaltyPoints: zod.number().optional(),
@@ -401,7 +401,7 @@ export const GetVehicleResponse = zod
           avatarUrl: zod.string().nullish(),
           referralCode: zod.string().nullish(),
           mechanicTier: zod
-            .enum(["detailer", "technician", "senior", "master"])
+            .enum(["detailer", "technician", "senior", "advanced", "master"])
             .nullish(),
           certifications: zod.string().nullish(),
           loyaltyPoints: zod.number().optional(),
@@ -2003,6 +2003,7 @@ export const GetShopResponse = zod
             "detailer",
             "technician",
             "senior",
+            "advanced",
             "master",
           ]),
           autoApprove: zod.boolean(),
@@ -2067,7 +2068,13 @@ export const CreateBayBody = zod.object({
   allowedJobCategories: zod.array(
     zod.enum(["repair", "diagnostic", "maintenance", "detailing"]),
   ),
-  minMechanicTier: zod.enum(["detailer", "technician", "senior", "master"]),
+  minMechanicTier: zod.enum([
+    "detailer",
+    "technician",
+    "senior",
+    "advanced",
+    "master",
+  ]),
   autoApprove: zod.boolean().optional(),
 });
 
@@ -2087,7 +2094,13 @@ export const ListShopBaysResponseItem = zod.object({
   allowedJobCategories: zod.array(
     zod.enum(["repair", "diagnostic", "maintenance", "detailing"]),
   ),
-  minMechanicTier: zod.enum(["detailer", "technician", "senior", "master"]),
+  minMechanicTier: zod.enum([
+    "detailer",
+    "technician",
+    "senior",
+    "advanced",
+    "master",
+  ]),
   autoApprove: zod.boolean(),
   status: zod.enum(["active", "inactive"]),
   createdAt: zod.coerce.date(),
@@ -2101,7 +2114,9 @@ export const ListAvailableBaysQueryParams = zod.object({
   jobCategory: zod
     .enum(["repair", "diagnostic", "maintenance", "detailing"])
     .optional(),
-  minTier: zod.enum(["detailer", "technician", "senior", "master"]).optional(),
+  minTier: zod
+    .enum(["detailer", "technician", "senior", "advanced", "master"])
+    .optional(),
 });
 
 export const ListAvailableBaysResponseItem = zod
@@ -2114,7 +2129,13 @@ export const ListAvailableBaysResponseItem = zod
     allowedJobCategories: zod.array(
       zod.enum(["repair", "diagnostic", "maintenance", "detailing"]),
     ),
-    minMechanicTier: zod.enum(["detailer", "technician", "senior", "master"]),
+    minMechanicTier: zod.enum([
+      "detailer",
+      "technician",
+      "senior",
+      "advanced",
+      "master",
+    ]),
     autoApprove: zod.boolean(),
     status: zod.enum(["active", "inactive"]),
     createdAt: zod.coerce.date(),
@@ -2160,7 +2181,13 @@ export const GetBayResponse = zod
     allowedJobCategories: zod.array(
       zod.enum(["repair", "diagnostic", "maintenance", "detailing"]),
     ),
-    minMechanicTier: zod.enum(["detailer", "technician", "senior", "master"]),
+    minMechanicTier: zod.enum([
+      "detailer",
+      "technician",
+      "senior",
+      "advanced",
+      "master",
+    ]),
     autoApprove: zod.boolean(),
     status: zod.enum(["active", "inactive"]),
     createdAt: zod.coerce.date(),
@@ -2203,7 +2230,7 @@ export const UpdateBayBody = zod.object({
     .array(zod.enum(["repair", "diagnostic", "maintenance", "detailing"]))
     .optional(),
   minMechanicTier: zod
-    .enum(["detailer", "technician", "senior", "master"])
+    .enum(["detailer", "technician", "senior", "advanced", "master"])
     .optional(),
   autoApprove: zod.boolean().optional(),
   status: zod.enum(["active", "inactive"]).optional(),
@@ -2218,7 +2245,13 @@ export const UpdateBayResponse = zod.object({
   allowedJobCategories: zod.array(
     zod.enum(["repair", "diagnostic", "maintenance", "detailing"]),
   ),
-  minMechanicTier: zod.enum(["detailer", "technician", "senior", "master"]),
+  minMechanicTier: zod.enum([
+    "detailer",
+    "technician",
+    "senior",
+    "advanced",
+    "master",
+  ]),
   autoApprove: zod.boolean(),
   status: zod.enum(["active", "inactive"]),
   createdAt: zod.coerce.date(),
@@ -2529,4 +2562,533 @@ export const ApproveJobTransportResponse = zod.object({
     .describe(
       "Whether the customer has approved their vehicle being transported to a shop bay. Always true for non-ghost-garage jobs.",
     ),
+});
+
+/**
+ * @summary Current tier, performance metrics, and next-tier eligibility for the authenticated mechanic
+ */
+export const GetMyProgressionResponse = zod.object({
+  mechanicId: zod.number(),
+  currentTier: zod.enum([
+    "detailer",
+    "technician",
+    "senior",
+    "advanced",
+    "master",
+  ]),
+  currentTierLabel: zod.string().optional(),
+  nextTierLabel: zod.string().nullish(),
+  metrics: zod.object({
+    completedJobs: zod.number(),
+    averageRating: zod.number().nullable(),
+    ratingCount: zod.number(),
+    unresolvedFlags: zod.number(),
+    verifiedCertifications: zod.number(),
+    verifiedAdvancedCertifications: zod.number(),
+    pendingCertifications: zod.number(),
+  }),
+  next: zod
+    .union([
+      zod.object({
+        from: zod.enum([
+          "detailer",
+          "technician",
+          "senior",
+          "advanced",
+          "master",
+        ]),
+        to: zod.enum([
+          "detailer",
+          "technician",
+          "senior",
+          "advanced",
+          "master",
+        ]),
+        summary: zod.string(),
+        thresholds: zod.record(zod.string(), zod.number()),
+        blockers: zod.array(zod.string()).nullable(),
+        autoApply: zod.boolean(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+  atMaxTier: zod.boolean(),
+  promoted: zod.boolean(),
+  promotedTo: zod
+    .union([
+      zod.enum(["detailer", "technician", "senior", "advanced", "master"]),
+      zod.null(),
+    ])
+    .optional(),
+  flaggedForAdminReview: zod.boolean(),
+  tierOrder: zod
+    .array(zod.enum(["detailer", "technician", "senior", "advanced", "master"]))
+    .optional(),
+  tierLabels: zod.record(zod.string(), zod.string()).optional(),
+});
+
+/**
+ * @summary Immutable promotion audit log for the authenticated mechanic
+ */
+export const ListMyPromotionHistoryResponseItem = zod.object({
+  id: zod.number(),
+  mechanicId: zod.number(),
+  previousTier: zod.enum([
+    "detailer",
+    "technician",
+    "senior",
+    "advanced",
+    "master",
+  ]),
+  newTier: zod.enum(["detailer", "technician", "senior", "advanced", "master"]),
+  reason: zod.string(),
+  trigger: zod.enum(["system", "system_flagged", "admin"]),
+  metricsSnapshot: zod.record(zod.string(), zod.unknown()),
+  triggeredBy: zod.number().nullish(),
+  createdAt: zod.coerce.date(),
+});
+export const ListMyPromotionHistoryResponse = zod.array(
+  ListMyPromotionHistoryResponseItem,
+);
+
+/**
+ * @summary Authenticated mechanic's certifications (any status)
+ */
+export const ListMyCertificationsResponseItem = zod.object({
+  id: zod.number(),
+  mechanicId: zod.number(),
+  certificationType: zod.string(),
+  issuingInstitution: zod.string(),
+  issueDate: zod.coerce.date(),
+  expirationDate: zod.coerce.date().nullish(),
+  documentUrl: zod.string(),
+  documentKind: zod.enum(["pdf", "image", "other"]),
+  skillLevel: zod.enum(["basic", "advanced"]),
+  status: zod.enum(["pending", "verified", "rejected"]),
+  reviewNote: zod.string().nullish(),
+  reviewedBy: zod.number().nullish(),
+  reviewedAt: zod.coerce.date().nullish(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+export const ListMyCertificationsResponse = zod.array(
+  ListMyCertificationsResponseItem,
+);
+
+/**
+ * @summary Upload a new certification (status starts as pending)
+ */
+export const createMyCertificationBodyCertificationTypeMin = 2;
+export const createMyCertificationBodyCertificationTypeMax = 120;
+
+export const createMyCertificationBodyIssuingInstitutionMin = 2;
+export const createMyCertificationBodyIssuingInstitutionMax = 120;
+
+export const createMyCertificationBodyDocumentUrlMax = 2048;
+
+export const createMyCertificationBodyDocumentKindDefault = `pdf`;
+export const createMyCertificationBodySkillLevelDefault = `basic`;
+
+export const CreateMyCertificationBody = zod.object({
+  certificationType: zod
+    .string()
+    .min(createMyCertificationBodyCertificationTypeMin)
+    .max(createMyCertificationBodyCertificationTypeMax),
+  issuingInstitution: zod
+    .string()
+    .min(createMyCertificationBodyIssuingInstitutionMin)
+    .max(createMyCertificationBodyIssuingInstitutionMax),
+  issueDate: zod.coerce.date(),
+  expirationDate: zod.coerce.date().nullish(),
+  documentUrl: zod.string().min(1).max(createMyCertificationBodyDocumentUrlMax),
+  documentKind: zod
+    .enum(["pdf", "image", "other"])
+    .default(createMyCertificationBodyDocumentKindDefault),
+  skillLevel: zod
+    .enum(["basic", "advanced"])
+    .default(createMyCertificationBodySkillLevelDefault),
+});
+
+/**
+ * @summary Remove a still-pending certification
+ */
+export const DeleteMyCertificationParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary Certification review queue (admin)
+ */
+export const ListAdminCertificationsQueryParams = zod.object({
+  status: zod.enum(["pending", "verified", "rejected"]).optional(),
+});
+
+export const ListAdminCertificationsResponseItem = zod
+  .object({
+    id: zod.number(),
+    mechanicId: zod.number(),
+    certificationType: zod.string(),
+    issuingInstitution: zod.string(),
+    issueDate: zod.coerce.date(),
+    expirationDate: zod.coerce.date().nullish(),
+    documentUrl: zod.string(),
+    documentKind: zod.enum(["pdf", "image", "other"]),
+    skillLevel: zod.enum(["basic", "advanced"]),
+    status: zod.enum(["pending", "verified", "rejected"]),
+    reviewNote: zod.string().nullish(),
+    reviewedBy: zod.number().nullish(),
+    reviewedAt: zod.coerce.date().nullish(),
+    createdAt: zod.coerce.date(),
+    updatedAt: zod.coerce.date(),
+  })
+  .and(
+    zod.object({
+      mechanicName: zod.string().nullish(),
+      mechanicEmail: zod.string().nullish(),
+      mechanicTier: zod
+        .union([
+          zod.enum(["detailer", "technician", "senior", "advanced", "master"]),
+          zod.null(),
+        ])
+        .optional(),
+    }),
+  );
+export const ListAdminCertificationsResponse = zod.array(
+  ListAdminCertificationsResponseItem,
+);
+
+/**
+ * @summary Verify or reject a certification (admin); verified certs trigger re-evaluation
+ */
+export const ReviewCertificationParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const reviewCertificationBodyReviewNoteMax = 500;
+
+export const ReviewCertificationBody = zod.object({
+  status: zod.enum(["verified", "rejected"]),
+  reviewNote: zod.string().max(reviewCertificationBodyReviewNoteMax).nullish(),
+});
+
+export const ReviewCertificationResponse = zod.object({
+  certification: zod.object({
+    id: zod.number(),
+    mechanicId: zod.number(),
+    certificationType: zod.string(),
+    issuingInstitution: zod.string(),
+    issueDate: zod.coerce.date(),
+    expirationDate: zod.coerce.date().nullish(),
+    documentUrl: zod.string(),
+    documentKind: zod.enum(["pdf", "image", "other"]),
+    skillLevel: zod.enum(["basic", "advanced"]),
+    status: zod.enum(["pending", "verified", "rejected"]),
+    reviewNote: zod.string().nullish(),
+    reviewedBy: zod.number().nullish(),
+    reviewedAt: zod.coerce.date().nullish(),
+    createdAt: zod.coerce.date(),
+    updatedAt: zod.coerce.date(),
+  }),
+  progression: zod
+    .union([
+      zod.object({
+        mechanicId: zod.number(),
+        currentTier: zod.enum([
+          "detailer",
+          "technician",
+          "senior",
+          "advanced",
+          "master",
+        ]),
+        currentTierLabel: zod.string().optional(),
+        nextTierLabel: zod.string().nullish(),
+        metrics: zod.object({
+          completedJobs: zod.number(),
+          averageRating: zod.number().nullable(),
+          ratingCount: zod.number(),
+          unresolvedFlags: zod.number(),
+          verifiedCertifications: zod.number(),
+          verifiedAdvancedCertifications: zod.number(),
+          pendingCertifications: zod.number(),
+        }),
+        next: zod
+          .union([
+            zod.object({
+              from: zod.enum([
+                "detailer",
+                "technician",
+                "senior",
+                "advanced",
+                "master",
+              ]),
+              to: zod.enum([
+                "detailer",
+                "technician",
+                "senior",
+                "advanced",
+                "master",
+              ]),
+              summary: zod.string(),
+              thresholds: zod.record(zod.string(), zod.number()),
+              blockers: zod.array(zod.string()).nullable(),
+              autoApply: zod.boolean(),
+            }),
+            zod.null(),
+          ])
+          .optional(),
+        atMaxTier: zod.boolean(),
+        promoted: zod.boolean(),
+        promotedTo: zod
+          .union([
+            zod.enum([
+              "detailer",
+              "technician",
+              "senior",
+              "advanced",
+              "master",
+            ]),
+            zod.null(),
+          ])
+          .optional(),
+        flaggedForAdminReview: zod.boolean(),
+        tierOrder: zod
+          .array(
+            zod.enum([
+              "detailer",
+              "technician",
+              "senior",
+              "advanced",
+              "master",
+            ]),
+          )
+          .optional(),
+        tierLabels: zod.record(zod.string(), zod.string()).optional(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+});
+
+/**
+ * @summary Advanced-tier mechanics evaluated for master promotion
+ */
+export const ListPendingPromotionsResponseItem = zod.object({
+  mechanicId: zod.number(),
+  mechanicName: zod.string(),
+  mechanicEmail: zod.string(),
+  currentTier: zod.enum([
+    "detailer",
+    "technician",
+    "senior",
+    "advanced",
+    "master",
+  ]),
+  metrics: zod.object({
+    completedJobs: zod.number(),
+    averageRating: zod.number().nullable(),
+    ratingCount: zod.number(),
+    unresolvedFlags: zod.number(),
+    verifiedCertifications: zod.number(),
+    verifiedAdvancedCertifications: zod.number(),
+    pendingCertifications: zod.number(),
+  }),
+  next: zod
+    .union([
+      zod.object({
+        from: zod.enum([
+          "detailer",
+          "technician",
+          "senior",
+          "advanced",
+          "master",
+        ]),
+        to: zod.enum([
+          "detailer",
+          "technician",
+          "senior",
+          "advanced",
+          "master",
+        ]),
+        summary: zod.string(),
+        thresholds: zod.record(zod.string(), zod.number()),
+        blockers: zod.array(zod.string()).nullable(),
+        autoApply: zod.boolean(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+  flaggedForAdminReview: zod.boolean(),
+});
+export const ListPendingPromotionsResponse = zod.array(
+  ListPendingPromotionsResponseItem,
+);
+
+/**
+ * @summary Detailed progression snapshot + promotion history for a mechanic (admin)
+ */
+export const GetMechanicProgressionParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetMechanicProgressionResponse = zod
+  .object({
+    mechanicId: zod.number(),
+    currentTier: zod.enum([
+      "detailer",
+      "technician",
+      "senior",
+      "advanced",
+      "master",
+    ]),
+    currentTierLabel: zod.string().optional(),
+    nextTierLabel: zod.string().nullish(),
+    metrics: zod.object({
+      completedJobs: zod.number(),
+      averageRating: zod.number().nullable(),
+      ratingCount: zod.number(),
+      unresolvedFlags: zod.number(),
+      verifiedCertifications: zod.number(),
+      verifiedAdvancedCertifications: zod.number(),
+      pendingCertifications: zod.number(),
+    }),
+    next: zod
+      .union([
+        zod.object({
+          from: zod.enum([
+            "detailer",
+            "technician",
+            "senior",
+            "advanced",
+            "master",
+          ]),
+          to: zod.enum([
+            "detailer",
+            "technician",
+            "senior",
+            "advanced",
+            "master",
+          ]),
+          summary: zod.string(),
+          thresholds: zod.record(zod.string(), zod.number()),
+          blockers: zod.array(zod.string()).nullable(),
+          autoApply: zod.boolean(),
+        }),
+        zod.null(),
+      ])
+      .optional(),
+    atMaxTier: zod.boolean(),
+    promoted: zod.boolean(),
+    promotedTo: zod
+      .union([
+        zod.enum(["detailer", "technician", "senior", "advanced", "master"]),
+        zod.null(),
+      ])
+      .optional(),
+    flaggedForAdminReview: zod.boolean(),
+    tierOrder: zod
+      .array(
+        zod.enum(["detailer", "technician", "senior", "advanced", "master"]),
+      )
+      .optional(),
+    tierLabels: zod.record(zod.string(), zod.string()).optional(),
+  })
+  .and(
+    zod.object({
+      history: zod.array(
+        zod.object({
+          id: zod.number(),
+          mechanicId: zod.number(),
+          previousTier: zod.enum([
+            "detailer",
+            "technician",
+            "senior",
+            "advanced",
+            "master",
+          ]),
+          newTier: zod.enum([
+            "detailer",
+            "technician",
+            "senior",
+            "advanced",
+            "master",
+          ]),
+          reason: zod.string(),
+          trigger: zod.enum(["system", "system_flagged", "admin"]),
+          metricsSnapshot: zod.record(zod.string(), zod.unknown()),
+          triggeredBy: zod.number().nullish(),
+          createdAt: zod.coerce.date(),
+        }),
+      ),
+    }),
+  );
+
+/**
+ * @summary Admin-finalize a master promotion. Validates engine eligibility unless bypassThresholds=true.
+ */
+export const PromoteMechanicParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const PromoteMechanicBody = zod.object({
+  bypassThresholds: zod.boolean().optional(),
+});
+
+export const PromoteMechanicResponse = zod.object({
+  mechanicId: zod.number(),
+  currentTier: zod.enum([
+    "detailer",
+    "technician",
+    "senior",
+    "advanced",
+    "master",
+  ]),
+  currentTierLabel: zod.string().optional(),
+  nextTierLabel: zod.string().nullish(),
+  metrics: zod.object({
+    completedJobs: zod.number(),
+    averageRating: zod.number().nullable(),
+    ratingCount: zod.number(),
+    unresolvedFlags: zod.number(),
+    verifiedCertifications: zod.number(),
+    verifiedAdvancedCertifications: zod.number(),
+    pendingCertifications: zod.number(),
+  }),
+  next: zod
+    .union([
+      zod.object({
+        from: zod.enum([
+          "detailer",
+          "technician",
+          "senior",
+          "advanced",
+          "master",
+        ]),
+        to: zod.enum([
+          "detailer",
+          "technician",
+          "senior",
+          "advanced",
+          "master",
+        ]),
+        summary: zod.string(),
+        thresholds: zod.record(zod.string(), zod.number()),
+        blockers: zod.array(zod.string()).nullable(),
+        autoApply: zod.boolean(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+  atMaxTier: zod.boolean(),
+  promoted: zod.boolean(),
+  promotedTo: zod
+    .union([
+      zod.enum(["detailer", "technician", "senior", "advanced", "master"]),
+      zod.null(),
+    ])
+    .optional(),
+  flaggedForAdminReview: zod.boolean(),
+  tierOrder: zod
+    .array(zod.enum(["detailer", "technician", "senior", "advanced", "master"]))
+    .optional(),
+  tierLabels: zod.record(zod.string(), zod.string()).optional(),
 });

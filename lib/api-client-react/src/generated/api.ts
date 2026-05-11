@@ -19,6 +19,7 @@ import type {
 import type {
   AddFavoriteBody,
   AdminDashboard,
+  AdminProgressionSnapshot,
   AssistantChatRequest,
   AssistantChatResponse,
   AuthResponse,
@@ -29,6 +30,7 @@ import type {
   ComponentSpecs,
   CreateBayBody,
   CreateBayBookingBody,
+  CreateCertificationBody,
   CreateFlagBody,
   CreateInspectionBody,
   CreateJobBody,
@@ -45,25 +47,34 @@ import type {
   HealthStatus,
   Inspection,
   Job,
+  ListAdminCertificationsParams,
   ListAvailableBaysParams,
   ListJobsParams,
   ListMechanicsParams,
   ListUsersParams,
   LoginBody,
+  MasterCandidate,
+  MechanicCertification,
+  MechanicCertificationWithMechanic,
   MechanicDashboard,
   MechanicProfile,
   MechanicSummary,
   OwnershipRecord,
   PartsCatalogResponse,
   Payment,
+  ProgressionSnapshot,
+  PromoteMechanicBody,
   RateCustomerBody,
   RateJobBody,
   RegisterBody,
   RemoveFavorite200,
   Review,
+  ReviewCertificationBody,
+  ReviewCertificationResult,
   ServiceRecommendation,
   Shop,
   ShopWithBays,
+  TierPromotion,
   TransferVehicleBody,
   UpdateBayBody,
   UpdateJobStatusBody,
@@ -5359,4 +5370,844 @@ export const useApproveJobTransport = <
   TContext
 > => {
   return useMutation(getApproveJobTransportMutationOptions(options));
+};
+
+/**
+ * @summary Current tier, performance metrics, and next-tier eligibility for the authenticated mechanic
+ */
+export const getGetMyProgressionUrl = () => {
+  return `/api/mechanic/me/progression`;
+};
+
+export const getMyProgression = async (
+  options?: RequestInit,
+): Promise<ProgressionSnapshot> => {
+  return customFetch<ProgressionSnapshot>(getGetMyProgressionUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetMyProgressionQueryKey = () => {
+  return [`/api/mechanic/me/progression`] as const;
+};
+
+export const getGetMyProgressionQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMyProgression>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMyProgression>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetMyProgressionQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getMyProgression>>
+  > = ({ signal }) => getMyProgression({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMyProgression>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMyProgressionQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMyProgression>>
+>;
+export type GetMyProgressionQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Current tier, performance metrics, and next-tier eligibility for the authenticated mechanic
+ */
+
+export function useGetMyProgression<
+  TData = Awaited<ReturnType<typeof getMyProgression>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMyProgression>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMyProgressionQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Immutable promotion audit log for the authenticated mechanic
+ */
+export const getListMyPromotionHistoryUrl = () => {
+  return `/api/mechanic/me/promotion-history`;
+};
+
+export const listMyPromotionHistory = async (
+  options?: RequestInit,
+): Promise<TierPromotion[]> => {
+  return customFetch<TierPromotion[]>(getListMyPromotionHistoryUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListMyPromotionHistoryQueryKey = () => {
+  return [`/api/mechanic/me/promotion-history`] as const;
+};
+
+export const getListMyPromotionHistoryQueryOptions = <
+  TData = Awaited<ReturnType<typeof listMyPromotionHistory>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listMyPromotionHistory>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListMyPromotionHistoryQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listMyPromotionHistory>>
+  > = ({ signal }) => listMyPromotionHistory({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listMyPromotionHistory>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListMyPromotionHistoryQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listMyPromotionHistory>>
+>;
+export type ListMyPromotionHistoryQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Immutable promotion audit log for the authenticated mechanic
+ */
+
+export function useListMyPromotionHistory<
+  TData = Awaited<ReturnType<typeof listMyPromotionHistory>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listMyPromotionHistory>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListMyPromotionHistoryQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Authenticated mechanic's certifications (any status)
+ */
+export const getListMyCertificationsUrl = () => {
+  return `/api/mechanic/me/certifications`;
+};
+
+export const listMyCertifications = async (
+  options?: RequestInit,
+): Promise<MechanicCertification[]> => {
+  return customFetch<MechanicCertification[]>(getListMyCertificationsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListMyCertificationsQueryKey = () => {
+  return [`/api/mechanic/me/certifications`] as const;
+};
+
+export const getListMyCertificationsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listMyCertifications>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listMyCertifications>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListMyCertificationsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listMyCertifications>>
+  > = ({ signal }) => listMyCertifications({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listMyCertifications>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListMyCertificationsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listMyCertifications>>
+>;
+export type ListMyCertificationsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Authenticated mechanic's certifications (any status)
+ */
+
+export function useListMyCertifications<
+  TData = Awaited<ReturnType<typeof listMyCertifications>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listMyCertifications>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListMyCertificationsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Upload a new certification (status starts as pending)
+ */
+export const getCreateMyCertificationUrl = () => {
+  return `/api/mechanic/me/certifications`;
+};
+
+export const createMyCertification = async (
+  createCertificationBody: CreateCertificationBody,
+  options?: RequestInit,
+): Promise<MechanicCertification> => {
+  return customFetch<MechanicCertification>(getCreateMyCertificationUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createCertificationBody),
+  });
+};
+
+export const getCreateMyCertificationMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createMyCertification>>,
+    TError,
+    { data: BodyType<CreateCertificationBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createMyCertification>>,
+  TError,
+  { data: BodyType<CreateCertificationBody> },
+  TContext
+> => {
+  const mutationKey = ["createMyCertification"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createMyCertification>>,
+    { data: BodyType<CreateCertificationBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createMyCertification(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateMyCertificationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createMyCertification>>
+>;
+export type CreateMyCertificationMutationBody =
+  BodyType<CreateCertificationBody>;
+export type CreateMyCertificationMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Upload a new certification (status starts as pending)
+ */
+export const useCreateMyCertification = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createMyCertification>>,
+    TError,
+    { data: BodyType<CreateCertificationBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createMyCertification>>,
+  TError,
+  { data: BodyType<CreateCertificationBody> },
+  TContext
+> => {
+  return useMutation(getCreateMyCertificationMutationOptions(options));
+};
+
+/**
+ * @summary Remove a still-pending certification
+ */
+export const getDeleteMyCertificationUrl = (id: number) => {
+  return `/api/mechanic/me/certifications/${id}`;
+};
+
+export const deleteMyCertification = async (
+  id: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteMyCertificationUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteMyCertificationMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteMyCertification>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteMyCertification>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deleteMyCertification"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteMyCertification>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteMyCertification(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteMyCertificationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteMyCertification>>
+>;
+
+export type DeleteMyCertificationMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Remove a still-pending certification
+ */
+export const useDeleteMyCertification = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteMyCertification>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteMyCertification>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getDeleteMyCertificationMutationOptions(options));
+};
+
+/**
+ * @summary Certification review queue (admin)
+ */
+export const getListAdminCertificationsUrl = (
+  params?: ListAdminCertificationsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/admin/certifications?${stringifiedParams}`
+    : `/api/admin/certifications`;
+};
+
+export const listAdminCertifications = async (
+  params?: ListAdminCertificationsParams,
+  options?: RequestInit,
+): Promise<MechanicCertificationWithMechanic[]> => {
+  return customFetch<MechanicCertificationWithMechanic[]>(
+    getListAdminCertificationsUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getListAdminCertificationsQueryKey = (
+  params?: ListAdminCertificationsParams,
+) => {
+  return [`/api/admin/certifications`, ...(params ? [params] : [])] as const;
+};
+
+export const getListAdminCertificationsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listAdminCertifications>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListAdminCertificationsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listAdminCertifications>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListAdminCertificationsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listAdminCertifications>>
+  > = ({ signal }) =>
+    listAdminCertifications(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listAdminCertifications>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListAdminCertificationsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listAdminCertifications>>
+>;
+export type ListAdminCertificationsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Certification review queue (admin)
+ */
+
+export function useListAdminCertifications<
+  TData = Awaited<ReturnType<typeof listAdminCertifications>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListAdminCertificationsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listAdminCertifications>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListAdminCertificationsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Verify or reject a certification (admin); verified certs trigger re-evaluation
+ */
+export const getReviewCertificationUrl = (id: number) => {
+  return `/api/admin/certifications/${id}`;
+};
+
+export const reviewCertification = async (
+  id: number,
+  reviewCertificationBody: ReviewCertificationBody,
+  options?: RequestInit,
+): Promise<ReviewCertificationResult> => {
+  return customFetch<ReviewCertificationResult>(getReviewCertificationUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(reviewCertificationBody),
+  });
+};
+
+export const getReviewCertificationMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reviewCertification>>,
+    TError,
+    { id: number; data: BodyType<ReviewCertificationBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof reviewCertification>>,
+  TError,
+  { id: number; data: BodyType<ReviewCertificationBody> },
+  TContext
+> => {
+  const mutationKey = ["reviewCertification"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof reviewCertification>>,
+    { id: number; data: BodyType<ReviewCertificationBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return reviewCertification(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ReviewCertificationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof reviewCertification>>
+>;
+export type ReviewCertificationMutationBody = BodyType<ReviewCertificationBody>;
+export type ReviewCertificationMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Verify or reject a certification (admin); verified certs trigger re-evaluation
+ */
+export const useReviewCertification = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reviewCertification>>,
+    TError,
+    { id: number; data: BodyType<ReviewCertificationBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof reviewCertification>>,
+  TError,
+  { id: number; data: BodyType<ReviewCertificationBody> },
+  TContext
+> => {
+  return useMutation(getReviewCertificationMutationOptions(options));
+};
+
+/**
+ * @summary Advanced-tier mechanics evaluated for master promotion
+ */
+export const getListPendingPromotionsUrl = () => {
+  return `/api/admin/promotions/pending`;
+};
+
+export const listPendingPromotions = async (
+  options?: RequestInit,
+): Promise<MasterCandidate[]> => {
+  return customFetch<MasterCandidate[]>(getListPendingPromotionsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListPendingPromotionsQueryKey = () => {
+  return [`/api/admin/promotions/pending`] as const;
+};
+
+export const getListPendingPromotionsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listPendingPromotions>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listPendingPromotions>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListPendingPromotionsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listPendingPromotions>>
+  > = ({ signal }) => listPendingPromotions({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listPendingPromotions>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListPendingPromotionsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listPendingPromotions>>
+>;
+export type ListPendingPromotionsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Advanced-tier mechanics evaluated for master promotion
+ */
+
+export function useListPendingPromotions<
+  TData = Awaited<ReturnType<typeof listPendingPromotions>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listPendingPromotions>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListPendingPromotionsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Detailed progression snapshot + promotion history for a mechanic (admin)
+ */
+export const getGetMechanicProgressionUrl = (id: number) => {
+  return `/api/admin/mechanics/${id}/progression`;
+};
+
+export const getMechanicProgression = async (
+  id: number,
+  options?: RequestInit,
+): Promise<AdminProgressionSnapshot> => {
+  return customFetch<AdminProgressionSnapshot>(
+    getGetMechanicProgressionUrl(id),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetMechanicProgressionQueryKey = (id: number) => {
+  return [`/api/admin/mechanics/${id}/progression`] as const;
+};
+
+export const getGetMechanicProgressionQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMechanicProgression>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMechanicProgression>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetMechanicProgressionQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getMechanicProgression>>
+  > = ({ signal }) => getMechanicProgression(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMechanicProgression>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMechanicProgressionQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMechanicProgression>>
+>;
+export type GetMechanicProgressionQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Detailed progression snapshot + promotion history for a mechanic (admin)
+ */
+
+export function useGetMechanicProgression<
+  TData = Awaited<ReturnType<typeof getMechanicProgression>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMechanicProgression>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMechanicProgressionQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Admin-finalize a master promotion. Validates engine eligibility unless bypassThresholds=true.
+ */
+export const getPromoteMechanicUrl = (id: number) => {
+  return `/api/admin/mechanics/${id}/promote`;
+};
+
+export const promoteMechanic = async (
+  id: number,
+  promoteMechanicBody?: PromoteMechanicBody,
+  options?: RequestInit,
+): Promise<ProgressionSnapshot> => {
+  return customFetch<ProgressionSnapshot>(getPromoteMechanicUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(promoteMechanicBody),
+  });
+};
+
+export const getPromoteMechanicMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof promoteMechanic>>,
+    TError,
+    { id: number; data: BodyType<PromoteMechanicBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof promoteMechanic>>,
+  TError,
+  { id: number; data: BodyType<PromoteMechanicBody> },
+  TContext
+> => {
+  const mutationKey = ["promoteMechanic"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof promoteMechanic>>,
+    { id: number; data: BodyType<PromoteMechanicBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return promoteMechanic(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type PromoteMechanicMutationResult = NonNullable<
+  Awaited<ReturnType<typeof promoteMechanic>>
+>;
+export type PromoteMechanicMutationBody = BodyType<PromoteMechanicBody>;
+export type PromoteMechanicMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Admin-finalize a master promotion. Validates engine eligibility unless bypassThresholds=true.
+ */
+export const usePromoteMechanic = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof promoteMechanic>>,
+    TError,
+    { id: number; data: BodyType<PromoteMechanicBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof promoteMechanic>>,
+  TError,
+  { id: number; data: BodyType<PromoteMechanicBody> },
+  TContext
+> => {
+  return useMutation(getPromoteMechanicMutationOptions(options));
 };

@@ -14,3 +14,5 @@ export * from "./shops";
 export * from "./bays";
 export * from "./bayBookings";
 export * from "./inspections";
+export * from "./mechanicCertifications";
+export * from "./tierPromotions";

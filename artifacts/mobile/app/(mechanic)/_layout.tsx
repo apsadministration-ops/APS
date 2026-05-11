@@ -34,6 +34,10 @@ function NativeTabLayout() {
         <Icon sf={{ default: "person.circle", selected: "person.circle.fill" }} />
         <Label>Profile</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="progression">
+        <Icon sf={{ default: "chart.line.uptrend.xyaxis", selected: "chart.line.uptrend.xyaxis" }} />
+        <Label>Tier</Label>
+      </NativeTabs.Trigger>
     </NativeTabs>
   );
 }
@@ -139,6 +143,18 @@ function ClassicTabLayout() {
               <SymbolView name="person.circle" tintColor={color} size={24} />
             ) : (
               <Feather name="user" size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="progression"
+        options={{
+          title: "Tier",
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="chart.line.uptrend.xyaxis" tintColor={color} size={24} />
+            ) : (
+              <Feather name="award" size={22} color={color} />
             ),
         }}
       />

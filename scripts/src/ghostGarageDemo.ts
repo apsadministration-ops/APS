@@ -63,7 +63,7 @@ async function register(role: "customer" | "mechanic" | "shop_owner", suffix: st
   return { token: r.token, user: r.user, email };
 }
 
-async function activateMechanic(mechanicId: number, tier: "detailer" | "technician" | "senior" | "master"): Promise<void> {
+async function activateMechanic(mechanicId: number, tier: "detailer" | "technician" | "senior" | "advanced" | "master"): Promise<void> {
   const client = new Client({ connectionString: DB_URL });
   await client.connect();
   try {

@@ -19,7 +19,7 @@ export const baysTable = pgTable("bays", {
     .default([]),
   // Lowest mechanic tier permitted to book.
   minMechanicTier: text("min_mechanic_tier", {
-    enum: ["detailer", "technician", "senior", "master"],
+    enum: ["detailer", "technician", "senior", "advanced", "master"],
   }).notNull().default("detailer"),
   autoApprove: boolean("auto_approve").notNull().default(false),
   status: text("status", { enum: ["active", "inactive"] }).notNull().default("active"),

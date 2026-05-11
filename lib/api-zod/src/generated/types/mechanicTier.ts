@@ -6,10 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ListAvailableBaysMinTier =
-  (typeof ListAvailableBaysMinTier)[keyof typeof ListAvailableBaysMinTier];
+export type MechanicTier = (typeof MechanicTier)[keyof typeof MechanicTier];
 
-export const ListAvailableBaysMinTier = {
+export const MechanicTier = {
   detailer: "detailer",
   technician: "technician",
   senior: "senior",

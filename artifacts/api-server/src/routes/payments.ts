@@ -4,6 +4,7 @@ import { db, paymentsTable, jobsTable, usersTable } from "@workspace/db";
 import { tryConvertReferral } from "../lib/referralEngine";
 import { authenticate, requireRole, requireActiveMechanic, type AuthRequest } from "../middlewares/authenticate";
 import { awardCustomerPoints } from "../lib/loyaltyEngine";
+import { runProgression } from "../lib/tierProgressionEngine";
 import { getStripePublishableKey, getUncachableStripeClient } from "../lib/stripeClient";
 
 const router: IRouter = Router();
@@ -272,6 +273,10 @@ router.post("/payments/:jobId/release", authenticate, requireRole("admin"), asyn
     .returning();
   await db.update(jobsTable).set({ status: "PAID" }).where(eq(jobsTable.id, jobId));
   const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, jobId));
+  if (job?.mechanicId) {
+    runProgression(job.mechanicId, "job_paid", { logger: req.log })
+      .catch((err) => req.log.error({ err, mechanicId: job.mechanicId }, "tier progression failed"));
+  }
   if (job?.customerId) {
     // Legacy release path — give the same spending points the Stripe path
     // would have awarded (1 pt per $ released).

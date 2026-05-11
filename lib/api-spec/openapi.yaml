@@ -36,6 +36,8 @@ tags:
     description: Mechanic-to-shop bay rental bookings
   - name: inspections
     description: Pre and post-service vehicle inspections (Ghost Garage)
+  - name: progression
+    description: Mechanic tier progression — certifications, performance, promotions
 
 paths:
   /healthz:
@@ -1207,7 +1209,7 @@ paths:
           required: false
           schema:
             type: string
-            enum: [detailer, technician, senior, master]
+            enum: [detailer, technician, senior, advanced, master]
       responses:
         "200":
           description: OK
@@ -1429,6 +1431,169 @@ paths:
               schema:
                 $ref: "#/components/schemas/Job"
 
+  /mechanic/me/progression:
+    get:
+      operationId: getMyProgression
+      tags: [progression]
+      summary: Current tier, performance metrics, and next-tier eligibility for the authenticated mechanic
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Progression snapshot
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProgressionSnapshot" }
+
+  /mechanic/me/promotion-history:
+    get:
+      operationId: listMyPromotionHistory
+      tags: [progression]
+      summary: Immutable promotion audit log for the authenticated mechanic
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Promotion history
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TierPromotion" }
+
+  /mechanic/me/certifications:
+    get:
+      operationId: listMyCertifications
+      tags: [progression]
+      summary: Authenticated mechanic's certifications (any status)
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Certifications
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/MechanicCertification" }
+    post:
+      operationId: createMyCertification
+      tags: [progression]
+      summary: Upload a new certification (status starts as pending)
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateCertificationBody" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MechanicCertification" }
+
+  /mechanic/me/certifications/{id}:
+    delete:
+      operationId: deleteMyCertification
+      tags: [progression]
+      summary: Remove a still-pending certification
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "204":
+          description: Removed
+
+  /admin/certifications:
+    get:
+      operationId: listAdminCertifications
+      tags: [progression]
+      summary: Certification review queue (admin)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [pending, verified, rejected]
+      responses:
+        "200":
+          description: Certifications with mechanic context
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/MechanicCertificationWithMechanic" }
+
+  /admin/certifications/{id}:
+    patch:
+      operationId: reviewCertification
+      tags: [progression]
+      summary: Verify or reject a certification (admin); verified certs trigger re-evaluation
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReviewCertificationBody" }
+      responses:
+        "200":
+          description: Reviewed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReviewCertificationResult" }
+
+  /admin/promotions/pending:
+    get:
+      operationId: listPendingPromotions
+      tags: [progression]
+      summary: Advanced-tier mechanics evaluated for master promotion
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Master-tier candidates
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/MasterCandidate" }
+
+  /admin/mechanics/{id}/progression:
+    get:
+      operationId: getMechanicProgression
+      tags: [progression]
+      summary: Detailed progression snapshot + promotion history for a mechanic (admin)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Progression with history
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminProgressionSnapshot" }
+
+  /admin/mechanics/{id}/promote:
+    post:
+      operationId: promoteMechanic
+      tags: [progression]
+      summary: Admin-finalize a master promotion. Validates engine eligibility unless bypassThresholds=true.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PromoteMechanicBody" }
+      responses:
+        "200":
+          description: Promoted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProgressionSnapshot" }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1531,7 +1696,7 @@ components:
           nullable: true
         mechanicTier:
           type: string
-          enum: [detailer, technician, senior, master]
+          enum: [detailer, technician, senior, advanced, master]
           nullable: true
         certifications:
           type: string
@@ -1578,7 +1743,7 @@ components:
           type: string
         mechanicTier:
           type: string
-          enum: [detailer, technician, senior, master]
+          enum: [detailer, technician, senior, advanced, master]
         certifications:
           type: string
 
@@ -2392,7 +2557,7 @@ components:
             enum: [repair, diagnostic, maintenance, detailing]
         minMechanicTier:
           type: string
-          enum: [detailer, technician, senior, master]
+          enum: [detailer, technician, senior, advanced, master]
         autoApprove:
           type: boolean
         status:
@@ -2442,7 +2607,7 @@ components:
             enum: [repair, diagnostic, maintenance, detailing]
         minMechanicTier:
           type: string
-          enum: [detailer, technician, senior, master]
+          enum: [detailer, technician, senior, advanced, master]
         autoApprove:
           type: boolean
       required: [name, hourlyRate, allowedJobCategories, minMechanicTier]
@@ -2466,7 +2631,7 @@ components:
             enum: [repair, diagnostic, maintenance, detailing]
         minMechanicTier:
           type: string
-          enum: [detailer, technician, senior, master]
+          enum: [detailer, technician, senior, advanced, master]
         autoApprove:
           type: boolean
         status:
@@ -2732,3 +2897,169 @@ components:
           minItems: 2
           maxItems: 2
       required: [id, title, detail, severity, source, suggestedAction]
+
+    MechanicTier:
+      type: string
+      enum: [detailer, technician, senior, advanced, master]
+
+    MechanicMetrics:
+      type: object
+      properties:
+        completedJobs: { type: integer }
+        averageRating: { type: number, nullable: true }
+        ratingCount: { type: integer }
+        unresolvedFlags: { type: integer }
+        verifiedCertifications: { type: integer }
+        verifiedAdvancedCertifications: { type: integer }
+        pendingCertifications: { type: integer }
+      required: [completedJobs, averageRating, ratingCount, unresolvedFlags, verifiedCertifications, verifiedAdvancedCertifications, pendingCertifications]
+
+    NextTierEvaluation:
+      type: object
+      properties:
+        from: { $ref: "#/components/schemas/MechanicTier" }
+        to: { $ref: "#/components/schemas/MechanicTier" }
+        summary: { type: string }
+        thresholds:
+          type: object
+          additionalProperties: { type: number }
+        blockers:
+          type: array
+          nullable: true
+          items: { type: string }
+        autoApply: { type: boolean }
+      required: [from, to, summary, thresholds, blockers, autoApply]
+
+    ProgressionSnapshot:
+      type: object
+      properties:
+        mechanicId: { type: integer }
+        currentTier: { $ref: "#/components/schemas/MechanicTier" }
+        currentTierLabel: { type: string }
+        nextTierLabel: { type: string, nullable: true }
+        metrics: { $ref: "#/components/schemas/MechanicMetrics" }
+        next:
+          oneOf:
+            - { $ref: "#/components/schemas/NextTierEvaluation" }
+            - { type: "null" }
+        atMaxTier: { type: boolean }
+        promoted: { type: boolean }
+        promotedTo:
+          oneOf:
+            - { $ref: "#/components/schemas/MechanicTier" }
+            - { type: "null" }
+        flaggedForAdminReview: { type: boolean }
+        tierOrder:
+          type: array
+          items: { $ref: "#/components/schemas/MechanicTier" }
+        tierLabels:
+          type: object
+          additionalProperties: { type: string }
+      required: [mechanicId, currentTier, metrics, atMaxTier, promoted, flaggedForAdminReview]
+
+    AdminProgressionSnapshot:
+      allOf:
+        - $ref: "#/components/schemas/ProgressionSnapshot"
+        - type: object
+          properties:
+            history:
+              type: array
+              items: { $ref: "#/components/schemas/TierPromotion" }
+          required: [history]
+
+    MechanicCertification:
+      type: object
+      properties:
+        id: { type: integer }
+        mechanicId: { type: integer }
+        certificationType: { type: string }
+        issuingInstitution: { type: string }
+        issueDate: { type: string, format: date-time }
+        expirationDate: { type: string, format: date-time, nullable: true }
+        documentUrl: { type: string }
+        documentKind: { type: string, enum: [pdf, image, other] }
+        skillLevel: { type: string, enum: [basic, advanced] }
+        status: { type: string, enum: [pending, verified, rejected] }
+        reviewNote: { type: string, nullable: true }
+        reviewedBy: { type: integer, nullable: true }
+        reviewedAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      required: [id, mechanicId, certificationType, issuingInstitution, issueDate, documentUrl, documentKind, skillLevel, status, createdAt, updatedAt]
+
+    MechanicCertificationWithMechanic:
+      allOf:
+        - $ref: "#/components/schemas/MechanicCertification"
+        - type: object
+          properties:
+            mechanicName: { type: string, nullable: true }
+            mechanicEmail: { type: string, nullable: true }
+            mechanicTier:
+              oneOf:
+                - { $ref: "#/components/schemas/MechanicTier" }
+                - { type: "null" }
+
+    CreateCertificationBody:
+      type: object
+      properties:
+        certificationType: { type: string, minLength: 2, maxLength: 120 }
+        issuingInstitution: { type: string, minLength: 2, maxLength: 120 }
+        issueDate: { type: string, format: date-time }
+        expirationDate: { type: string, format: date-time, nullable: true }
+        documentUrl: { type: string, minLength: 1, maxLength: 2048 }
+        documentKind: { type: string, enum: [pdf, image, other], default: pdf }
+        skillLevel: { type: string, enum: [basic, advanced], default: basic }
+      required: [certificationType, issuingInstitution, issueDate, documentUrl]
+
+    ReviewCertificationBody:
+      type: object
+      properties:
+        status: { type: string, enum: [verified, rejected] }
+        reviewNote: { type: string, nullable: true, maxLength: 500 }
+      required: [status]
+
+    ReviewCertificationResult:
+      type: object
+      properties:
+        certification: { $ref: "#/components/schemas/MechanicCertification" }
+        progression:
+          oneOf:
+            - { $ref: "#/components/schemas/ProgressionSnapshot" }
+            - { type: "null" }
+      required: [certification]
+
+    TierPromotion:
+      type: object
+      properties:
+        id: { type: integer }
+        mechanicId: { type: integer }
+        previousTier: { $ref: "#/components/schemas/MechanicTier" }
+        newTier: { $ref: "#/components/schemas/MechanicTier" }
+        reason: { type: string }
+        trigger: { type: string, enum: [system, system_flagged, admin] }
+        metricsSnapshot:
+          type: object
+          additionalProperties: true
+        triggeredBy: { type: integer, nullable: true }
+        createdAt: { type: string, format: date-time }
+      required: [id, mechanicId, previousTier, newTier, reason, trigger, metricsSnapshot, createdAt]
+
+    MasterCandidate:
+      type: object
+      properties:
+        mechanicId: { type: integer }
+        mechanicName: { type: string }
+        mechanicEmail: { type: string }
+        currentTier: { $ref: "#/components/schemas/MechanicTier" }
+        metrics: { $ref: "#/components/schemas/MechanicMetrics" }
+        next:
+          oneOf:
+            - { $ref: "#/components/schemas/NextTierEvaluation" }
+            - { type: "null" }
+        flaggedForAdminReview: { type: boolean }
+      required: [mechanicId, mechanicName, mechanicEmail, currentTier, metrics, flaggedForAdminReview]
+
+    PromoteMechanicBody:
+      type: object
+      properties:
+        bypassThresholds: { type: boolean }

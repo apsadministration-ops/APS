@@ -68,6 +68,7 @@ export const UserMechanicTier = {
   detailer: "detailer",
   technician: "technician",
   senior: "senior",
+  advanced: "advanced",
   master: "master",
 } as const;
 
@@ -115,6 +116,7 @@ export const UpdateUserBodyMechanicTier = {
   detailer: "detailer",
   technician: "technician",
   senior: "senior",
+  advanced: "advanced",
   master: "master",
 } as const;
 
@@ -660,6 +662,7 @@ export const BayMinMechanicTier = {
   detailer: "detailer",
   technician: "technician",
   senior: "senior",
+  advanced: "advanced",
   master: "master",
 } as const;
 
@@ -708,6 +711,7 @@ export const CreateBayBodyMinMechanicTier = {
   detailer: "detailer",
   technician: "technician",
   senior: "senior",
+  advanced: "advanced",
   master: "master",
 } as const;
 
@@ -738,6 +742,7 @@ export const UpdateBayBodyMinMechanicTier = {
   detailer: "detailer",
   technician: "technician",
   senior: "senior",
+  advanced: "advanced",
   master: "master",
 } as const;
 
@@ -1010,6 +1015,203 @@ export interface ServiceRecommendation {
   estimatedCostRangeUsd?: number[];
 }
 
+export type MechanicTier = (typeof MechanicTier)[keyof typeof MechanicTier];
+
+export const MechanicTier = {
+  detailer: "detailer",
+  technician: "technician",
+  senior: "senior",
+  advanced: "advanced",
+  master: "master",
+} as const;
+
+export interface MechanicMetrics {
+  completedJobs: number;
+  averageRating: number | null;
+  ratingCount: number;
+  unresolvedFlags: number;
+  verifiedCertifications: number;
+  verifiedAdvancedCertifications: number;
+  pendingCertifications: number;
+}
+
+export type NextTierEvaluationThresholds = { [key: string]: number };
+
+export interface NextTierEvaluation {
+  from: MechanicTier;
+  to: MechanicTier;
+  summary: string;
+  thresholds: NextTierEvaluationThresholds;
+  blockers: string[] | null;
+  autoApply: boolean;
+}
+
+export type ProgressionSnapshotTierLabels = { [key: string]: string };
+
+export interface ProgressionSnapshot {
+  mechanicId: number;
+  currentTier: MechanicTier;
+  currentTierLabel?: string;
+  nextTierLabel?: string | null;
+  metrics: MechanicMetrics;
+  next?: NextTierEvaluation | null;
+  atMaxTier: boolean;
+  promoted: boolean;
+  promotedTo?: MechanicTier | null;
+  flaggedForAdminReview: boolean;
+  tierOrder?: MechanicTier[];
+  tierLabels?: ProgressionSnapshotTierLabels;
+}
+
+export type TierPromotionTrigger =
+  (typeof TierPromotionTrigger)[keyof typeof TierPromotionTrigger];
+
+export const TierPromotionTrigger = {
+  system: "system",
+  system_flagged: "system_flagged",
+  admin: "admin",
+} as const;
+
+export type TierPromotionMetricsSnapshot = { [key: string]: unknown };
+
+export interface TierPromotion {
+  id: number;
+  mechanicId: number;
+  previousTier: MechanicTier;
+  newTier: MechanicTier;
+  reason: string;
+  trigger: TierPromotionTrigger;
+  metricsSnapshot: TierPromotionMetricsSnapshot;
+  triggeredBy?: number | null;
+  createdAt: string;
+}
+
+export type AdminProgressionSnapshot = ProgressionSnapshot & {
+  history: TierPromotion[];
+};
+
+export type MechanicCertificationDocumentKind =
+  (typeof MechanicCertificationDocumentKind)[keyof typeof MechanicCertificationDocumentKind];
+
+export const MechanicCertificationDocumentKind = {
+  pdf: "pdf",
+  image: "image",
+  other: "other",
+} as const;
+
+export type MechanicCertificationSkillLevel =
+  (typeof MechanicCertificationSkillLevel)[keyof typeof MechanicCertificationSkillLevel];
+
+export const MechanicCertificationSkillLevel = {
+  basic: "basic",
+  advanced: "advanced",
+} as const;
+
+export type MechanicCertificationStatus =
+  (typeof MechanicCertificationStatus)[keyof typeof MechanicCertificationStatus];
+
+export const MechanicCertificationStatus = {
+  pending: "pending",
+  verified: "verified",
+  rejected: "rejected",
+} as const;
+
+export interface MechanicCertification {
+  id: number;
+  mechanicId: number;
+  certificationType: string;
+  issuingInstitution: string;
+  issueDate: string;
+  expirationDate?: string | null;
+  documentUrl: string;
+  documentKind: MechanicCertificationDocumentKind;
+  skillLevel: MechanicCertificationSkillLevel;
+  status: MechanicCertificationStatus;
+  reviewNote?: string | null;
+  reviewedBy?: number | null;
+  reviewedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type MechanicCertificationWithMechanic = MechanicCertification & {
+  mechanicName?: string | null;
+  mechanicEmail?: string | null;
+  mechanicTier?: MechanicTier | null;
+};
+
+export type CreateCertificationBodyDocumentKind =
+  (typeof CreateCertificationBodyDocumentKind)[keyof typeof CreateCertificationBodyDocumentKind];
+
+export const CreateCertificationBodyDocumentKind = {
+  pdf: "pdf",
+  image: "image",
+  other: "other",
+} as const;
+
+export type CreateCertificationBodySkillLevel =
+  (typeof CreateCertificationBodySkillLevel)[keyof typeof CreateCertificationBodySkillLevel];
+
+export const CreateCertificationBodySkillLevel = {
+  basic: "basic",
+  advanced: "advanced",
+} as const;
+
+export interface CreateCertificationBody {
+  /**
+   * @minLength 2
+   * @maxLength 120
+   */
+  certificationType: string;
+  /**
+   * @minLength 2
+   * @maxLength 120
+   */
+  issuingInstitution: string;
+  issueDate: string;
+  expirationDate?: string | null;
+  /**
+   * @minLength 1
+   * @maxLength 2048
+   */
+  documentUrl: string;
+  documentKind?: CreateCertificationBodyDocumentKind;
+  skillLevel?: CreateCertificationBodySkillLevel;
+}
+
+export type ReviewCertificationBodyStatus =
+  (typeof ReviewCertificationBodyStatus)[keyof typeof ReviewCertificationBodyStatus];
+
+export const ReviewCertificationBodyStatus = {
+  verified: "verified",
+  rejected: "rejected",
+} as const;
+
+export interface ReviewCertificationBody {
+  status: ReviewCertificationBodyStatus;
+  /** @maxLength 500 */
+  reviewNote?: string | null;
+}
+
+export interface ReviewCertificationResult {
+  certification: MechanicCertification;
+  progression?: ProgressionSnapshot | null;
+}
+
+export interface MasterCandidate {
+  mechanicId: number;
+  mechanicName: string;
+  mechanicEmail: string;
+  currentTier: MechanicTier;
+  metrics: MechanicMetrics;
+  next?: NextTierEvaluation | null;
+  flaggedForAdminReview: boolean;
+}
+
+export interface PromoteMechanicBody {
+  bypassThresholds?: boolean;
+}
+
 export type ListUsersParams = {
   role?: ListUsersRole;
   status?: ListUsersStatus;
@@ -1129,9 +1331,23 @@ export const ListAvailableBaysMinTier = {
   detailer: "detailer",
   technician: "technician",
   senior: "senior",
+  advanced: "advanced",
   master: "master",
 } as const;
 
 export type CancelBayBookingBody = {
   reason?: string;
 };
+
+export type ListAdminCertificationsParams = {
+  status?: ListAdminCertificationsStatus;
+};
+
+export type ListAdminCertificationsStatus =
+  (typeof ListAdminCertificationsStatus)[keyof typeof ListAdminCertificationsStatus];
+
+export const ListAdminCertificationsStatus = {
+  pending: "pending",
+  verified: "verified",
+  rejected: "rejected",
+} as const;

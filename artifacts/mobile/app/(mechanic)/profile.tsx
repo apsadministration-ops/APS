@@ -14,13 +14,14 @@ import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const TIER_META: Record<string, { color: string; label: string; icon: string; desc: string }> = {
-  detailer: { color: "#60A5FA", label: "Detailer", icon: "droplet", desc: "Entry level — detailing jobs only" },
-  technician: { color: "#34D399", label: "Technician", icon: "tool", desc: "Standard mechanic — all job types" },
-  senior: { color: "#FBBF24", label: "Senior Tech", icon: "star", desc: "Advanced technician — priority listings" },
-  master: { color: "#F472B6", label: "Master Tech", icon: "award", desc: "Certified master — all privileges" },
+  detailer: { color: "#60A5FA", label: "Detailer", icon: "droplet", desc: "TIER 1 — entry level, cosmetic and basic services" },
+  technician: { color: "#34D399", label: "Basic Mechanic", icon: "tool", desc: "TIER 2 — oil changes, brakes, diagnostics assistance" },
+  senior: { color: "#FBBF24", label: "Intermediate Mechanic", icon: "star", desc: "TIER 3 — suspension, CV axles, steering systems" },
+  advanced: { color: "#FB923C", label: "Advanced Mechanic", icon: "zap", desc: "TIER 4 — high-skill repairs and full diagnostics" },
+  master: { color: "#F472B6", label: "Master Mechanic", icon: "award", desc: "TIER 5 — full diagnostic authority, complex systems" },
 };
 
-const TIER_ORDER = ["detailer", "technician", "senior", "master"];
+const TIER_ORDER = ["detailer", "technician", "senior", "advanced", "master"];
 
 interface LoyaltyData { balance: number; history: { id: number; points: number; reason: string; createdAt: string }[] }
 interface ConnectStatus { accountId: string | null; ready: boolean; chargesEnabled: boolean; payoutsEnabled: boolean; detailsSubmitted: boolean }

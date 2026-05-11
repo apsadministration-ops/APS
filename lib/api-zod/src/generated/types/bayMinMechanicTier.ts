@@ -13,5 +13,6 @@ export const BayMinMechanicTier = {
   detailer: "detailer",
   technician: "technician",
   senior: "senior",
+  advanced: "advanced",
   master: "master",
 } as const;

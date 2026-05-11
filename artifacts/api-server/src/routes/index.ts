@@ -19,6 +19,7 @@ import shopsRouter from "./shops";
 import baysRouter from "./bays";
 import bookingsRouter from "./bookings";
 import inspectionsRouter from "./inspections";
+import progressionRouter from "./progression";
 
 const router: IRouter = Router();
 
@@ -42,5 +43,6 @@ router.use(shopsRouter);
 router.use(baysRouter);
 router.use(bookingsRouter);
 router.use(inspectionsRouter);
+router.use(progressionRouter);
 
 export default router;

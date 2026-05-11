@@ -13,7 +13,14 @@ export const usersTable = pgTable("users", {
   avatarUrl: text("avatar_url"),
   pushToken: text("push_token"),
   referralCode: text("referral_code").unique(),
-  mechanicTier: text("mechanic_tier", { enum: ["detailer", "technician", "senior", "master"] }).default("detailer"),
+  // Tier ladder (5 levels). The internal name is preserved for backward compat;
+  // the user-facing label is in MECHANIC_TIER_LABELS in lib/tierProgressionEngine.ts:
+  //   detailer    — TIER 1: Detailer
+  //   technician  — TIER 2: Basic Mechanic
+  //   senior      — TIER 3: Intermediate Mechanic
+  //   advanced    — TIER 4: Advanced Mechanic
+  //   master      — TIER 5: Master Mechanic
+  mechanicTier: text("mechanic_tier", { enum: ["detailer", "technician", "senior", "advanced", "master"] }).default("detailer"),
   certifications: text("certifications").default("[]"),
   loyaltyPoints: integer("loyalty_points").notNull().default(0),
   mechanicPoints: integer("mechanic_points").notNull().default(0),

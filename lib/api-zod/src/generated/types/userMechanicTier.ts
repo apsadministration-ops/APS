@@ -14,5 +14,6 @@ export const UserMechanicTier = {
   detailer: "detailer",
   technician: "technician",
   senior: "senior",
+  advanced: "advanced",
   master: "master",
 } as const;
