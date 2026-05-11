@@ -8,7 +8,17 @@ import { useMemo, useState } from "react";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import * as Location from "expo-location";
 import { success as hapticSuccess } from "@/utils/haptics";
-import { JOB_CATALOG, TIERS, tierLabel, type ServiceDef, type TierKey } from "@workspace/tier-catalog";
+import { JOB_CATALOG, type ServiceDef } from "@workspace/tier-catalog";
+
+// Customer-facing category labels. Detailing is intentionally excluded — it
+// has its own dedicated booking page (`/detailing`) with package pricing.
+const CATEGORY_ORDER: Array<{ key: "maintenance" | "repair" | "diagnostic"; label: string; icon: keyof typeof Feather.glyphMap }> = [
+  { key: "maintenance", label: "Maintenance",  icon: "tool" },
+  { key: "repair",      label: "Repairs",      icon: "settings" },
+  { key: "diagnostic",  label: "Diagnostics",  icon: "activity" },
+];
+
+const DIAGNOSTIC_SLUG = "basic_diagnostic_scan";
 
 // Mirrors artifacts/api-server/src/lib/transportKeywords.ts so the customer
 // sees the same lift-detection result the server will compute. The server
@@ -48,14 +58,28 @@ export default function RequestServiceScreen() {
     () => JOB_CATALOG.find((s) => s.slug === serviceSlug) ?? null,
     [serviceSlug],
   );
-  // Group services by tier for the picker. Filtered by free-text query.
+  // Group services by customer-facing category for the picker (NOT by tier —
+  // tiers are an internal pricing/skill concept the customer shouldn't see).
+  // Detailing services are intentionally excluded — those live on the
+  // dedicated /detailing page with package pricing.
   const grouped = useMemo(() => {
     const q = serviceQuery.trim().toLowerCase();
-    return TIERS.map((t) => ({
-      tier: t,
-      services: JOB_CATALOG.filter((s) => s.tier === t.key && (q === "" || s.name.toLowerCase().includes(q))),
+    return CATEGORY_ORDER.map((cat) => ({
+      category: cat,
+      services: JOB_CATALOG
+        .filter((s) => s.category === cat.key)
+        .filter((s) => q === "" || s.name.toLowerCase().includes(q))
+        .sort((a, b) => a.name.localeCompare(b.name)),
     })).filter((g) => g.services.length > 0);
   }, [serviceQuery]);
+
+  const pickDiagnostic = () => {
+    setServiceSlug(DIAGNOSTIC_SLUG);
+    setServiceQuery("");
+  };
+  const goToDetailing = () => {
+    router.replace("/detailing");
+  };
 
   const fetchWithTimeout = async (url: string, ms = 8000): Promise<Response | null> => {
     const ctrl = new AbortController();
@@ -259,9 +283,6 @@ export default function RequestServiceScreen() {
             <View style={[styles.selectedSvc, { backgroundColor: colors.primary + "12", borderColor: colors.primary }]}>
               <View style={{ flex: 1 }}>
                 <Text style={[styles.selectedSvcName, { color: colors.foreground }]}>{selectedService.name}</Text>
-                <Text style={[styles.selectedSvcMeta, { color: colors.mutedForeground }]}>
-                  {tierLabel(selectedService.tier as TierKey)} · {selectedService.category}
-                </Text>
               </View>
               <Pressable onPress={() => setServiceSlug(null)} hitSlop={8} style={[styles.changeBtn, { borderColor: colors.primary }]}>
                 <Text style={[styles.changeBtnText, { color: colors.primary }]}>Change</Text>
@@ -271,18 +292,51 @@ export default function RequestServiceScreen() {
             <>
               <TextInput
                 style={[styles.input, { backgroundColor: colors.card, color: colors.foreground, borderColor: colors.border }]}
-                placeholder="Search services (e.g. oil change, brakes, detail)…"
+                placeholder="Search services (e.g. oil change, brakes, battery)…"
                 placeholderTextColor={colors.mutedForeground}
                 value={serviceQuery}
                 onChangeText={setServiceQuery}
                 autoCapitalize="none"
               />
+
+              {/* "Not sure what you need?" — picks the diagnostic scan service. */}
+              <Pressable
+                onPress={pickDiagnostic}
+                style={[styles.unsureCard, { backgroundColor: colors.primary + "0F", borderColor: colors.primary }]}
+              >
+                <View style={[styles.unsureIcon, { backgroundColor: colors.primary }]}>
+                  <Feather name="help-circle" size={18} color="white" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.unsureTitle, { color: colors.foreground }]}>Not sure what's wrong?</Text>
+                  <Text style={[styles.unsureSub, { color: colors.mutedForeground }]}>
+                    Request a diagnostic — describe the issue below and a mechanic will scan and identify it for you.
+                  </Text>
+                </View>
+                <Feather name="chevron-right" size={18} color={colors.primary} />
+              </Pressable>
+
+              {/* Detailing pointer — keep these flows separated. */}
+              <Pressable
+                onPress={goToDetailing}
+                style={[styles.detailPointer, { backgroundColor: colors.card, borderColor: colors.border }]}
+              >
+                <Feather name="droplet" size={16} color={colors.primary} />
+                <Text style={[styles.detailPointerText, { color: colors.foreground }]}>
+                  Looking for a wash, wax, or full detail?{" "}
+                  <Text style={{ color: colors.primary, fontWeight: "700" }}>Book detailing →</Text>
+                </Text>
+              </Pressable>
+
               <View style={styles.svcList}>
                 {grouped.map((g) => (
-                  <View key={g.tier.key} style={{ marginTop: 14 }}>
-                    <Text style={[styles.tierHeader, { color: colors.mutedForeground }]}>
-                      Tier {g.tier.level} · {g.tier.label}
-                    </Text>
+                  <View key={g.category.key} style={{ marginTop: 14 }}>
+                    <View style={styles.catHeaderRow}>
+                      <Feather name={g.category.icon} size={14} color={colors.mutedForeground} />
+                      <Text style={[styles.catHeader, { color: colors.mutedForeground }]}>
+                        {g.category.label}
+                      </Text>
+                    </View>
                     <View style={{ gap: 6, marginTop: 6 }}>
                       {g.services.map((s) => (
                         <Pressable
@@ -299,7 +353,7 @@ export default function RequestServiceScreen() {
                 ))}
                 {grouped.length === 0 ? (
                   <Text style={[styles.helper, { color: colors.mutedForeground, marginTop: 12 }]}>
-                    No service matches "{serviceQuery}". Clear the search to browse all.
+                    No service matches "{serviceQuery}". Clear the search to browse all, or tap "Not sure what's wrong?" above to request a diagnostic.
                   </Text>
                 ) : null}
               </View>
@@ -455,7 +509,20 @@ const styles = StyleSheet.create({
   },
   changeBtnText: { fontSize: 12, fontWeight: "700" },
   svcList: {},
-  tierHeader: { fontSize: 11, fontWeight: "700", letterSpacing: 0.6 },
+  catHeaderRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  catHeader: { fontSize: 11, fontWeight: "700", letterSpacing: 0.8, textTransform: "uppercase" },
+  unsureCard: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    padding: 14, borderRadius: 14, borderWidth: 1.5, marginTop: 12,
+  },
+  unsureIcon: { width: 38, height: 38, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  unsureTitle: { fontSize: 14, fontWeight: "800" },
+  unsureSub: { fontSize: 12, marginTop: 3, lineHeight: 17 },
+  detailPointer: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    padding: 12, borderRadius: 12, borderWidth: 1, marginTop: 8,
+  },
+  detailPointerText: { flex: 1, fontSize: 13, lineHeight: 18 },
   svcRow: {
     flexDirection: "row", alignItems: "center", gap: 8,
     padding: 12, borderRadius: 10, borderWidth: 1,
