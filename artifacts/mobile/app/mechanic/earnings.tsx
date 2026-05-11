@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, ScrollView, Pressable, TextInput } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, Switch } from "react-native";
 import { Stack, useRouter } from "expo-router";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
@@ -8,9 +8,13 @@ import {
   TIERS,
   JOB_CATALOG,
   COMMISSION,
+  EUROPEAN_PREMIUM,
   servicesForTier,
   tierLabel,
   commissionForJob,
+  quoteForService,
+  splitCents,
+  isPricedService,
   type TierKey,
 } from "@workspace/tier-catalog";
 
@@ -25,36 +29,45 @@ export default function EarningsScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const myTier = ((user?.mechanicTier ?? "detailer") as TierKey);
-  const [labor, setLabor] = useState("250");
+  // Flat-rate calculator: toggle between domestic and European vehicle to
+  // see how the +25–35% premium changes mechanic take-home. Each tier card
+  // uses the first PRICED sample service for that tier so the numbers are
+  // grounded in the real catalog.
+  const [european, setEuropean] = useState(false);
 
-  const laborNum = useMemo(() => {
-    const n = parseFloat(labor.replace(/[^0-9.]/g, ""));
-    return Number.isFinite(n) && n > 0 ? n : 0;
-  }, [labor]);
-
-  // For the calculator: a card per tier showing what THIS mechanic would
-  // make on that tier's typical job. Only render tiers the mechanic can
-  // actually accept (tier <= their tier).
   const calcRows = useMemo(() => {
     return TIERS.map((t) => {
-      const sample = servicesForTier(t.key)[0];
+      // Only sample priced services so the calculator can always show a
+      // concrete dollar amount. Tiers with no priced services are skipped.
+      const sample = servicesForTier(t.key).find(isPricedService);
       if (!sample) return null;
+      const quote = quoteForService(sample, { isEuropean: european });
+      if (!quote) return null;
       const c = commissionForJob({
         category: sample.category,
         jobTier: t.key,
         mechanicTier: myTier,
       });
-      const mechanicTake = laborNum * c.mechanicRate;
-      const platformTake = laborNum - mechanicTake;
-      return { tier: t, sample, c, mechanicTake, platformTake };
+      // Use the SAME cents-based split the server uses at Stripe capture
+      // (`splitCents` in payments.ts/worklogs.ts). This guarantees the
+      // mechanic sees the exact take-home they'll be paid, not a rounded
+      // approximation that drifts a dollar from the payout.
+      const total = quote.bookedTotal;
+      const totalCents = total * 100;
+      const { mechanicPayoutCents, platformFeeCents } = splitCents(totalCents, c);
+      const mechanicTake = mechanicPayoutCents / 100;
+      const platformTake = platformFeeCents / 100;
+      return { tier: t, sample, c, quote, total, mechanicTake, platformTake };
     }).filter(Boolean) as Array<{
       tier: typeof TIERS[number];
       sample: typeof JOB_CATALOG[number];
       c: ReturnType<typeof commissionForJob>;
+      quote: NonNullable<ReturnType<typeof quoteForService>>;
+      total: number;
       mechanicTake: number;
       platformTake: number;
     }>;
-  }, [laborNum, myTier]);
+  }, [european, myTier]);
 
   return (
     <>
@@ -96,23 +109,26 @@ export default function EarningsScreen() {
           />
         </View>
 
-        {/* Live calculator */}
+        {/* Live calculator — flat rates from catalog */}
         <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Calculator</Text>
+          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Take-home calculator</Text>
           <Text style={[styles.sectionSub, { color: colors.mutedForeground }]}>
-            Plug in a labor amount to see what you'd take home for a typical job at each tier — calculated against your current tier ({tierLabel(myTier)}).
+            Each tier shows a typical flat-rate job and what you'd keep — calculated against your current tier ({tierLabel(myTier)}). Toggle European to add the +{EUROPEAN_PREMIUM.minPct}–{EUROPEAN_PREMIUM.maxPct}% vehicle premium.
           </Text>
-          <View style={styles.inputRow}>
-            <Text style={[styles.dollar, { color: colors.foreground }]}>$</Text>
-            <TextInput
-              style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.background }]}
-              keyboardType="decimal-pad"
-              value={labor}
-              onChangeText={setLabor}
-              placeholder="250"
-              placeholderTextColor={colors.mutedForeground}
+
+          <View style={[styles.euroToggle, { borderColor: colors.border, backgroundColor: colors.background }]}>
+            <Feather name="flag" size={16} color={european ? "#1D4ED8" : colors.mutedForeground} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.euroToggleTitle, { color: colors.foreground }]}>European vehicle</Text>
+              <Text style={[styles.euroToggleSub, { color: colors.mutedForeground }]}>
+                Adds +{EUROPEAN_PREMIUM.appliedPct}% to the booked total
+              </Text>
+            </View>
+            <Switch
+              value={european}
+              onValueChange={setEuropean}
+              trackColor={{ false: colors.border, true: "#3B82F6" }}
             />
-            <Text style={[styles.unit, { color: colors.mutedForeground }]}>labor</Text>
           </View>
 
           <View style={{ gap: 8, marginTop: 12 }}>
@@ -132,7 +148,7 @@ export default function EarningsScreen() {
                       Tier {row.tier.level} · {row.tier.label}
                     </Text>
                     <Text style={[styles.calcSample, { color: colors.mutedForeground }]} numberOfLines={1}>
-                      e.g. {row.sample.name}
+                      e.g. {row.sample.name} · ${row.quote.finalMin}–${row.quote.finalMax}
                     </Text>
                     <Text style={[styles.calcReason, { color: colors.mutedForeground }]}>
                       {canAccept ? row.c.reasonLabel : "Above your current tier — not accepted yet"}
@@ -143,7 +159,7 @@ export default function EarningsScreen() {
                       ${row.mechanicTake.toFixed(2)}
                     </Text>
                     <Text style={[styles.calcSplit, { color: colors.mutedForeground }]}>
-                      {row.c.mechanicPct}% / {row.c.platformPct}%
+                      of ${row.total} · {row.c.mechanicPct}% / {row.c.platformPct}%
                     </Text>
                   </View>
                 </View>
@@ -238,10 +254,12 @@ const styles = StyleSheet.create({
   section: { borderWidth: 1, borderRadius: 16, padding: 16, marginTop: 6 },
   sectionTitle: { fontSize: 16, fontWeight: "800" },
   sectionSub: { fontSize: 13, lineHeight: 18, marginTop: 4, marginBottom: 12 },
-  inputRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  dollar: { fontSize: 22, fontWeight: "700" },
-  input: { flex: 1, height: 48, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, fontSize: 17, fontWeight: "700" },
-  unit: { fontSize: 13, fontWeight: "600" },
+  euroToggle: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, borderWidth: 1,
+  },
+  euroToggleTitle: { fontSize: 14, fontWeight: "700" },
+  euroToggleSub: { fontSize: 11, marginTop: 1 },
   calcRow: {
     flexDirection: "row", alignItems: "center", gap: 12,
     padding: 12, borderRadius: 10, borderWidth: 1,

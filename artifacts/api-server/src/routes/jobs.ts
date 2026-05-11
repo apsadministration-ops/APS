@@ -13,6 +13,8 @@ import {
   tierLevel,
   mechanicQualifiedFor,
   commissionForJob,
+  quoteForService,
+  isEuropeanVehicle,
   type TierKey,
   type ServiceCategory,
 } from "@workspace/tier-catalog";
@@ -170,11 +172,14 @@ router.post("/jobs", authenticate, async (req: AuthRequest, res): Promise<void> 
   if (req.userRole !== "customer" && req.userRole !== "admin") {
     res.status(403).json({ error: "Only customers can create jobs" }); return;
   }
-  const { vehicleId, jobType, serviceSlug, description, locationLat, locationLng, locationAddress, estimatedPrice, requestedMechanicId } = req.body as {
+  const { vehicleId, jobType, serviceSlug, description, locationLat, locationLng, locationAddress, requestedMechanicId } = req.body as {
     vehicleId: number; jobType?: string; serviceSlug?: string; description: string;
-    locationLat?: number; locationLng?: number; locationAddress?: string; estimatedPrice?: number;
+    locationLat?: number; locationLng?: number; locationAddress?: string;
     requestedMechanicId?: number;
   };
+  // NOTE: any client-supplied `estimatedPrice` is intentionally ignored.
+  // Pricing is derived server-side from the catalog flat-rate + European
+  // premium below so the customer can never see one number and pay another.
   if (!vehicleId || !description) {
     res.status(400).json({ error: "vehicleId and description are required" }); return;
   }
@@ -208,13 +213,22 @@ router.post("/jobs", authenticate, async (req: AuthRequest, res): Promise<void> 
   // job description always classifies the same way regardless of UI version.
   const ghostGarage = requiresLiftFromDescription(description);
 
+  // Server-derived flat-rate price: catalog base × (1 + European premium).
+  // Clients NEVER set this — they receive a quote breakdown via
+  // GET /quotes/service/:slug?vehicleId=… and what they see is what they pay.
+  // Services without a published flat rate (e.g. "Performance Tuning") leave
+  // estimatedPrice null until a mechanic logs work or admin sets one.
+  const isEuropean = isEuropeanVehicle({ vin: vehicle.vin, make: vehicle.make });
+  const quote = catalogEntry ? quoteForService(catalogEntry, { isEuropean }) : null;
+  const derivedPrice: number | null = quote ? quote.bookedTotal : null;
+
   const [job] = await db.insert(jobsTable).values({
     vehicleId, vin: vehicle.vin, customerId: req.userId!,
     jobType: finalJobType,
     serviceSlug: catalogEntry?.slug ?? null,
     requiredTier: finalRequiredTier,
     description, locationLat: locationLat ?? null, locationLng: locationLng ?? null,
-    locationAddress: locationAddress ?? null, estimatedPrice: estimatedPrice ?? null,
+    locationAddress: locationAddress ?? null, estimatedPrice: derivedPrice,
     requestedMechanicId: validatedReqMech, status: "REQUESTED",
     requiresGhostGarage: ghostGarage,
     customerTransportApproved: !ghostGarage,
@@ -261,6 +275,13 @@ router.patch("/jobs/:jobId/status", authenticate, async (req: AuthRequest, res):
   const jobId = parseInt(String(req.params.jobId), 10);
   if (isNaN(jobId)) { res.status(400).json({ error: "Invalid job ID" }); return; }
   const { status, estimatedPrice } = req.body as { status: string; estimatedPrice?: number };
+  // Pricing is server-derived from the catalog. Only admins can override it
+  // (e.g. one-off custom quote outside the catalog) — mechanics are never
+  // allowed to change the price the customer sees after booking.
+  if (estimatedPrice !== undefined && req.userRole !== "admin") {
+    res.status(403).json({ error: "Pricing is set by the catalog and cannot be changed by the mechanic." });
+    return;
+  }
   const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, jobId));
   if (!job) { res.status(404).json({ error: "Job not found" }); return; }
   // IDOR guard: only the assigned mechanic (for in-progress status updates)

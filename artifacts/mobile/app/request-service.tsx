@@ -8,7 +8,10 @@ import { useMemo, useState } from "react";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import * as Location from "expo-location";
 import { success as hapticSuccess } from "@/utils/haptics";
-import { JOB_CATALOG, type ServiceDef } from "@workspace/tier-catalog";
+import {
+  JOB_CATALOG, isPricedService, isEuropeanVehicle, quoteForService,
+  EUROPEAN_PREMIUM, type ServiceDef,
+} from "@workspace/tier-catalog";
 
 // Customer-facing category labels. Detailing is intentionally excluded — it
 // has its own dedicated booking page (`/detailing`) with package pricing.
@@ -62,16 +65,36 @@ export default function RequestServiceScreen() {
   // tiers are an internal pricing/skill concept the customer shouldn't see).
   // Detailing services are intentionally excluded — those live on the
   // dedicated /detailing page with package pricing.
+  // Customers only see services with a published flat-rate price; the
+  // diagnostic-scan slug is exempt because it's reachable via the "Not
+  // sure?" shortcut and exists specifically for unknown problems.
   const grouped = useMemo(() => {
     const q = serviceQuery.trim().toLowerCase();
     return CATEGORY_ORDER.map((cat) => ({
       category: cat,
       services: JOB_CATALOG
         .filter((s) => s.category === cat.key)
+        .filter((s) => isPricedService(s) || s.slug === DIAGNOSTIC_SLUG)
         .filter((s) => q === "" || s.name.toLowerCase().includes(q))
         .sort((a, b) => a.name.localeCompare(b.name)),
     })).filter((g) => g.services.length > 0);
   }, [serviceQuery]);
+
+  // Live, in-memory flat-rate quote — what the server will stamp on the job.
+  // Computed from the same `@workspace/tier-catalog` lib the server uses, so
+  // the customer can never see one number and pay another.
+  const selectedVehicle = useMemo(
+    () => vehicles?.find((v) => v.id === selectedVehicleId) ?? null,
+    [vehicles, selectedVehicleId],
+  );
+  const isEuro = useMemo(
+    () => (selectedVehicle ? isEuropeanVehicle({ vin: selectedVehicle.vin, make: selectedVehicle.make }) : false),
+    [selectedVehicle],
+  );
+  const quote = useMemo(
+    () => (selectedService ? quoteForService(selectedService, { isEuropean: isEuro }) : null),
+    [selectedService, isEuro],
+  );
 
   const pickDiagnostic = () => {
     setServiceSlug(DIAGNOSTIC_SLUG);
@@ -280,14 +303,55 @@ export default function RequestServiceScreen() {
 
           <Text style={[styles.sectionLabel, { color: colors.mutedForeground, marginTop: 20 }]}>SERVICE</Text>
           {selectedService ? (
-            <View style={[styles.selectedSvc, { backgroundColor: colors.primary + "12", borderColor: colors.primary }]}>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.selectedSvcName, { color: colors.foreground }]}>{selectedService.name}</Text>
+            <>
+              <View style={[styles.selectedSvc, { backgroundColor: colors.primary + "12", borderColor: colors.primary }]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.selectedSvcName, { color: colors.foreground }]}>{selectedService.name}</Text>
+                </View>
+                <Pressable onPress={() => setServiceSlug(null)} hitSlop={8} style={[styles.changeBtn, { borderColor: colors.primary }]}>
+                  <Text style={[styles.changeBtnText, { color: colors.primary }]}>Change</Text>
+                </Pressable>
               </View>
-              <Pressable onPress={() => setServiceSlug(null)} hitSlop={8} style={[styles.changeBtn, { borderColor: colors.primary }]}>
-                <Text style={[styles.changeBtnText, { color: colors.primary }]}>Change</Text>
-              </Pressable>
-            </View>
+              {/* Flat-rate quote card — what the customer will pay if they book. */}
+              {quote ? (
+                <View style={[styles.quoteCard, { backgroundColor: colors.card, borderColor: "#22C55E" }]}>
+                  <View style={styles.quoteHeader}>
+                    <Feather name="dollar-sign" size={16} color="#15803D" />
+                    <Text style={[styles.quoteTitle, { color: colors.foreground }]}>Flat-rate price</Text>
+                  </View>
+                  <Text style={[styles.quoteAmount, { color: colors.foreground }]}>
+                    ${quote.finalMin}–${quote.finalMax}
+                  </Text>
+                  <Text style={[styles.quoteSub, { color: colors.mutedForeground }]}>
+                    Total — labor + typical parts. Booked at ${quote.bookedTotal} unless your mechanic logs additional approved upsells.
+                  </Text>
+                  {quote.isEuropean ? (
+                    <View style={[styles.quoteEuro, { backgroundColor: "#3B82F614", borderColor: "#3B82F6" }]}>
+                      <Feather name="info" size={12} color="#1D4ED8" />
+                      <Text style={[styles.quoteEuroText, { color: colors.foreground }]}>
+                        European vehicle premium included: +{quote.premiumMinPct}–{quote.premiumMaxPct}%
+                        (base ${quote.baseMin}–${quote.baseMax} → +{EUROPEAN_PREMIUM.appliedPct}% applied).
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+              ) : selectedService.slug === DIAGNOSTIC_SLUG ? (
+                <View style={[styles.quoteCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <View style={styles.quoteHeader}>
+                    <Feather name="search" size={16} color={colors.mutedForeground} />
+                    <Text style={[styles.quoteTitle, { color: colors.foreground }]}>Diagnostic visit</Text>
+                  </View>
+                  <Text style={[styles.quoteSub, { color: colors.mutedForeground }]}>
+                    Your mechanic will inspect, scan codes, and quote the repair before any work begins.
+                  </Text>
+                </View>
+              ) : null}
+              {!selectedVehicle && isPricedService(selectedService) ? (
+                <Text style={[styles.helper, { color: colors.mutedForeground, marginTop: 8 }]}>
+                  Pick a vehicle above to see if a European premium applies.
+                </Text>
+              ) : null}
+            </>
           ) : (
             <>
               <TextInput
@@ -504,6 +568,18 @@ const styles = StyleSheet.create({
   },
   selectedSvcName: { fontSize: 15, fontWeight: "700" },
   selectedSvcMeta: { fontSize: 12, marginTop: 2 },
+  quoteCard: {
+    marginTop: 10, padding: 14, borderRadius: 12, borderWidth: 1.5, gap: 6,
+  },
+  quoteHeader: { flexDirection: "row", alignItems: "center", gap: 6 },
+  quoteTitle: { fontSize: 12, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.6 },
+  quoteAmount: { fontSize: 26, fontWeight: "800" },
+  quoteSub: { fontSize: 12, lineHeight: 17 },
+  quoteEuro: {
+    flexDirection: "row", alignItems: "flex-start", gap: 6,
+    padding: 10, borderRadius: 10, borderWidth: 1, marginTop: 6,
+  },
+  quoteEuroText: { flex: 1, fontSize: 11, lineHeight: 15 },
   changeBtn: {
     paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1.5,
   },

@@ -9,57 +9,51 @@ import { useListVehicles, useCreateJob } from "@workspace/api-client-react";
 import { Feather } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import * as Haptics from "expo-haptics";
+import { findServiceBySlug, isEuropeanVehicle, quoteForService, EUROPEAN_PREMIUM } from "@workspace/tier-catalog";
 
 interface Package {
-  id: string;
+  /** Catalog slug — single source of truth for pricing (server-derived). */
+  slug: string;
   name: string;
   description: string;
   duration: string;
-  price: string;
-  priceValue: number;
   features: string[];
   color: string;
 }
 
+// Each package maps to a catalog slug. Prices are pulled from the catalog so
+// the customer always sees the same number the server stamps on their job.
 const PACKAGES: Package[] = [
   {
-    id: "express",
-    name: "Express Wash",
+    slug: "interior_exterior_wash",
+    name: "Express Wash & Vacuum",
     description: "Quick exterior wash and basic interior wipe-down.",
     duration: "45–60 min",
-    price: "$30–$50",
-    priceValue: 40,
     features: ["Exterior hand wash", "Wheel cleaning", "Interior vacuum", "Window cleaning"],
     color: "#0EA5E9",
   },
   {
-    id: "interior",
-    name: "Interior Detail",
+    slug: "full_interior_detailing",
+    name: "Full Interior Detail",
     description: "Deep clean of all interior surfaces, seats, and carpet.",
     duration: "2–3 hours",
-    price: "$80–$120",
-    priceValue: 100,
     features: ["Full interior vacuum", "Seat shampooing", "Dashboard & trim clean", "Odor treatment", "Carpet shampoo"],
     color: "#8B5CF6",
   },
   {
-    id: "full",
-    name: "Full Detail",
-    description: "Complete interior + exterior detailing for showroom results.",
+    slug: "complete_detail",
+    name: "Complete Interior + Exterior Detail",
+    description: "Full interior + exterior detailing for showroom results.",
     duration: "3–5 hours",
-    price: "$150–$220",
-    priceValue: 185,
     features: ["Everything in Express + Interior", "Clay bar decontamination", "Polish & wax protection", "Engine bay clean", "Tire dressing"],
     color: "#F97316",
   },
   {
-    id: "premium",
-    name: "Premium Package",
-    description: "The ultimate detailing experience with ceramic coating prep.",
+    slug: "ceramic_coating",
+    name: "Ceramic Coating (Basic)",
+    description: "Long-lasting ceramic coating with paint prep and decontamination.",
     duration: "5–8 hours",
-    price: "$300–$500",
-    priceValue: 400,
-    features: ["Everything in Full Detail", "Paint correction", "Ceramic coating prep", "Leather conditioning", "Headlight restoration", "Before & after photos"],
+    features: ["Paint correction", "Ceramic coating application", "Leather conditioning", "Headlight restoration", "Before & after photos"],
     color: "#FBBF24",
   },
 ];
@@ -182,9 +176,10 @@ export default function DetailingScreen() {
       {
         data: {
           vehicleId: selectedVehicleId,
+          // Server derives jobType + tier + flat-rate price from the slug.
+          serviceSlug: pkg.slug,
           jobType: "detailing",
           description: desc,
-          estimatedPrice: pkg.priceValue,
           locationAddress: finalAddress || undefined,
           locationLat: locationLat ?? undefined,
           locationLng: locationLng ?? undefined,
@@ -284,41 +279,58 @@ export default function DetailingScreen() {
             </View>
             <Text style={[styles.stepTitle, { color: colors.foreground }]}>Choose a Package</Text>
           </View>
-          <View style={styles.packageList}>
-            {PACKAGES.map((pkg) => {
-              const isSelected = selectedPackage?.id === pkg.id;
-              return (
-                <Pressable
-                  key={pkg.id}
-                  style={[
-                    styles.packageCard,
-                    {
-                      backgroundColor: isSelected ? pkg.color + "14" : colors.card,
-                      borderColor: isSelected ? pkg.color : colors.border,
-                      borderWidth: isSelected ? 2 : 1,
-                    },
-                  ]}
-                  onPress={() => setSelectedPackage(pkg)}
-                >
-                  <View style={styles.packageHeader}>
-                    <View style={[styles.packageIcon, { backgroundColor: pkg.color }]}>
-                      <Feather name="droplet" size={18} color="white" />
-                    </View>
-                    <View style={styles.packageMeta}>
-                      <Text style={[styles.packageName, { color: colors.foreground }]}>{pkg.name}</Text>
-                      <View style={styles.packagePills}>
-                        <View style={[styles.pill, { backgroundColor: pkg.color + "20" }]}>
-                          <Feather name="clock" size={10} color={pkg.color} />
-                          <Text style={[styles.pillText, { color: pkg.color }]}>{pkg.duration}</Text>
-                        </View>
-                        <View style={[styles.pill, { backgroundColor: "#22C55E20" }]}>
-                          <Feather name="dollar-sign" size={10} color="#22C55E" />
-                          <Text style={[styles.pillText, { color: "#22C55E" }]}>{pkg.price}</Text>
-                        </View>
-                      </View>
-                    </View>
-                    {isSelected && <Feather name="check-circle" size={22} color={pkg.color} />}
+          {(() => {
+            const selectedVehicle = vehicles?.find((v) => v.id === selectedVehicleId) ?? null;
+            const isEuro = selectedVehicle ? isEuropeanVehicle({ vin: selectedVehicle.vin, make: selectedVehicle.make }) : false;
+            return (
+              <>
+                {isEuro ? (
+                  <View style={[styles.euroBanner, { backgroundColor: "#3B82F614", borderColor: "#3B82F6" }]}>
+                    <Feather name="info" size={14} color="#1D4ED8" />
+                    <Text style={[styles.euroBannerText, { color: colors.foreground }]}>
+                      European vehicle detected — a {EUROPEAN_PREMIUM.minPct}–{EUROPEAN_PREMIUM.maxPct}% premium
+                      is included in the prices below ({EUROPEAN_PREMIUM.appliedPct}% applied to the booked total).
+                    </Text>
                   </View>
+                ) : null}
+                <View style={styles.packageList}>
+                  {PACKAGES.map((pkg) => {
+                    const isSelected = selectedPackage?.slug === pkg.slug;
+                    const svc = findServiceBySlug(pkg.slug);
+                    const quote = svc ? quoteForService(svc, { isEuropean: isEuro }) : null;
+                    const priceLabel = quote ? `$${quote.finalMin}–$${quote.finalMax}` : "—";
+                    return (
+                      <Pressable
+                        key={pkg.slug}
+                        style={[
+                          styles.packageCard,
+                          {
+                            backgroundColor: isSelected ? pkg.color + "14" : colors.card,
+                            borderColor: isSelected ? pkg.color : colors.border,
+                            borderWidth: isSelected ? 2 : 1,
+                          },
+                        ]}
+                        onPress={() => setSelectedPackage(pkg)}
+                      >
+                        <View style={styles.packageHeader}>
+                          <View style={[styles.packageIcon, { backgroundColor: pkg.color }]}>
+                            <Feather name="droplet" size={18} color="white" />
+                          </View>
+                          <View style={styles.packageMeta}>
+                            <Text style={[styles.packageName, { color: colors.foreground }]}>{pkg.name}</Text>
+                            <View style={styles.packagePills}>
+                              <View style={[styles.pill, { backgroundColor: pkg.color + "20" }]}>
+                                <Feather name="clock" size={10} color={pkg.color} />
+                                <Text style={[styles.pillText, { color: pkg.color }]}>{pkg.duration}</Text>
+                              </View>
+                              <View style={[styles.pill, { backgroundColor: "#22C55E20" }]}>
+                                <Feather name="dollar-sign" size={10} color="#22C55E" />
+                                <Text style={[styles.pillText, { color: "#22C55E" }]}>{priceLabel}</Text>
+                              </View>
+                            </View>
+                          </View>
+                          {isSelected && <Feather name="check-circle" size={22} color={pkg.color} />}
+                        </View>
                   <Text style={[styles.packageDesc, { color: colors.mutedForeground }]}>{pkg.description}</Text>
                   <View style={styles.featureList}>
                     {pkg.features.map((f) => (
@@ -331,7 +343,10 @@ export default function DetailingScreen() {
                 </Pressable>
               );
             })}
-          </View>
+                </View>
+              </>
+            );
+          })()}
         </View>
 
         {/* Step 3: Location */}
@@ -459,6 +474,11 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start", marginTop: 10,
   },
   locBadgeText: { fontSize: 12, fontWeight: "600" },
+  euroBanner: {
+    flexDirection: "row", alignItems: "flex-start", gap: 8,
+    padding: 12, borderRadius: 12, borderWidth: 1, marginBottom: 12,
+  },
+  euroBannerText: { flex: 1, fontSize: 12, lineHeight: 17 },
   error: { fontSize: 14 },
   submitBtn: {
     height: 56, borderRadius: 16, alignItems: "center", justifyContent: "center",
