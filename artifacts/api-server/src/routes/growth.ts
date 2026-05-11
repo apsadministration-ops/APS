@@ -28,7 +28,10 @@
 import { Router, type IRouter } from "express";
 import { and, desc, eq, gte, inArray, isNotNull } from "drizzle-orm";
 import { z } from "zod";
-import { db, socialPostsTable, type SocialPost } from "@workspace/db";
+import {
+  db, socialPostsTable, mechanicAmplificationTable, usersTable,
+  type SocialPost,
+} from "@workspace/db";
 import { authenticate, requireRole, type AuthRequest } from "../middlewares/authenticate";
 import {
   getAcquisitionOverview,
@@ -42,6 +45,7 @@ import {
 } from "../lib/growthAnalytics";
 import {
   generateContent,
+  generateMechanicContent,
   suggestTrendingTopics,
   recommendForBalance,
   TOPIC_KINDS,
@@ -50,6 +54,16 @@ import {
   type Platform,
   type TopicKind,
 } from "../lib/contentEngine";
+import {
+  getAdminGrowthSettings,
+  updateAdminGrowthSettings,
+  assertAiGenerationAllowed,
+  PolicyError,
+  AI_RESTRICTIONS,
+  ADMIN_PERMISSIONS,
+} from "../lib/adminGrowthPolicy";
+import { buildAmplificationKit } from "../lib/mechanicAmplification";
+import { FUTURE_CAPABILITIES } from "../lib/_futureGrowth";
 
 const router: IRouter = Router();
 
@@ -107,6 +121,11 @@ router.get("/admin/growth/amplification", async (_req: AuthRequest, res): Promis
 });
 
 router.get("/admin/growth/trends", async (_req: AuthRequest, res): Promise<void> => {
+  try { await assertAiGenerationAllowed(); }
+  catch (err) {
+    if (err instanceof PolicyError) { res.status(err.statusCode).json({ error: err.message }); return; }
+    throw err;
+  }
   const regions = await getRegionalDensity();
   const top = regions.slice(0, 5).map((r) => r.region);
   const shortages = regions
@@ -154,6 +173,11 @@ router.post("/admin/growth/content/generate", async (req: AuthRequest, res): Pro
     return;
   }
   const body = parsed.data;
+  try { await assertAiGenerationAllowed(); }
+  catch (err) {
+    if (err instanceof PolicyError) { res.status(err.statusCode).json({ error: err.message }); return; }
+    throw err;
+  }
   let generated;
   try {
     generated = await generateContent({
@@ -200,6 +224,11 @@ router.post("/admin/growth/content/generate-batch", async (req: AuthRequest, res
     return;
   }
   const { platforms, ...rest } = parsed.data;
+  try { await assertAiGenerationAllowed(); }
+  catch (err) {
+    if (err instanceof PolicyError) { res.status(err.statusCode).json({ error: err.message }); return; }
+    throw err;
+  }
   const out: SocialPost[] = [];
   const errors: { platform: Platform; error: string }[] = [];
   // Sequential to avoid model rate limits.
@@ -418,5 +447,139 @@ async function transition(
 function req_log(req: AuthRequest) {
   return req.log ?? { error: () => {/* noop */}, info: () => {/* noop */}, warn: () => {/* noop */} };
 }
+
+/* -------------------------------------------------------------------------- */
+/* Admin Controls — AI policy + permissions surface                           */
+/* -------------------------------------------------------------------------- */
+
+router.get("/admin/growth/settings", async (_req: AuthRequest, res): Promise<void> => {
+  const settings = await getAdminGrowthSettings();
+  res.json({
+    settings,
+    aiRestrictions: AI_RESTRICTIONS,
+    adminPermissions: ADMIN_PERMISSIONS,
+    futureCapabilities: FUTURE_CAPABILITIES,
+  });
+});
+
+const settingsPatchSchema = z.object({
+  aiContentGenerationPaused: z.boolean().optional(),
+  maxDailyDrafts: z.number().int().min(1).max(10000).optional(),
+}).refine((d) => Object.keys(d).length > 0, { message: "Empty patch" });
+
+router.patch("/admin/growth/settings", async (req: AuthRequest, res): Promise<void> => {
+  const parsed = settingsPatchSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "Invalid body", issues: parsed.error.issues }); return; }
+  const updated = await updateAdminGrowthSettings(parsed.data, req.userId!);
+  res.json(updated);
+});
+
+/* -------------------------------------------------------------------------- */
+/* Admin Mechanic Amplification — kit access + page customization             */
+/* -------------------------------------------------------------------------- */
+
+async function loadMechanicWithPage(mechanicId: number) {
+  const [mechanic] = await db.select().from(usersTable)
+    .where(and(eq(usersTable.id, mechanicId), eq(usersTable.role, "mechanic")));
+  if (!mechanic) return null;
+  const [page] = await db.select().from(mechanicAmplificationTable)
+    .where(eq(mechanicAmplificationTable.mechanicId, mechanicId));
+  return { mechanic, page: page ?? null };
+}
+
+router.get("/admin/growth/mechanics/:id/kit", async (req: AuthRequest, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const found = await loadMechanicWithPage(id);
+  if (!found) { res.status(404).json({ error: "Mechanic not found" }); return; }
+  const kit = await buildAmplificationKit(found.mechanic, found.page);
+  res.json(kit);
+});
+
+const pagePatchSchema = z.object({
+  displayName: z.string().trim().max(80).nullable().optional(),
+  tagline: z.string().trim().max(120).nullable().optional(),
+  bio: z.string().trim().max(600).nullable().optional(),
+  specialty: z.string().trim().max(80).nullable().optional(),
+  brandColor: z.string().trim().regex(/^#[0-9A-Fa-f]{6}$/).nullable().optional(),
+  instagramHandle: z.string().trim().max(40).nullable().optional(),
+  facebookHandle: z.string().trim().max(80).nullable().optional(),
+  tiktokHandle: z.string().trim().max(40).nullable().optional(),
+  twitterHandle: z.string().trim().max(40).nullable().optional(),
+  pageEnabled: z.boolean().optional(),
+});
+
+router.patch("/admin/growth/mechanics/:id/page", async (req: AuthRequest, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const parsed = pagePatchSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "Invalid body", issues: parsed.error.issues }); return; }
+  const found = await loadMechanicWithPage(id);
+  if (!found) { res.status(404).json({ error: "Mechanic not found" }); return; }
+  const [row] = await db.insert(mechanicAmplificationTable)
+    .values({ mechanicId: id, ...parsed.data, updatedAt: new Date() })
+    .onConflictDoUpdate({
+      target: mechanicAmplificationTable.mechanicId,
+      set: { ...parsed.data, updatedAt: new Date() },
+    }).returning();
+  res.json(row);
+});
+
+const mechanicContentSchema = z.object({
+  variant: z.enum(["spotlight", "book_with_me", "referral_push"]),
+  platform: z.enum(["facebook", "instagram", "tiktok", "twitter"]),
+  briefingContext: z.string().trim().max(1000).optional().nullable(),
+});
+
+router.post("/admin/growth/mechanics/:id/content", async (req: AuthRequest, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const parsed = mechanicContentSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "Invalid body", issues: parsed.error.issues }); return; }
+  try { await assertAiGenerationAllowed(); }
+  catch (err) {
+    if (err instanceof PolicyError) { res.status(err.statusCode).json({ error: err.message }); return; }
+    throw err;
+  }
+  const found = await loadMechanicWithPage(id);
+  if (!found) { res.status(404).json({ error: "Mechanic not found" }); return; }
+  const m = found.mechanic;
+  let generated;
+  try {
+    generated = await generateMechanicContent({
+      mechanic: {
+        id: m.id, name: found.page?.displayName ?? m.name,
+        region: m.region, city: m.city,
+        specialty: found.page?.specialty ?? null,
+        tagline: found.page?.tagline ?? null,
+        referralCode: m.referralCode,
+      },
+      variant: parsed.data.variant,
+      platform: parsed.data.platform,
+      briefingContext: parsed.data.briefingContext ?? null,
+    });
+  } catch (err) {
+    req.log?.error({ err }, "mechanic content generation failed");
+    res.status(502).json({ error: "Content generation failed", detail: err instanceof Error ? err.message : "unknown" });
+    return;
+  }
+  const topicMap = { spotlight: "mechanic_spotlight", book_with_me: "book_through_aps", referral_push: "referral_campaign" } as const;
+  const [post] = await db.insert(socialPostsTable).values({
+    platform: parsed.data.platform,
+    status: "pending_review",
+    topicKind: topicMap[parsed.data.variant],
+    topicTitle: `${parsed.data.variant === "spotlight" ? "Spotlight" : parsed.data.variant === "book_with_me" ? "Book with" : "Referral push"}: ${m.name}`,
+    region: m.city ?? m.region ?? null,
+    caption: generated.caption,
+    hashtags: generated.hashtags,
+    mediaIdeas: generated.mediaIdeas,
+    hookText: generated.hookText,
+    callToAction: generated.callToAction,
+    generationModel: generated.model,
+    generationPrompt: generated.prompt,
+    generatedById: req.userId!,
+  }).returning();
+  res.status(201).json(post);
+});
 
 export default router;

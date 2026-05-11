@@ -19,6 +19,7 @@ export default function GrowthLayout() {
       <Stack.Screen name="trends" options={{ title: "Trends & Opportunities" }} />
       <Stack.Screen name="queue" options={{ title: "Content Approval Queue" }} />
       <Stack.Screen name="content/[id]" options={{ title: "Post Detail" }} />
+      <Stack.Screen name="admin-controls" options={{ title: "Admin Controls" }} />
     </Stack>
   );
 }

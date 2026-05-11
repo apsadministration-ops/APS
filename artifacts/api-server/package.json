@@ -21,6 +21,7 @@
     "jsonwebtoken": "^9.0.3",
     "pino": "^9",
     "pino-http": "^10",
+    "qrcode": "^1.5.4",
     "zod": "catalog:"
   },
   "devDependencies": {
@@ -30,6 +31,7 @@
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "catalog:",
+    "@types/qrcode": "^1.5.6",
     "esbuild": "^0.27.3",
     "esbuild-plugin-pino": "^2.3.3",
     "pino-pretty": "^13",

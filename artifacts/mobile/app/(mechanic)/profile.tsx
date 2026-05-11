@@ -276,7 +276,10 @@ export default function MechanicProfileScreen() {
         <Row icon="phone" label="Phone" value={user?.phone ?? "Not set"} />
         <Row icon="shield" label="Account Status" value={user?.status?.toUpperCase()} />
         {user?.referralCode && (
-          <Row icon="gift" label="My Referral Code" value={user.referralCode} onPress={() => router.push("/referral")} />
+          <>
+            <Row icon="gift" label="My Referral Code" value={user.referralCode} onPress={() => router.push("/referral")} />
+            <Row icon="zap" label="Amplification Kit" value="QR, booking link, AI content" onPress={() => router.push("/(mechanic)/amplification")} />
+          </>
         )}
 
         {/* Payouts */}

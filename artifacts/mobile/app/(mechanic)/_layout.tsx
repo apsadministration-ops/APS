@@ -38,6 +38,10 @@ function NativeTabLayout() {
         <Icon sf={{ default: "chart.line.uptrend.xyaxis", selected: "chart.line.uptrend.xyaxis" }} />
         <Label>Tier</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="amplification" hidden>
+        <Icon sf={{ default: "bolt", selected: "bolt.fill" }} />
+        <Label>Amplification</Label>
+      </NativeTabs.Trigger>
     </NativeTabs>
   );
 }
@@ -158,6 +162,7 @@ function ClassicTabLayout() {
             ),
         }}
       />
+      <Tabs.Screen name="amplification" options={{ href: null }} />
     </Tabs>
   );
 }

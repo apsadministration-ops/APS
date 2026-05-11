@@ -197,17 +197,50 @@ export interface TrendIdea {
   suggestedRegions?: string[];
 }
 
+/** Northern-hemisphere season label from a Date (months 0-indexed). */
+function seasonLabel(d: Date): string {
+  const m = d.getMonth();
+  if (m === 11 || m <= 1) return "winter";
+  if (m >= 2 && m <= 4) return "spring";
+  if (m >= 5 && m <= 7) return "summer";
+  return "autumn";
+}
+
+/** Calendar of automotive-relevant US holidays / windows by month. */
+function holidayWindow(d: Date): string {
+  const m = d.getMonth();
+  return ({
+    0: "post-holiday recovery, MLK weekend road trips, deep winter",
+    1: "Presidents Day travel, Valentine's local trips, late winter",
+    2: "spring break travel, early pollen, salt residue from winter roads",
+    3: "spring tune-ups, Easter travel, tax-refund vehicle upgrades",
+    4: "Memorial Day road trips, summer prep, AC checks",
+    5: "summer travel kickoff, heat stress on batteries/tires, Father's Day",
+    6: "Independence Day road trips, peak heat, hurricane prep (Gulf/Atlantic)",
+    7: "back-to-school, late hurricane season, summer travel tail",
+    8: "Labor Day road trips, autumn prep, hurricane peak (Gulf/Atlantic)",
+    9: "leaf-peeping travel, tire-pressure swings with cold snaps",
+    10: "Thanksgiving travel surge, winter prep, snow-tire window",
+    11: "winter holiday travel, deep freeze, battery failures, salt season",
+  } as Record<number, string>)[m] ?? "";
+}
+
 export async function suggestTrendingTopics(opts: {
   now: Date;
   topRegions: string[];
   shortages: { region: string; balance: string }[];
 }): Promise<TrendIdea[]> {
   const month = opts.now.toLocaleString("en-US", { month: "long" });
+  const season = seasonLabel(opts.now);
+  const holidays = holidayWindow(opts.now);
   const userPrompt = [
-    `Today is ${opts.now.toDateString()} (${month}). Suggest 6 timely organic content opportunities for APS.`,
+    `Today is ${opts.now.toDateString()} (${month}, ${season}).`,
+    `Calendar context: ${holidays}.`,
+    `Suggest 6 timely organic content opportunities for APS — mix seasonal-maintenance, weather-driven, and holiday-travel angles. Cover at least one weather-alert and one winterization/summer-travel idea when in-season.`,
     `Top regions by activity: ${opts.topRegions.slice(0, 5).join(", ") || "n/a"}.`,
     `Marketplace imbalances flagged: ${opts.shortages.map((s) => `${s.region} (${s.balance})`).join(", ") || "none"}.`,
     `Allowed topicKind values: ${TOPIC_KINDS.join(", ")}.`,
+    `Concrete example angles to draw from when relevant: cold-weather battery warnings, hurricane preparation, summer tire/coolant checks, winter brake inspections, salt-corrosion underbody washes, road-trip pre-checks.`,
     `Respond with JSON: { "ideas": [ { "topicKind": "...", "title": "≤80 char title", "rationale": "≤140 char why-now reason", "suggestedRegions": ["..."] } ] }`,
   ].join("\n");
 
@@ -232,6 +265,62 @@ export async function suggestTrendingTopics(opts: {
       suggestedRegions: Array.isArray(i.suggestedRegions) ? i.suggestedRegions.map(String) : undefined,
     }))
     .slice(0, 8);
+}
+
+/**
+ * Mechanic-specific content generation.
+ *
+ * Uses the same `generateContent` engine but injects the mechanic's name,
+ * region, specialty, and referral code into the briefing so the AI produces
+ * "spotlight" / "book-with-me" / referral-focused copy that the mechanic
+ * can repost. Output is identical shape to `generateContent` — admin still
+ * approves before publish.
+ */
+export interface MechanicContentInput {
+  mechanic: {
+    id: number;
+    name: string;
+    region: string | null;
+    city: string | null;
+    specialty: string | null;
+    tagline: string | null;
+    referralCode: string | null;
+  };
+  variant: "spotlight" | "book_with_me" | "referral_push";
+  platform: Platform;
+  briefingContext?: string | null;
+}
+
+const MECHANIC_VARIANT_TOPIC: Record<MechanicContentInput["variant"], TopicKind> = {
+  spotlight: "mechanic_spotlight",
+  book_with_me: "book_through_aps",
+  referral_push: "referral_campaign",
+};
+
+export async function generateMechanicContent(input: MechanicContentInput): Promise<GeneratedContent> {
+  const { mechanic } = input;
+  const region = mechanic.city ?? mechanic.region ?? null;
+  const briefingParts: string[] = [
+    `Featured mechanic: ${mechanic.name} (verified APS mechanic).`,
+  ];
+  if (mechanic.specialty) briefingParts.push(`Specialty: ${mechanic.specialty}.`);
+  if (mechanic.tagline) briefingParts.push(`Mechanic tagline: ${mechanic.tagline}.`);
+  if (mechanic.referralCode) briefingParts.push(`Their personal referral code is ${mechanic.referralCode} — include it as the CTA where natural.`);
+  if (input.variant === "book_with_me") {
+    briefingParts.push("Frame this as a first-person 'Book with me on APS' invitation written FROM the mechanic's voice. Friendly, direct, neighborhood.");
+  } else if (input.variant === "spotlight") {
+    briefingParts.push("Frame this as APS spotlighting this mechanic for the local community. Third-person celebratory, specific about craft.");
+  } else {
+    briefingParts.push("Frame this as a referral-driven push — invite friends/family to use the mechanic's referral code, with a clear win-win.");
+  }
+  if (input.briefingContext) briefingParts.push(input.briefingContext);
+
+  return generateContent({
+    topicKind: MECHANIC_VARIANT_TOPIC[input.variant],
+    platform: input.platform,
+    region,
+    briefingContext: briefingParts.join(" "),
+  });
 }
 
 /**
