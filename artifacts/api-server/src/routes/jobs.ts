@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { eq, and, sql } from "drizzle-orm";
 import { db, jobsTable, vehiclesTable, usersTable, workLogsTable, paymentsTable, messagesTable } from "@workspace/db";
 import { authenticate, requireActiveMechanic, type AuthRequest } from "../middlewares/authenticate";
-import { notifyMechanics, notifyCustomerJobAccepted } from "../lib/notifications";
+import { notifyMechanics, notifyCustomerApprovalPending } from "../lib/notifications";
 import { getUncachableStripeClient } from "../lib/stripeClient";
 import { awardCustomerPoints, awardMechanicPoints, RULES } from "../lib/loyaltyEngine";
 import { startCustomerApproval } from "../lib/customerApprovalEngine";
@@ -311,18 +311,17 @@ router.post("/jobs/:jobId/accept", authenticate, requireActiveMechanic, async (r
   if (!result.ok) { res.status(result.status).json({ error: result.error }); return; }
   const updated = result.updated;
 
-  // Notify customer their job was accepted (fire-and-forget)
+  // Trust system: the job is in PENDING_APPROVAL, not ACCEPTED yet. Notify the
+  // customer that they have ~60s to approve this mechanic. The "Mechanic En
+  // Route" notification fires later once the customer (or auto-sweep) approves.
   const [mechanic] = await db.select().from(usersTable).where(eq(usersTable.id, req.userId!));
   const [customer] = await db.select().from(usersTable).where(eq(usersTable.id, updated.customerId));
   const [vehicle] = await db.select().from(vehiclesTable).where(eq(vehiclesTable.id, updated.vehicleId));
-  if (customer?.pushToken && mechanic && vehicle) {
-    notifyCustomerJobAccepted(
-      customer.pushToken,
-      mechanic.name,
-      `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
-      jobId,
-    ).catch(() => {});
+  if (customer?.pushToken && mechanic) {
+    notifyCustomerApprovalPending(customer.pushToken, mechanic.name, jobId).catch(() => {});
   }
+  // `notifyCustomerJobAccepted` now fires from the approve handler, not here.
+  void vehicle;
 
   res.json(await formatJob(updated));
 });

@@ -86,3 +86,58 @@ export async function notifyCustomerJobAccepted(
     },
   ]);
 }
+
+/**
+ * Trust-system notifications. The customer must approve a candidate mechanic
+ * within 60s, otherwise the system auto-approves. The mechanic gets a separate
+ * notification once the customer responds.
+ */
+export async function notifyCustomerApprovalPending(
+  token: string,
+  mechanicName: string,
+  jobId: number,
+): Promise<void> {
+  if (!token.startsWith("ExponentPushToken[")) return;
+  await sendPushNotifications([
+    {
+      to: token,
+      title: "Approve your mechanic — 60s",
+      body: `${mechanicName} wants to take your job. Tap to review and approve.`,
+      data: { jobId, screen: "approve" },
+      sound: "default",
+    },
+  ]);
+}
+
+export async function notifyMechanicApprovalDeclined(
+  token: string,
+  jobId: number,
+  reason?: string | null,
+): Promise<void> {
+  if (!token.startsWith("ExponentPushToken[")) return;
+  await sendPushNotifications([
+    {
+      to: token,
+      title: "Customer chose another mechanic",
+      body: reason ? `Reason: ${reason.slice(0, 120)}` : "The job has been put back on the board.",
+      data: { jobId, screen: "available" },
+      sound: "default",
+    },
+  ]);
+}
+
+export async function notifyMechanicApprovalAccepted(
+  token: string,
+  jobId: number,
+): Promise<void> {
+  if (!token.startsWith("ExponentPushToken[")) return;
+  await sendPushNotifications([
+    {
+      to: token,
+      title: "Approved — go for it",
+      body: "The customer approved you. Head to the job.",
+      data: { jobId, screen: "job" },
+      sound: "default",
+    },
+  ]);
+}

@@ -19,7 +19,10 @@
  */
 
 import { and, eq, lte, sql } from "drizzle-orm";
-import { db, customerApprovalsTable, jobsTable } from "@workspace/db";
+import { db, customerApprovalsTable, jobsTable, usersTable, vehiclesTable } from "@workspace/db";
+import {
+  notifyMechanicApprovalAccepted, notifyCustomerJobAccepted,
+} from "./notifications";
 
 export const APPROVAL_WINDOW_MS = 60 * 1000;
 
@@ -97,8 +100,31 @@ export async function applyApprovalDecision(input: DecisionInput): Promise<Decis
 }
 
 /**
+ * Single source of truth for "the job just became ACCEPTED" side effects.
+ * Used by manual approve, lazy sweep, and bulk sweep so notifications never
+ * depend on which entry path triggered the transition. Best-effort — never
+ * blocks the caller on push delivery.
+ */
+export async function fireApprovalAcceptedNotifications(jobId: number): Promise<void> {
+  try {
+    const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, jobId));
+    if (!job || !job.mechanicId) return;
+    const [mech] = await db.select().from(usersTable).where(eq(usersTable.id, job.mechanicId));
+    const [cust] = await db.select().from(usersTable).where(eq(usersTable.id, job.customerId));
+    const [veh] = await db.select().from(vehiclesTable).where(eq(vehiclesTable.id, job.vehicleId));
+    if (mech?.pushToken) await notifyMechanicApprovalAccepted(mech.pushToken, jobId);
+    if (cust?.pushToken && mech && veh) {
+      await notifyCustomerJobAccepted(cust.pushToken, mech.name,
+        `${veh.year} ${veh.make} ${veh.model}`, jobId);
+    }
+  } catch { /* best-effort */ }
+}
+
+/**
  * Lazy / cron sweeper. Pass `jobId` to scope to a single row (cheap on read
- * paths); omit to sweep the whole table.
+ * paths); omit to sweep the whole table. Fires accepted-notifications for
+ * every auto-approved job so mechanics+customers get the same push regardless
+ * of whether the approval was manual or expiry-driven.
  */
 export async function sweepExpiredApprovals(jobId?: number): Promise<number> {
   const where = jobId === undefined
@@ -115,6 +141,7 @@ export async function sweepExpiredApprovals(jobId?: number): Promise<number> {
   for (const a of swept) {
     await db.update(jobsTable).set({ status: "ACCEPTED" })
       .where(and(eq(jobsTable.id, a.jobId), eq(jobsTable.status, "PENDING_APPROVAL")));
+    void fireApprovalAcceptedNotifications(a.jobId);
   }
   return swept.length;
 }

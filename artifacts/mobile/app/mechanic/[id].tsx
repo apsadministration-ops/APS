@@ -114,6 +114,13 @@ export default function MechanicDetailScreen() {
               <Text style={styles.actionText}>Request</Text>
             </Pressable>
             <Pressable
+              style={[styles.actionBtn, { backgroundColor: colors.secondary, borderWidth: 1, borderColor: colors.border }]}
+              onPress={() => router.push(`/profile/${mech.id}` as never)}
+            >
+              <Feather name="shield" size={16} color={colors.foreground} />
+              <Text style={[styles.actionText, { color: colors.foreground }]}>Trust</Text>
+            </Pressable>
+            <Pressable
               style={[styles.actionBtn, { backgroundColor: mech.isFavorite ? "#EF444420" : colors.secondary, borderWidth: 1, borderColor: mech.isFavorite ? "#EF4444" : colors.border }]}
               onPress={toggleFav}
             >

@@ -13,7 +13,7 @@
  */
 
 import { Router, type IRouter, type Response } from "express";
-import { and, desc, eq, isNull, ne } from "drizzle-orm";
+import { and, desc, eq, isNull, ne, inArray as sqlIn, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
   db, reviewsTable, reviewAuditLogsTable, jobsTable, usersTable,
@@ -131,6 +131,13 @@ router.get("/reviews/job/:jobId", authenticate, async (req: AuthRequest, res: Re
   if (!job) { res.status(404).json({ error: "Not found" }); return; }
   const isParticipant = req.userId === job.customerId || req.userId === job.mechanicId;
   if (!isParticipant && req.userRole !== "admin") { res.status(403).json({ error: "Forbidden" }); return; }
+  // Lazy-publish any reviews on this job whose 72h lock has expired so the
+  // visibility-lock contract holds on every read surface, not just /user/:id.
+  const flipped = await publishExpiredHiddenReviews();
+  for (const subjectId of flipped) {
+    await recomputeUserReputation(subjectId);
+    await recomputeBadgesForUser(subjectId);
+  }
   const rows = await db.select().from(reviewsTable).where(eq(reviewsTable.jobId, jobId));
   // Mask the counterpart's hidden review unless caller is author or admin.
   const viewer = { id: req.userId!, role: req.userRole! };
@@ -259,6 +266,93 @@ router.get("/reputation/:userId", authenticate, async (req: AuthRequest, res: Re
 
 router.get("/badges/catalog", (_req, res) => {
   res.json(badgeMetadata());
+});
+
+/* ----------------------------- admin moderation --------------------------- */
+/**
+ * Admin-only feed of recent reviews for the moderation queue. Joins author,
+ * subject, and job-type metadata so the admin UI can render single-call. We
+ * intentionally include `removed` reviews so admins can see the full history.
+ */
+router.get("/admin/reviews/recent", authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
+  if (req.userRole !== "admin") { res.status(403).json({ error: "Admin only" }); return; }
+  const limit = Math.min(Number(req.query.limit ?? 50), 200);
+  const rows = await db.select().from(reviewsTable)
+    .orderBy(desc(reviewsTable.submittedAt))
+    .limit(limit);
+  const userIds = Array.from(new Set(rows.flatMap((r) => [r.authorId, r.subjectId])));
+  const jobIds = Array.from(new Set(rows.map((r) => r.jobId)));
+  const users = userIds.length
+    ? await db.select().from(usersTable).where(sqlIn(usersTable.id, userIds))
+    : [];
+  const jobs = jobIds.length
+    ? await db.select().from(jobsTable).where(sqlIn(jobsTable.id, jobIds))
+    : [];
+  const userMap = new Map(users.map((u) => [u.id, u]));
+  const jobMap = new Map(jobs.map((j) => [j.id, j]));
+  res.json(rows.map((r) => ({
+    id: r.id,
+    jobId: r.jobId,
+    jobType: jobMap.get(r.jobId)?.jobType ?? null,
+    authorId: r.authorId,
+    authorRole: r.authorRole,
+    authorName: userMap.get(r.authorId)?.name ?? "Unknown",
+    subjectId: r.subjectId,
+    subjectRole: r.subjectRole,
+    subjectName: userMap.get(r.subjectId)?.name ?? "Unknown",
+    overallRating: r.overallRating,
+    text: r.text ?? null,
+    visibility: r.visibility,
+    visibleAt: r.visibleAt,
+    submittedAt: r.submittedAt,
+    editedAt: r.editedAt,
+    removedAt: r.removedAt,
+    removedReason: r.removedReason,
+  })));
+});
+
+/**
+ * Admin trust analytics overview: top mechanics by trust, low-trust mechanics,
+ * and platform-wide review volume. Single endpoint to power the admin trust
+ * dashboard with one round trip.
+ */
+router.get("/admin/trust/overview", authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
+  if (req.userRole !== "admin") { res.status(403).json({ error: "Admin only" }); return; }
+  const reps = await db.select().from(userReputationTable);
+  const userIdsForReps = reps.map((r) => r.userId);
+  const users = userIdsForReps.length
+    ? await db.select().from(usersTable).where(sqlIn(usersTable.id, userIdsForReps))
+    : [];
+  const userMap = new Map(users.map((u) => [u.id, u]));
+  const decorated = reps
+    .map((r) => {
+      const u = userMap.get(r.userId);
+      if (!u) return null;
+      return {
+        userId: r.userId,
+        name: u.name,
+        role: u.role,
+        mechanicTier: u.mechanicTier ?? null,
+        trustScore: r.trustScore,
+        overallAvg: Number(r.overallAvg),
+        reviewCount: r.reviewCount,
+        cancellationRate: Number(r.cancellationRate),
+        noShowRate: Number(r.noShowRate),
+      };
+    })
+    .filter(<T>(x: T | null): x is T => x !== null);
+  const mechanics = decorated.filter((d) => d.role === "mechanic" && d.reviewCount >= 1);
+  const top = [...mechanics].sort((a, b) => b.trustScore - a.trustScore).slice(0, 10);
+  const low = [...mechanics].sort((a, b) => a.trustScore - b.trustScore).slice(0, 10);
+  const totalReviews = await db.select({ id: reviewsTable.id }).from(reviewsTable);
+  const visible = totalReviews.length; // count alias; cheap enough at current scale
+  const removed = (await db.select({ id: reviewsTable.id }).from(reviewsTable)
+    .where(eq(reviewsTable.visibility, "removed"))).length;
+  res.json({
+    totals: { reviews: visible, removed },
+    topMechanics: top,
+    lowMechanics: low,
+  });
 });
 
 /* -------------------------------------------------------------------------- */

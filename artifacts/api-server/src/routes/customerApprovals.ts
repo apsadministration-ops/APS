@@ -20,7 +20,10 @@ import { and, eq, lte, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db, customerApprovalsTable, jobsTable, usersTable, userReputationTable, userBadgesTable } from "@workspace/db";
 import { authenticate, type AuthRequest } from "../middlewares/authenticate";
-import { sweepExpiredApprovals, applyApprovalDecision } from "../lib/customerApprovalEngine";
+import {
+  sweepExpiredApprovals, applyApprovalDecision, fireApprovalAcceptedNotifications,
+} from "../lib/customerApprovalEngine";
+import { notifyMechanicApprovalDeclined } from "../lib/notifications";
 
 const router: IRouter = Router();
 
@@ -79,6 +82,9 @@ router.post("/approvals/:jobId/approve", authenticate, async (req: AuthRequest, 
     jobId, viewerId: req.userId!, viewerRole: req.userRole!, decision: "approved",
   });
   if (!result.ok) { res.status(result.status).json({ error: result.error }); return; }
+  // Centralized so the same notifications fire from manual approve,
+  // /approvals/job/:jobId lazy sweep, and the bulk sweep below.
+  void fireApprovalAcceptedNotifications(jobId);
   res.json({ ok: true, approval: result.approval, jobStatus: result.jobStatus });
 });
 
@@ -94,24 +100,21 @@ router.post("/approvals/:jobId/decline", authenticate, async (req: AuthRequest, 
     decision: "declined", reason: parsed.data.reason,
   });
   if (!result.ok) { res.status(result.status).json({ error: result.error }); return; }
+  // Tell the rejected mechanic so they don't keep waiting on the job screen.
+  void (async () => {
+    try {
+      const [mech] = await db.select().from(usersTable).where(eq(usersTable.id, result.approval.mechanicId));
+      if (mech?.pushToken) await notifyMechanicApprovalDeclined(mech.pushToken, jobId, parsed.data.reason ?? null);
+    } catch { /* best-effort */ }
+  })();
   res.json({ ok: true, approval: result.approval, jobStatus: result.jobStatus });
 });
 
 router.post("/approvals/sweep", authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
   if (req.userRole !== "admin") { res.status(403).json({ error: "Admin only" }); return; }
-  const swept = await db.update(customerApprovalsTable)
-    .set({ status: "auto_approved", respondedAt: new Date() })
-    .where(and(
-      eq(customerApprovalsTable.status, "pending"),
-      lte(customerApprovalsTable.expiresAt, new Date()),
-    ))
-    .returning();
-  // Bulk-promote each affected job into ACCEPTED so the mechanic workflow unblocks.
-  for (const a of swept) {
-    await db.update(jobsTable).set({ status: "ACCEPTED" })
-      .where(and(eq(jobsTable.id, a.jobId), eq(jobsTable.status, "PENDING_APPROVAL")));
-  }
-  res.json({ ok: true, swept: swept.length });
+  // Delegate to the engine helper so notifications fire from a single place.
+  const swept = await sweepExpiredApprovals();
+  res.json({ ok: true, swept });
 });
 
 export default router;

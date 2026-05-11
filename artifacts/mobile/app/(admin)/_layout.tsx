@@ -83,6 +83,13 @@ export default function AdminTabLayout() {
         }}
       />
       <Tabs.Screen
+        name="trust"
+        options={{
+          title: "Trust",
+          tabBarIcon: ({ color }) => <Feather name="shield" size={22} color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="certifications"
         options={{
           title: "Certs",
