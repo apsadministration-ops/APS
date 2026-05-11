@@ -30,3 +30,15 @@ id = "622mz5JvmOSFgTK91SVYg"
 uri = "file://artifacts/demo-video/public/images/tech-map.png"
 type = "image"
 title = "abstract tech dots map"
+
+[[generated]]
+id = "iI2ucX62bB1T-hZBwTcl5"
+uri = "file://artifacts/demo-video/public/images/car-blueprint.png"
+type = "image"
+title = "car blueprint on lift"
+
+[[generated]]
+id = "G-dmng0MuFyvqfFs9R9-U"
+uri = "file://artifacts/demo-video/public/images/dark-metal-bg.png"
+type = "image"
+title = "dark industrial metal texture"

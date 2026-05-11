@@ -1,74 +1,110 @@
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { useEffect, useState } from 'react';
 
 export function Scene2() {
   const [phase, setPhase] = useState(0);
 
   useEffect(() => {
     const timers = [
-      setTimeout(() => setPhase(1), 500),
-      setTimeout(() => setPhase(2), 1500),
-      setTimeout(() => setPhase(3), 3000),
-      setTimeout(() => setPhase(4), 5000),
+      setTimeout(() => setPhase(1), 300),
+      setTimeout(() => setPhase(2), 1000),
+      setTimeout(() => setPhase(3), 2000),
+      setTimeout(() => setPhase(4), 3000),
     ];
     return () => timers.forEach(t => clearTimeout(t));
   }, []);
 
   return (
-    <motion.div
+    <motion.div 
       className="absolute inset-0 flex items-center justify-between px-[10vw]"
-      initial={{ opacity: 0, x: 100 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: -100 }}
-      transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0, scale: 0.9, filter: 'blur(10px)' }}
+      transition={{ duration: 0.8 }}
     >
-      <div className="w-[40vw]">
-        <motion.h2
-          className="text-5xl font-display font-bold text-white leading-tight"
-          initial={{ opacity: 0, y: 20 }}
-          animate={phase >= 1 ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
+      <div className="z-10 w-[40vw]">
+        {/* Phone Mockup */}
+        <motion.div className="relative bg-[#1E293B] border-[6px] border-[#0F172A] rounded-[40px] w-full max-w-[320px] h-[600px] overflow-hidden shadow-2xl mx-auto"
+          initial={{ y: 50, opacity: 0, rotateY: -15 }}
+          animate={{ y: 0, opacity: 1, rotateY: 0 }}
+          transition={{ type: 'spring', damping: 25, stiffness: 100 }}
+          style={{ perspective: 1000 }}
         >
-          Add your vehicle once.
-        </motion.h2>
-        <motion.p
-          className="text-2xl text-gray-400 mt-4"
-          initial={{ opacity: 0 }}
-          animate={phase >= 2 ? { opacity: 1 } : { opacity: 0 }}
-        >
-          Scan the VIN. We handle the rest.
-        </motion.p>
+          {/* Header */}
+          <div className="bg-[#0F172A] text-white p-6 pt-10">
+            <h2 className="text-xl font-bold">2018 Subaru Outback</h2>
+            <p className="text-[#94A3B8] text-sm">VIN: JF2SJAEC9JH...</p>
+          </div>
+
+          <div className="p-4 space-y-4">
+            <motion.div className="bg-white/5 p-4 rounded-2xl border border-white/10"
+              initial={{ opacity: 0, x: -20 }}
+              animate={phase >= 1 ? { opacity: 1, x: 0 } : {}}
+            >
+              <div className="font-bold mb-1 text-white">Issue</div>
+              <div className="text-[#94A3B8] text-sm leading-snug">Front-left CV axle clicking on hard-left turns. Needs lift to drop subframe.</div>
+            </motion.div>
+
+            {phase >= 2 && (
+              <motion.div className="bg-[#0EA5E9]/20 border border-[#0EA5E9]/50 p-4 rounded-2xl text-center"
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ type: 'spring' }}
+              >
+                <div className="font-bold text-[#0EA5E9] mb-1">Ghost Garage</div>
+                <div className="text-sm text-white/80">Transport + Bay Repair</div>
+              </motion.div>
+            )}
+
+            {phase >= 3 && (
+              <motion.div className="bg-[#10B981] p-4 rounded-2xl text-center text-white font-bold"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+              >
+                Transport Approved
+              </motion.div>
+            )}
+          </div>
+        </motion.div>
       </div>
 
-      <motion.div
-        className="relative w-[300px] h-[600px] bg-[#0F172A] rounded-[40px] border-[8px] border-gray-800 overflow-hidden shadow-2xl"
-        initial={{ y: 50, opacity: 0, rotateY: 20 }}
-        animate={{ y: 0, opacity: 1, rotateY: 0 }}
-        transition={{ duration: 1, ease: 'easeOut' }}
-        style={{ perspective: 1000 }}
-      >
-        <div className="p-6 bg-slate-900 h-full flex flex-col">
-          <div className="flex justify-between items-center mb-8">
-            <span className="text-white font-bold font-display">Garage</span>
-            <span className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white">+</span>
-          </div>
-          
-          {phase >= 3 && (
-            <motion.div
-              className="bg-slate-800 rounded-xl p-4 shadow-lg border border-slate-700"
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-            >
-              <div className="h-32 bg-slate-700 rounded-lg mb-4 overflow-hidden relative">
-                <img src={`${import.meta.env.BASE_URL}images/honda-accord.png`} className="w-full h-full object-cover" />
-              </div>
-              <h3 className="text-xl font-bold text-white">2018 Honda Accord</h3>
-              <p className="text-sm text-gray-400 mt-1">VIN: 1HGCM82633A123456</p>
-              <p className="text-sm text-gray-400">Plate: DEMO-001</p>
-            </motion.div>
-          )}
-        </div>
-      </motion.div>
+      <div className="z-10 w-1/2 text-right">
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+          className="text-[#F59E0B] font-mono text-sm tracking-widest mb-4 uppercase"
+        >
+          02 // Customer
+        </motion.div>
+        
+        <h1 className="text-[4vw] font-bold leading-tight">
+          <motion.span className="block"
+            initial={{ opacity: 0, x: 50 }}
+            animate={phase >= 1 ? { opacity: 1, x: 0 } : {}}
+            transition={{ type: 'spring', damping: 20, stiffness: 100 }}
+          >
+            Ghost Garage
+          </motion.span>
+          <motion.span className="block text-gradient"
+            initial={{ opacity: 0, x: 50 }}
+            animate={phase >= 2 ? { opacity: 1, x: 0 } : {}}
+            transition={{ type: 'spring', damping: 20, stiffness: 100 }}
+            style={{ backgroundImage: 'linear-gradient(to right, #F59E0B, #FBBF24)' }}
+          >
+            Request
+          </motion.span>
+        </h1>
+        
+        <motion.p className="text-[#94A3B8] mt-6 text-[1.5vw] max-w-md ml-auto"
+          initial={{ opacity: 0 }}
+          animate={phase >= 4 ? { opacity: 1 } : {}}
+          transition={{ duration: 0.6 }}
+        >
+          Customer needs a major repair but has no lift. 
+          They approve transport to a Ghost Bay in one tap.
+        </motion.p>
+      </div>
     </motion.div>
   );
 }

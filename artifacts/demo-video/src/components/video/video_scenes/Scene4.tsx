@@ -1,87 +1,124 @@
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { useEffect, useState } from 'react';
 
 export function Scene4() {
   const [phase, setPhase] = useState(0);
 
   useEffect(() => {
     const timers = [
-      setTimeout(() => setPhase(1), 500),
-      setTimeout(() => setPhase(2), 1500),
-      setTimeout(() => setPhase(3), 3000),
+      setTimeout(() => setPhase(1), 300),
+      setTimeout(() => setPhase(2), 1000),
+      setTimeout(() => setPhase(3), 2000),
+      setTimeout(() => setPhase(4), 3000),
     ];
     return () => timers.forEach(t => clearTimeout(t));
   }, []);
 
   return (
-    <motion.div
-      className="absolute inset-0 flex items-center justify-center"
+    <motion.div 
+      className="absolute inset-0 flex items-center justify-center px-[10vw]"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      exit={{ opacity: 0, y: -50 }}
+      exit={{ opacity: 0, scale: 0.9, filter: 'blur(10px)' }}
       transition={{ duration: 0.8 }}
     >
-      <motion.img
-        src={`${import.meta.env.BASE_URL}images/tech-map.png`}
-        className="absolute inset-0 w-full h-full object-cover opacity-40"
-        animate={{ scale: 1.2, x: -50 }}
-        transition={{ duration: 10, ease: 'linear' }}
-      />
-      
-      <div className="relative z-10 flex items-center justify-between w-full px-[10vw]">
+      <div className="w-full flex justify-between items-center z-10">
+        
         <div className="w-[40vw]">
-          <motion.div
-            className="bg-slate-800/80 backdrop-blur-xl p-6 rounded-2xl border border-slate-700 inline-block mb-6"
-            initial={{ y: 20, opacity: 0 }}
+          <motion.div className="relative bg-[#1E293B] border-[6px] border-[#0F172A] rounded-[40px] w-full max-w-[320px] h-[600px] overflow-hidden shadow-2xl mx-auto"
+            initial={{ y: 50, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 100 }}
           >
-            <div className="flex items-center gap-4">
-              <img src={`${import.meta.env.BASE_URL}images/mechanic-profile.png`} className="w-16 h-16 rounded-full" />
-              <div>
-                <h4 className="text-xl font-bold text-white">Mike Wrench</h4>
-                <p className="text-blue-400">Senior ASE Certified</p>
-              </div>
+            <div className="bg-[#0F172A] text-white p-6 pt-10 border-b border-white/10">
+              <h2 className="text-xl font-bold">Diagnostic Work Log</h2>
+            </div>
+            
+            <div className="p-4 space-y-3">
+              <motion.div className="bg-white/5 p-3 rounded-xl border border-white/10"
+                initial={{ opacity: 0, x: -20 }}
+                animate={phase >= 1 ? { opacity: 1, x: 0 } : {}}
+              >
+                <div className="text-xs text-[#94A3B8] mb-1">Post-Inspection</div>
+                <div className="text-sm text-white">78,431 mi. No new damage.</div>
+              </motion.div>
+
+              {phase >= 2 && (
+                <motion.div className="bg-white/5 p-3 rounded-xl border border-white/10"
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                >
+                  <div className="text-xs text-[#94A3B8] mb-1">Root Cause</div>
+                  <div className="text-sm text-white font-mono leading-tight bg-[#0F172A] p-2 rounded">Inner CV joint had play causing the click on left turns.</div>
+                </motion.div>
+              )}
+
+              {phase >= 3 && (
+                <motion.div className="bg-white/5 p-3 rounded-xl border border-white/10"
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                >
+                  <div className="text-xs text-[#94A3B8] mb-1">Parts & Labor</div>
+                  <div className="flex justify-between text-sm text-white border-b border-white/10 pb-1 mb-1">
+                    <span>GSP NCV23568 Axle</span>
+                    <span>$165</span>
+                  </div>
+                  <div className="flex justify-between text-sm text-white">
+                    <span>Labor (1.75 hr)</span>
+                    <span>$220</span>
+                  </div>
+                </motion.div>
+              )}
+
+              {phase >= 4 && (
+                <motion.div className="bg-[#10B981] p-3 rounded-xl text-center text-white font-bold shadow-lg"
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                >
+                  Submit Log
+                </motion.div>
+              )}
             </div>
           </motion.div>
-          <motion.h2
-            className="text-5xl font-display font-bold text-white leading-tight"
-            initial={{ opacity: 0 }}
-            animate={phase >= 1 ? { opacity: 1 } : { opacity: 0 }}
+        </div>
+
+        <div className="w-1/2 text-right">
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+            className="text-[#10B981] font-mono text-sm tracking-widest mb-4 uppercase"
           >
-            Help is on the way.
-          </motion.h2>
-          <motion.p
-            className="text-2xl text-gray-400 mt-4"
+            03 // Mechanic (Continued)
+          </motion.div>
+          
+          <h1 className="text-[4vw] font-bold leading-tight">
+            <motion.span className="block"
+              initial={{ opacity: 0, x: 50 }}
+              animate={phase >= 1 ? { opacity: 1, x: 0 } : {}}
+              transition={{ type: 'spring', damping: 20, stiffness: 100 }}
+            >
+              Repair &
+            </motion.span>
+            <motion.span className="block text-gradient"
+              initial={{ opacity: 0, x: 50 }}
+              animate={phase >= 2 ? { opacity: 1, x: 0 } : {}}
+              transition={{ type: 'spring', damping: 20, stiffness: 100 }}
+              style={{ backgroundImage: 'linear-gradient(to right, #10B981, #34D399)' }}
+            >
+              Documentation
+            </motion.span>
+          </h1>
+          
+          <motion.p className="text-[#94A3B8] mt-6 text-[1.5vw] max-w-md ml-auto"
             initial={{ opacity: 0 }}
-            animate={phase >= 2 ? { opacity: 1 } : { opacity: 0 }}
+            animate={phase >= 3 ? { opacity: 1 } : {}}
+            transition={{ duration: 0.6 }}
           >
-            Track your mechanic live.
+            Completes the repair on the lift. Submits a diagnostic-rich Phase-3 work log with root cause analysis.
           </motion.p>
         </div>
 
-        <motion.div
-          className="relative w-[300px] h-[600px] bg-[#0F172A] rounded-[40px] border-[8px] border-gray-800 overflow-hidden shadow-2xl"
-          initial={{ x: 50, opacity: 0 }}
-          animate={{ x: 0, opacity: 1 }}
-        >
-          <div className="relative h-2/3 bg-slate-800 overflow-hidden">
-            <img src={`${import.meta.env.BASE_URL}images/tech-map.png`} className="w-[200%] h-[200%] max-w-none object-cover opacity-80 -ml-[50%] -mt-[50%]" />
-            {phase >= 1 && (
-              <motion.div
-                className="absolute w-8 h-8 bg-blue-500 rounded-full border-4 border-white shadow-lg z-10"
-                initial={{ top: '80%', left: '80%' }}
-                animate={{ top: '40%', left: '50%' }}
-                transition={{ duration: 4, ease: 'linear' }}
-              />
-            )}
-             <div className="absolute top-[40%] left-[50%] w-4 h-4 bg-red-500 rounded-full border-2 border-white shadow-lg z-0" />
-          </div>
-          <div className="h-1/3 bg-slate-900 p-6 flex flex-col justify-center">
-            <p className="text-gray-400 text-sm">Status</p>
-            <h3 className="text-2xl font-bold text-blue-400">EN ROUTE</h3>
-            <p className="text-white mt-2">Arriving in 12 mins</p>
-          </div>
-        </motion.div>
       </div>
     </motion.div>
   );
