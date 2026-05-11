@@ -1,7 +1,12 @@
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, TextInput } from "react-native";
 import { confirm, alertMessage } from "@/utils/confirm";
 import { useColors } from "@/hooks/useColors";
-import { useGetJob, useRateJob, useCancelJob, useRateCustomer, useCreateFlag } from "@workspace/api-client-react";
+import {
+  useGetJob, useRateJob, useCancelJob, useRateCustomer, useCreateFlag,
+  useApproveJobTransport, useListJobInspections,
+  getGetJobQueryKey, getListJobInspectionsQueryKey,
+} from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams, useRouter, Stack } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -43,6 +48,11 @@ export default function JobDetailScreen() {
   const rateCustomerMutation = useRateCustomer();
   const cancelMutation = useCancelJob();
   const flagMutation = useCreateFlag();
+  const approveTransportMutation = useApproveJobTransport();
+  const queryClient = useQueryClient();
+  const { data: inspections } = useListJobInspections(jobId, {
+    query: { enabled: Number.isFinite(jobId) && job?.requiresGhostGarage === true } as any,
+  });
 
   const [rating, setRating] = useState(0);
   const [reviewText, setReviewText] = useState("");
@@ -152,6 +162,23 @@ export default function JobDetailScreen() {
         },
       }
     );
+  };
+
+  const handleApproveTransport = async () => {
+    const ok = await confirm({
+      title: "Approve transport to shop bay?",
+      message: "Your mechanic will drive the vehicle to a partner shop bay for service. You can track them en route.",
+      confirmText: "Approve",
+    });
+    if (!ok) return;
+    approveTransportMutation.mutate({ jobId }, {
+      onSuccess: () => {
+        try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch { /* web */ }
+        queryClient.invalidateQueries({ queryKey: getGetJobQueryKey(jobId) });
+        queryClient.invalidateQueries({ queryKey: getListJobInspectionsQueryKey(jobId) });
+      },
+      onError: (e: any) => void alertMessage("Couldn't approve", e?.message ?? "Try again."),
+    });
   };
 
   const handleFlag = async (kind: "mechanic" | "customer") => {
@@ -432,6 +459,96 @@ export default function JobDetailScreen() {
               <View style={styles.liveDot} />
             </Pressable>
           )}
+
+          {/* Ghost Garage: customer transport approval CTA */}
+          {isCustomer && job.requiresGhostGarage && !job.customerTransportApproved && (
+            <View style={[styles.card, { backgroundColor: colors.primary + "10", borderColor: colors.primary + "55" }]}>
+              <Text style={[styles.cardTitle, { color: colors.primary }]}>Approve Transport to Shop Bay</Text>
+              <Text style={{ color: colors.foreground, fontSize: 13, lineHeight: 18 }}>
+                This job needs an indoor bay (lift, alignment, etc). Approve so your mechanic can drive your vehicle to the shop. You'll be able to track them along the way.
+              </Text>
+              <Pressable
+                style={[styles.primaryBtn, { backgroundColor: colors.primary }, approveTransportMutation.isPending && { opacity: 0.6 }]}
+                onPress={() => { void handleApproveTransport(); }}
+                disabled={approveTransportMutation.isPending}
+              >
+                {approveTransportMutation.isPending
+                  ? <ActivityIndicator color="white" />
+                  : <Text style={styles.primaryBtnText}>Approve Transport</Text>}
+              </Pressable>
+            </View>
+          )}
+
+          {/* Ghost Garage: transport approved badge */}
+          {job.requiresGhostGarage && job.customerTransportApproved && (
+            <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 10 }]}>
+              <Feather name="check-circle" size={18} color={colors.primary} />
+              <Text style={{ color: colors.foreground, fontSize: 13, fontWeight: "600", flex: 1 }}>
+                Transport approved — vehicle may be driven to a shop bay.
+              </Text>
+            </View>
+          )}
+
+          {/* Inspections viewer */}
+          {job.requiresGhostGarage && inspections && inspections.length > 0 && (
+            <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Text style={[styles.cardTitle, { color: colors.foreground }]}>Inspections</Text>
+              {inspections.map((insp) => (
+                <View key={insp.id} style={{ paddingTop: 8, borderTopWidth: 1, borderColor: colors.border, marginTop: 8 }}>
+                  <Text style={{ color: colors.primary, fontSize: 12, fontWeight: "700", letterSpacing: 0.5 }}>
+                    {insp.kind.toUpperCase()}-INSPECTION  ·  {insp.mileage.toLocaleString()} mi
+                  </Text>
+                  {insp.notes ? (
+                    <Text style={{ color: colors.foreground, fontSize: 13, marginTop: 4 }}>{insp.notes}</Text>
+                  ) : null}
+                  {insp.mediaUrls && insp.mediaUrls.length > 0 ? (
+                    <Text style={{ color: colors.mutedForeground, fontSize: 12, marginTop: 6 }}>
+                      {insp.mediaUrls.length} photo{insp.mediaUrls.length === 1 ? "" : "s"}
+                    </Text>
+                  ) : null}
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* Mechanic Ghost Garage actions */}
+          {isMechanic && job.mechanicId === user?.id && job.requiresGhostGarage &&
+            ["ACCEPTED", "EN_ROUTE", "IN_PROGRESS"].includes(job.status) && (() => {
+              const hasPre = inspections?.some((i) => i.kind === "pre");
+              const hasPost = inspections?.some((i) => i.kind === "post");
+              return (
+                <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <Text style={[styles.cardTitle, { color: colors.foreground }]}>Ghost Garage</Text>
+                  <Pressable
+                    style={[styles.partsBtn, { backgroundColor: colors.secondary, borderColor: colors.border, marginTop: 0 }]}
+                    onPress={() => router.push(`/bays/${job.id}`)}
+                  >
+                    <Feather name="home" size={16} color={colors.foreground} />
+                    <Text style={[styles.partsBtnText, { color: colors.foreground }]}>Find a Bay</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.partsBtn, { backgroundColor: hasPre ? colors.muted : colors.primary + "18", borderColor: colors.primary + "44" }]}
+                    onPress={() => router.push(`/inspection/${job.id}?kind=pre`)}
+                  >
+                    <Feather name={hasPre ? "check" : "camera"} size={16} color={colors.primary} />
+                    <Text style={[styles.partsBtnText, { color: colors.primary }]}>
+                      {hasPre ? "Pre-Inspection ✓" : "Capture Pre-Inspection"}
+                    </Text>
+                  </Pressable>
+                  {hasPre && (
+                    <Pressable
+                      style={[styles.partsBtn, { backgroundColor: hasPost ? colors.muted : colors.primary + "18", borderColor: colors.primary + "44" }]}
+                      onPress={() => router.push(`/inspection/${job.id}?kind=post`)}
+                    >
+                      <Feather name={hasPost ? "check" : "camera"} size={16} color={colors.primary} />
+                      <Text style={[styles.partsBtnText, { color: colors.primary }]}>
+                        {hasPost ? "Post-Inspection ✓" : "Capture Post-Inspection"}
+                      </Text>
+                    </Pressable>
+                  )}
+                </View>
+              );
+            })()}
 
           {/* Actions */}
           {canSubmitWorklog && (

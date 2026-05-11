@@ -49,6 +49,8 @@ function RootLayoutNav() {
         router.replace("/(mechanic)");
       } else if (user.role === "admin") {
         router.replace("/(admin)");
+      } else if (user.role === "shop_owner") {
+        router.replace("/(shop-owner)");
       }
     }
   }, [user, isLoading, segments]);
@@ -64,6 +66,10 @@ function RootLayoutNav() {
         <Stack.Screen name="(customer)" options={{ headerShown: false }} />
         <Stack.Screen name="(mechanic)" options={{ headerShown: false }} />
         <Stack.Screen name="(admin)" options={{ headerShown: false }} />
+        <Stack.Screen name="(shop-owner)" options={{ headerShown: false }} />
+        <Stack.Screen name="shop/[id]" options={{ presentation: "card" }} />
+        <Stack.Screen name="bays/[jobId]" options={{ presentation: "modal" }} />
+        <Stack.Screen name="inspection/[jobId]" options={{ presentation: "modal" }} />
         <Stack.Screen name="vehicle/[id]" options={{ presentation: "card" }} />
         <Stack.Screen name="job/[id]" options={{ presentation: "card" }} />
         <Stack.Screen name="request-service" options={{ presentation: "modal" }} />

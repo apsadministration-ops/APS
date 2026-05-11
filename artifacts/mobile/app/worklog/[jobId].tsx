@@ -4,7 +4,7 @@ import {
 } from "react-native";
 import { alertMessage } from "@/utils/confirm";
 import { useColors } from "@/hooks/useColors";
-import { useGetJob, useCreateWorkLog } from "@workspace/api-client-react";
+import { useGetJob, useCreateWorkLog, useListMyBookings } from "@workspace/api-client-react";
 import { useLocalSearchParams, useRouter, Stack } from "expo-router";
 import { useState } from "react";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
@@ -21,6 +21,7 @@ export default function WorkLogScreen() {
   const jid = parseInt(jobId, 10);
 
   const { data: job } = useGetJob(jid);
+  const { data: myBookings } = useListMyBookings();
   const createMutation = useCreateWorkLog();
 
   const [category, setCategory] = useState<string>("repair");
@@ -33,7 +34,31 @@ export default function WorkLogScreen() {
   const [notes, setNotes] = useState("");
   const [beforeImages, setBeforeImages] = useState<string[]>([]);
   const [afterImages, setAfterImages] = useState<string[]>([]);
+  const [laborHours, setLaborHours] = useState("");
+  const [diagnosticCodes, setDiagnosticCodes] = useState<string[]>([]);
+  const [newDtc, setNewDtc] = useState("");
+  const [rootCauseDiagnosis, setRootCauseDiagnosis] = useState("");
+  const [repairSteps, setRepairSteps] = useState("");
+  const [observedSymptoms, setObservedSymptoms] = useState("");
+  const [recommendedMonitoring, setRecommendedMonitoring] = useState("");
+  const [recurringIssueTags, setRecurringIssueTags] = useState<string[]>([]);
+  const [newTag, setNewTag] = useState("");
   const [error, setError] = useState("");
+
+  const matchingBooking = (myBookings ?? []).find((b) => b.jobId === jid);
+  const requiresGhost = job?.requiresGhostGarage === true;
+
+  const addDtc = () => {
+    const t = newDtc.trim().toUpperCase();
+    if (t) { setDiagnosticCodes((prev) => [...prev, t]); setNewDtc(""); }
+  };
+  const removeDtc = (idx: number) => setDiagnosticCodes((p) => p.filter((_, i) => i !== idx));
+
+  const addTag = () => {
+    const t = newTag.trim();
+    if (t) { setRecurringIssueTags((prev) => [...prev, t]); setNewTag(""); }
+  };
+  const removeTag = (idx: number) => setRecurringIssueTags((p) => p.filter((_, i) => i !== idx));
 
   const pickImages = async (setter: (imgs: string[]) => void) => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -78,7 +103,12 @@ export default function WorkLogScreen() {
       setError("Please enter a labor cost (can be 0).");
       return;
     }
+    if (requiresGhost && !matchingBooking) {
+      setError("This is a Ghost Garage job — book a bay first, then come back to submit.");
+      return;
+    }
 
+    const hoursNum = parseFloat(laborHours);
     createMutation.mutate(
       {
         data: {
@@ -92,6 +122,14 @@ export default function WorkLogScreen() {
           notes: notes || undefined,
           beforeImages,
           afterImages,
+          laborHours: Number.isFinite(hoursNum) && hoursNum >= 0 ? hoursNum : undefined,
+          diagnosticCodes: diagnosticCodes.length > 0 ? diagnosticCodes : undefined,
+          rootCauseDiagnosis: rootCauseDiagnosis.trim() || undefined,
+          repairSteps: repairSteps.trim() || undefined,
+          observedSymptoms: observedSymptoms.trim() || undefined,
+          recommendedMonitoring: recommendedMonitoring.trim() || undefined,
+          recurringIssueTags: recurringIssueTags.length > 0 ? recurringIssueTags : undefined,
+          bayBookingId: matchingBooking?.id,
         },
       },
       {
@@ -274,6 +312,137 @@ export default function WorkLogScreen() {
             </ScrollView>
           )}
 
+          {requiresGhost && (
+            <View style={[styles.ghostBanner, {
+              backgroundColor: matchingBooking ? colors.primary + "14" : colors.destructive + "14",
+              borderColor: matchingBooking ? colors.primary + "44" : colors.destructive + "44",
+            }]}>
+              <Feather
+                name={matchingBooking ? "check-circle" : "alert-triangle"}
+                size={16}
+                color={matchingBooking ? colors.primary : colors.destructive}
+              />
+              <Text style={{ flex: 1, fontSize: 12, fontWeight: "600",
+                color: matchingBooking ? colors.primary : colors.destructive,
+              }}>
+                {matchingBooking
+                  ? `Linked to bay booking #${matchingBooking.id}`
+                  : "Ghost Garage job — book a bay first."}
+              </Text>
+            </View>
+          )}
+
+          <Text style={[styles.sectionLabel, { color: colors.mutedForeground, marginTop: 16 }]}>LABOR HOURS</Text>
+          <TextInput
+            style={[styles.input, { backgroundColor: colors.card, color: colors.foreground, borderColor: colors.border }]}
+            placeholder="2.5"
+            placeholderTextColor={colors.mutedForeground}
+            keyboardType="decimal-pad"
+            value={laborHours}
+            onChangeText={setLaborHours}
+          />
+
+          <Text style={[styles.sectionLabel, { color: colors.mutedForeground, marginTop: 16 }]}>OBD-II / DIAGNOSTIC CODES</Text>
+          <View style={styles.partsInput}>
+            <TextInput
+              style={[styles.input, { flex: 1, backgroundColor: colors.card, color: colors.foreground, borderColor: colors.border }]}
+              placeholder="P0420, U0100, etc."
+              placeholderTextColor={colors.mutedForeground}
+              autoCapitalize="characters"
+              value={newDtc}
+              onChangeText={setNewDtc}
+              onSubmitEditing={addDtc}
+              returnKeyType="done"
+            />
+            <Pressable style={[styles.addPartBtn, { backgroundColor: colors.primary }]} onPress={addDtc}>
+              <Feather name="plus" size={18} color="white" />
+            </Pressable>
+          </View>
+          {diagnosticCodes.length > 0 && (
+            <View style={styles.partsList}>
+              {diagnosticCodes.map((c, i) => (
+                <View key={i} style={[styles.partTag, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
+                  <Text style={[styles.partTagText, { color: colors.secondaryForeground, fontFamily: "monospace" }]}>{c}</Text>
+                  <Pressable onPress={() => removeDtc(i)}>
+                    <Feather name="x" size={14} color={colors.mutedForeground} />
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          )}
+
+          <Text style={[styles.sectionLabel, { color: colors.mutedForeground, marginTop: 16 }]}>OBSERVED SYMPTOMS</Text>
+          <TextInput
+            style={[styles.textarea, { backgroundColor: colors.card, color: colors.foreground, borderColor: colors.border, minHeight: 70 }]}
+            placeholder="What the customer/mechanic noticed (rough idle, intermittent stall…)"
+            placeholderTextColor={colors.mutedForeground}
+            multiline
+            value={observedSymptoms}
+            onChangeText={setObservedSymptoms}
+            textAlignVertical="top"
+          />
+
+          <Text style={[styles.sectionLabel, { color: colors.mutedForeground, marginTop: 16 }]}>ROOT CAUSE</Text>
+          <TextInput
+            style={[styles.textarea, { backgroundColor: colors.card, color: colors.foreground, borderColor: colors.border, minHeight: 70 }]}
+            placeholder="What actually caused the failure."
+            placeholderTextColor={colors.mutedForeground}
+            multiline
+            value={rootCauseDiagnosis}
+            onChangeText={setRootCauseDiagnosis}
+            textAlignVertical="top"
+          />
+
+          <Text style={[styles.sectionLabel, { color: colors.mutedForeground, marginTop: 16 }]}>REPAIR STEPS</Text>
+          <TextInput
+            style={[styles.textarea, { backgroundColor: colors.card, color: colors.foreground, borderColor: colors.border, minHeight: 70 }]}
+            placeholder="Step-by-step what was performed."
+            placeholderTextColor={colors.mutedForeground}
+            multiline
+            value={repairSteps}
+            onChangeText={setRepairSteps}
+            textAlignVertical="top"
+          />
+
+          <Text style={[styles.sectionLabel, { color: colors.mutedForeground, marginTop: 16 }]}>RECOMMENDED MONITORING</Text>
+          <TextInput
+            style={[styles.textarea, { backgroundColor: colors.card, color: colors.foreground, borderColor: colors.border, minHeight: 70 }]}
+            placeholder="Re-check at next service / watch for…"
+            placeholderTextColor={colors.mutedForeground}
+            multiline
+            value={recommendedMonitoring}
+            onChangeText={setRecommendedMonitoring}
+            textAlignVertical="top"
+          />
+
+          <Text style={[styles.sectionLabel, { color: colors.mutedForeground, marginTop: 16 }]}>RECURRING ISSUE TAGS</Text>
+          <View style={styles.partsInput}>
+            <TextInput
+              style={[styles.input, { flex: 1, backgroundColor: colors.card, color: colors.foreground, borderColor: colors.border }]}
+              placeholder="intermittent, post-storm, recall-likely…"
+              placeholderTextColor={colors.mutedForeground}
+              value={newTag}
+              onChangeText={setNewTag}
+              onSubmitEditing={addTag}
+              returnKeyType="done"
+            />
+            <Pressable style={[styles.addPartBtn, { backgroundColor: colors.primary }]} onPress={addTag}>
+              <Feather name="plus" size={18} color="white" />
+            </Pressable>
+          </View>
+          {recurringIssueTags.length > 0 && (
+            <View style={styles.partsList}>
+              {recurringIssueTags.map((t, i) => (
+                <View key={i} style={[styles.partTag, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
+                  <Text style={[styles.partTagText, { color: colors.secondaryForeground }]}>#{t}</Text>
+                  <Pressable onPress={() => removeTag(i)}>
+                    <Feather name="x" size={14} color={colors.mutedForeground} />
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          )}
+
           {error ? <Text style={[styles.error, { color: colors.destructive }]}>{error}</Text> : null}
 
           <Pressable
@@ -363,6 +532,10 @@ const styles = StyleSheet.create({
   photoPickerText: { fontSize: 13, fontWeight: "500" },
   imagePreview: { marginTop: 10 },
   previewImage: { width: 80, height: 80, borderRadius: 8, marginRight: 8 },
+  ghostBanner: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    padding: 10, borderRadius: 10, borderWidth: 1, marginTop: 12,
+  },
   error: { fontSize: 14, marginTop: 8 },
   submitBtn: {
     height: 56,

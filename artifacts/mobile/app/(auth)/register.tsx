@@ -170,6 +170,12 @@ export default function RegisterScreen() {
             >
               <Text style={[styles.roleText, { color: role === "mechanic" ? colors.primaryForeground : colors.foreground }]}>Mechanic</Text>
             </Pressable>
+            <Pressable
+              style={[styles.roleButton, { backgroundColor: role === "shop_owner" ? colors.primary : colors.card, borderColor: colors.border }]}
+              onPress={() => setRole("shop_owner")}
+            >
+              <Text style={[styles.roleText, { color: role === "shop_owner" ? colors.primaryForeground : colors.foreground }]}>Shop Owner</Text>
+            </Pressable>
           </View>
 
           <Text style={[styles.label, { color: colors.foreground }]}>Full Name</Text>

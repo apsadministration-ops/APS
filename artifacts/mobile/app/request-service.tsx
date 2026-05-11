@@ -29,6 +29,7 @@ export default function RequestServiceScreen() {
   const [zipCode, setZipCode] = useState("");
   const [locating, setLocating] = useState(false);
   const [lookingUpZip, setLookingUpZip] = useState(false);
+  const [requiresGhostGarage, setRequiresGhostGarage] = useState(false);
   const [error, setError] = useState("");
 
   const fetchWithTimeout = async (url: string, ms = 8000): Promise<Response | null> => {
@@ -154,6 +155,7 @@ export default function RequestServiceScreen() {
           locationLat: locationLat ?? undefined,
           locationLng: locationLng ?? undefined,
           requestedMechanicId: requestedMechanicId ?? undefined,
+          requiresGhostGarage: requiresGhostGarage || undefined,
         },
       },
       {
@@ -314,6 +316,29 @@ export default function RequestServiceScreen() {
             </View>
           ) : null}
 
+          <Pressable
+            onPress={() => setRequiresGhostGarage((v) => !v)}
+            style={[styles.ghostToggle, {
+              backgroundColor: requiresGhostGarage ? colors.primary + "18" : colors.card,
+              borderColor: requiresGhostGarage ? colors.primary : colors.border,
+            }]}
+          >
+            <Feather
+              name={requiresGhostGarage ? "check-square" : "square"}
+              size={20}
+              color={requiresGhostGarage ? colors.primary : colors.mutedForeground}
+            />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.ghostToggleTitle, { color: colors.foreground }]}>
+                Needs an indoor shop bay (Ghost Garage)
+              </Text>
+              <Text style={[styles.ghostToggleSub, { color: colors.mutedForeground }]}>
+                For lifts, alignments, AC work, and other shop-only repairs. Mechanic will book a bay
+                and you'll be asked to approve the vehicle being driven there.
+              </Text>
+            </View>
+          </Pressable>
+
           {error ? <Text style={[styles.error, { color: colors.destructive }]}>{error}</Text> : null}
 
           <Pressable
@@ -407,6 +432,12 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   locBadgeText: { fontSize: 12, fontWeight: "600" },
+  ghostToggle: {
+    flexDirection: "row", alignItems: "flex-start", gap: 12,
+    padding: 14, borderRadius: 12, borderWidth: 1.5, marginTop: 20,
+  },
+  ghostToggleTitle: { fontSize: 14, fontWeight: "700", marginBottom: 4 },
+  ghostToggleSub: { fontSize: 12, lineHeight: 16 },
   error: { fontSize: 14, marginTop: 8 },
   submitBtn: {
     height: 56,

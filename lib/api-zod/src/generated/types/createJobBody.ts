@@ -17,4 +17,6 @@ export interface CreateJobBody {
   estimatedPrice?: number;
   /** If set, only this mechanic sees the job in Available. */
   requestedMechanicId?: number;
+  /** True if the job needs an indoor shop bay (lift, etc). */
+  requiresGhostGarage?: boolean;
 }

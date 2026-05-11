@@ -622,6 +622,10 @@ export const CreateJobBody = zod.object({
     .number()
     .optional()
     .describe("If set, only this mechanic sees the job in Available."),
+  requiresGhostGarage: zod
+    .boolean()
+    .optional()
+    .describe("True if the job needs an indoor shop bay (lift, etc)."),
 });
 
 /**
