@@ -11,7 +11,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Ionicons } from "@expo/vector-icons";
+import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useGlobalSearchParams, useSegments } from "expo-router";
 import {
   Gesture,
@@ -174,33 +174,45 @@ export default function AIAssistantWidget() {
   const startX = useSharedValue(0);
   const startY = useSharedValue(0);
 
-  const drag = useMemo(
-    () =>
-      Gesture.Pan()
-        .minDistance(6)
-        .onStart(() => {
-          startX.value = tx.value;
-          startY.value = ty.value;
-        })
-        .onUpdate((e) => {
-          tx.value = startX.value + e.translationX;
-          ty.value = startY.value + e.translationY;
-        })
-        .onEnd(() => {
-          // Snap to nearest horizontal edge
-          const snapLeft = 8;
-          const snapRight = winW - BUBBLE_SIZE - 8;
-          const target =
-            tx.value + BUBBLE_SIZE / 2 < winW / 2 ? snapLeft : snapRight;
-          tx.value = withSpring(target, { damping: 18, stiffness: 180 });
-          ty.value = withSpring(
-            Math.max(8, Math.min(ty.value, winH - BUBBLE_SIZE - 8)),
-            { damping: 18, stiffness: 180 },
-          );
-          runOnJS(persistPosition)(target, ty.value);
-        }),
-    [winW, winH, persistPosition, tx, ty, startX, startY],
-  );
+  const toggleExpanded = useCallback(() => {
+    setExpanded((e) => !e);
+  }, []);
+
+  const composedGesture = useMemo(() => {
+    const pan = Gesture.Pan()
+      .minDistance(8)
+      .onStart(() => {
+        startX.value = tx.value;
+        startY.value = ty.value;
+      })
+      .onUpdate((e) => {
+        tx.value = startX.value + e.translationX;
+        ty.value = startY.value + e.translationY;
+      })
+      .onEnd(() => {
+        // Snap to nearest horizontal edge
+        const snapLeft = 8;
+        const snapRight = winW - BUBBLE_SIZE - 8;
+        const target =
+          tx.value + BUBBLE_SIZE / 2 < winW / 2 ? snapLeft : snapRight;
+        tx.value = withSpring(target, { damping: 18, stiffness: 180 });
+        ty.value = withSpring(
+          Math.max(8, Math.min(ty.value, winH - BUBBLE_SIZE - 8)),
+          { damping: 18, stiffness: 180 },
+        );
+        runOnJS(persistPosition)(target, ty.value);
+      });
+
+    // Tap fires the toggle. Use Race so a small movement starts a pan
+    // instead of registering as a tap. On Android this is required
+    // because <Pressable> swallows touches before GestureDetector sees
+    // them — composing Tap + Pan inside GestureDetector fixes drag.
+    const tap = Gesture.Tap().maxDistance(8).onEnd((_e, success) => {
+      if (success) runOnJS(toggleExpanded)();
+    });
+
+    return Gesture.Race(pan, tap);
+  }, [winW, winH, persistPosition, tx, ty, startX, startY, toggleExpanded]);
 
   const bubbleStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: tx.value }, { translateY: ty.value }],
@@ -263,7 +275,7 @@ export default function AIAssistantWidget() {
             { backgroundColor: colors.primary, bottom: 24, right: 16 },
           ]}
         >
-          <Ionicons name="sparkles" size={18} color={colors.primaryForeground} />
+          <MaterialCommunityIcons name="creation" size={18} color={colors.primaryForeground} />
         </Pressable>
       </View>
     );
@@ -271,25 +283,26 @@ export default function AIAssistantWidget() {
 
   return (
     <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
-      <GestureDetector gesture={drag}>
-        <Animated.View style={[styles.bubbleContainer, bubbleStyle]}>
-          <Pressable
-            onPress={() => setExpanded((e) => !e)}
-            accessibilityLabel={expanded ? "Close assistant" : "Open assistant"}
-            style={[
-              styles.bubble,
-              {
-                backgroundColor: colors.primary,
-                shadowColor: "#000",
-              },
-            ]}
-          >
-            <Ionicons
-              name={expanded ? "close" : "sparkles"}
+      <GestureDetector gesture={composedGesture}>
+        <Animated.View
+          style={[
+            styles.bubbleContainer,
+            bubbleStyle,
+            styles.bubble,
+            { backgroundColor: colors.primary, shadowColor: "#000" },
+          ]}
+          accessibilityLabel={expanded ? "Close assistant" : "Open assistant"}
+          accessibilityRole="button"
+        >
+          {expanded ? (
+            <Feather name="x" size={26} color={colors.primaryForeground} />
+          ) : (
+            <MaterialCommunityIcons
+              name="creation"
               size={26}
               color={colors.primaryForeground}
             />
-          </Pressable>
+          )}
         </Animated.View>
       </GestureDetector>
 
@@ -309,7 +322,7 @@ export default function AIAssistantWidget() {
           <View style={[styles.header, { borderBottomColor: colors.border }]}>
             <View style={styles.headerLeft}>
               <View style={[styles.iconBadge, { backgroundColor: colors.primary }]}>
-                <Ionicons name="sparkles" size={14} color={colors.primaryForeground} />
+                <MaterialCommunityIcons name="creation" size={14} color={colors.primaryForeground} />
               </View>
               <View>
                 <Text style={[styles.headerTitle, { color: colors.foreground }]}>
@@ -331,7 +344,7 @@ export default function AIAssistantWidget() {
                   accessibilityLabel="Clear chat"
                   style={styles.headerBtn}
                 >
-                  <Ionicons name="refresh" size={18} color={colors.mutedForeground} />
+                  <Feather name="refresh-cw" size={18} color={colors.mutedForeground} />
                 </Pressable>
               ) : null}
               <Pressable
@@ -343,14 +356,14 @@ export default function AIAssistantWidget() {
                 accessibilityLabel="Hide assistant"
                 style={styles.headerBtn}
               >
-                <Ionicons name="eye-off-outline" size={18} color={colors.mutedForeground} />
+                <Feather name="eye-off" size={18} color={colors.mutedForeground} />
               </Pressable>
               <Pressable
                 onPress={() => setExpanded(false)}
                 accessibilityLabel="Minimize"
                 style={styles.headerBtn}
               >
-                <Ionicons name="remove" size={20} color={colors.mutedForeground} />
+                <Feather name="minus" size={20} color={colors.mutedForeground} />
               </Pressable>
             </View>
           </View>
@@ -489,7 +502,7 @@ export default function AIAssistantWidget() {
               ]}
               accessibilityLabel="Send message"
             >
-              <Ionicons
+              <Feather
                 name="arrow-up"
                 size={18}
                 color={
