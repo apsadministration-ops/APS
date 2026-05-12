@@ -147,46 +147,88 @@ export default function EarningsScreen() {
             />
           </View>
 
-          <View style={{ gap: 8, marginTop: 12 }}>
+          <View style={{ gap: 10, marginTop: 12 }}>
             {calcRows.map((row) => {
               const canAccept = row.tier.level <= TIERS.find((t) => t.key === myTier)!.level;
+              const accent = row.c.reason === "detailing" ? "#15803D"
+                : row.c.reason === "working_down" ? "#B45309"
+                : colors.primary;
               return (
                 <View
                   key={row.tier.key}
                   style={[styles.calcRow, {
                     backgroundColor: canAccept ? colors.background : colors.card,
                     borderColor: row.tier.key === myTier ? colors.primary : colors.border,
-                    opacity: canAccept ? 1 : 0.5,
+                    opacity: canAccept ? 1 : 0.55,
                   }]}
                 >
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.calcTier, { color: colors.foreground }]}>
-                      Tier {row.tier.level} · {row.tier.label}
-                    </Text>
-                    <Text style={[styles.calcSample, { color: colors.mutedForeground }]} numberOfLines={1}>
-                      e.g. {row.sample.name} · ${row.quote.finalMin}–${row.quote.finalMax}
-                    </Text>
-                    <Text style={[styles.calcReason, { color: colors.mutedForeground }]}>
-                      {canAccept ? row.c.reasonLabel : "Above your current tier — not accepted yet"}
-                    </Text>
+                  {/* Header: tier label on the left, take-home on the right */}
+                  <View style={styles.calcHeader}>
+                    <View style={{ flex: 1, paddingRight: 12, minWidth: 0 }}>
+                      <Text style={[styles.calcTierBadge, { color: colors.mutedForeground }]}>
+                        TIER {row.tier.level}
+                      </Text>
+                      <Text style={[styles.calcTier, { color: colors.foreground }]}>
+                        {row.tier.label}
+                      </Text>
+                    </View>
+                    <View style={{ alignItems: "flex-end" }}>
+                      <Text style={[styles.calcTake, { color: accent }]}>
+                        ${row.earnings.toFixed(2)}
+                      </Text>
+                      <Text style={[styles.calcTakeLabel, { color: colors.mutedForeground }]}>
+                        take-home
+                      </Text>
+                    </View>
                   </View>
-                  <View style={{ alignItems: "flex-end" }}>
-                    <Text style={[styles.calcTake, { color: row.c.reason === "detailing" ? "#15803D" : row.c.reason === "working_down" ? "#B45309" : colors.primary }]}>
-                      ${row.earnings.toFixed(2)}
-                    </Text>
-                    <Text style={[styles.calcSplit, { color: colors.mutedForeground }]}>
-                      take-home · {row.c.mechanicPct}% of ${row.netProfit.toFixed(2)} net profit
-                    </Text>
-                    {row.partsCost > 0 ? (
-                      <Text style={[styles.calcSplit, { color: colors.mutedForeground, fontSize: 10 }]}>
-                        +${row.partsCost.toFixed(2)} parts reimbursed = ${row.grossPayout.toFixed(2)} deposited (of ${row.total})
-                      </Text>
-                    ) : (
-                      <Text style={[styles.calcSplit, { color: colors.mutedForeground, fontSize: 10 }]}>
-                        ${row.grossPayout.toFixed(2)} deposited (of ${row.total} job total)
-                      </Text>
+
+                  {/* Sample job name */}
+                  <Text style={[styles.calcSample, { color: colors.foreground }]}>
+                    e.g. {row.sample.name}
+                  </Text>
+                  <Text style={[styles.calcSampleSub, { color: colors.mutedForeground }]}>
+                    ${row.quote.finalMin}–${row.quote.finalMax} · {row.c.reasonLabel}
+                  </Text>
+
+                  {/* Breakdown box */}
+                  <View style={[styles.breakdownBox, { borderColor: colors.border, backgroundColor: colors.card }]}>
+                    <View style={styles.breakdownRow}>
+                      <Text style={[styles.breakdownLabel, { color: colors.mutedForeground }]}>Job total</Text>
+                      <Text style={[styles.breakdownValue, { color: colors.foreground }]}>${row.total.toFixed(2)}</Text>
+                    </View>
+                    {row.partsCost > 0 && (
+                      <View style={styles.breakdownRow}>
+                        <Text style={[styles.breakdownLabel, { color: colors.mutedForeground }]}>− Parts cost</Text>
+                        <Text style={[styles.breakdownValue, { color: colors.foreground }]}>${row.partsCost.toFixed(2)}</Text>
+                      </View>
                     )}
+                    <View style={[styles.breakdownRow, { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 6, marginTop: 4 }]}>
+                      <Text style={[styles.breakdownLabel, { color: colors.foreground, fontWeight: "700" }]}>Net profit</Text>
+                      <Text style={[styles.breakdownValue, { color: colors.foreground, fontWeight: "700" }]}>${row.netProfit.toFixed(2)}</Text>
+                    </View>
+                    <View style={styles.breakdownRow}>
+                      <Text style={[styles.breakdownLabel, { color: accent }]}>
+                        Your share ({row.c.mechanicPct}%)
+                      </Text>
+                      <Text style={[styles.breakdownValue, { color: accent, fontWeight: "700" }]}>${row.earnings.toFixed(2)}</Text>
+                    </View>
+                    {row.partsCost > 0 && (
+                      <View style={styles.breakdownRow}>
+                        <Text style={[styles.breakdownLabel, { color: colors.mutedForeground }]}>+ Parts reimbursement</Text>
+                        <Text style={[styles.breakdownValue, { color: colors.foreground }]}>${row.partsCost.toFixed(2)}</Text>
+                      </View>
+                    )}
+                    <View style={[styles.breakdownRow, { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 6, marginTop: 4 }]}>
+                      <Text style={[styles.breakdownLabel, { color: colors.mutedForeground, fontSize: 11 }]}>Total deposited</Text>
+                      <Text style={[styles.breakdownValue, { color: colors.foreground }]}>${row.grossPayout.toFixed(2)}</Text>
+                    </View>
                   </View>
+
+                  {!canAccept && (
+                    <Text style={[styles.lockedNote, { color: colors.mutedForeground }]}>
+                      🔒 Above your current tier — not accepted yet
+                    </Text>
+                  )}
                 </View>
               );
             })}
@@ -286,14 +328,28 @@ const styles = StyleSheet.create({
   euroToggleTitle: { fontSize: 14, fontWeight: "700" },
   euroToggleSub: { fontSize: 11, marginTop: 1 },
   calcRow: {
-    flexDirection: "row", alignItems: "center", gap: 12,
-    padding: 12, borderRadius: 10, borderWidth: 1,
+    padding: 14, borderRadius: 12, borderWidth: 1,
   },
-  calcTier: { fontSize: 14, fontWeight: "700" },
-  calcSample: { fontSize: 12, marginTop: 2 },
-  calcReason: { fontSize: 11, marginTop: 4, fontStyle: "italic" },
-  calcTake: { fontSize: 20, fontWeight: "800" },
-  calcSplit: { fontSize: 11, fontWeight: "600", marginTop: 2 },
+  calcHeader: {
+    flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between",
+    marginBottom: 10,
+  },
+  calcTierBadge: { fontSize: 10, fontWeight: "700", letterSpacing: 1 },
+  calcTier: { fontSize: 16, fontWeight: "800", marginTop: 2 },
+  calcSample: { fontSize: 13, fontWeight: "600", marginBottom: 2 },
+  calcSampleSub: { fontSize: 12, marginBottom: 10 },
+  calcTake: { fontSize: 24, fontWeight: "800", lineHeight: 28 },
+  calcTakeLabel: { fontSize: 10, fontWeight: "700", letterSpacing: 0.5, textTransform: "uppercase", marginTop: 2 },
+  breakdownBox: {
+    borderWidth: 1, borderRadius: 10, padding: 10, gap: 4,
+  },
+  breakdownRow: {
+    flexDirection: "row", justifyContent: "space-between", alignItems: "center",
+    paddingVertical: 2,
+  },
+  breakdownLabel: { fontSize: 12, flexShrink: 1, paddingRight: 8 },
+  breakdownValue: { fontSize: 13, fontWeight: "600", fontVariant: ["tabular-nums"] },
+  lockedNote: { fontSize: 11, marginTop: 8, fontStyle: "italic" },
   tierBlock: { borderRadius: 14, padding: 14, marginTop: 10 },
   tierHead: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 12 },
   tierBadge: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
