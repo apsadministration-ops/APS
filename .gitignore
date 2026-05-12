@@ -1,26 +1,40 @@
-# See https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
-
 # compiled output
-dist
-tmp
-out-tsc
+dist/
+build/
+tmp/
+out-tsc/
 *.tsbuildinfo
-.expo
-.expo-shared
+.expo/
+.expo-shared/
+artifacts/mobile/.expo/
+artifacts/mobile/android/
+artifacts/mobile/ios/
 
 # dependencies
-node_modules
+node_modules/
 
-# IDEs and editors
-/.idea
+# env / secrets — NEVER commit
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# logs
+*.log
+npm-debug.log*
+yarn-error.log
+testem.log
+/tmp/
+
+# IDE
+/.idea/
 .project
 .classpath
 .c9/
 *.launch
 .settings/
 *.sublime-workspace
-
-# IDE - VSCode
 .vscode/*
 !.vscode/settings.json
 !.vscode/tasks.json
@@ -28,22 +42,26 @@ node_modules
 !.vscode/extensions.json
 
 # misc
-/.sass-cache
+/.sass-cache/
 /connect.lock
-/coverage
+/coverage/
 /libpeerconnection.log
-npm-debug.log
-yarn-error.log
-testem.log
-/typings
+/typings/
 
 # System Files
 .DS_Store
 Thumbs.db
 
+# Replit-specific (kept locally; not needed on GitHub)
+.cache/
+.local/
+.agents/
+.upm/
+
+# Editor / tooling caches
 .cursor/rules/nx-rules.mdc
 .github/instructions/nx.instructions.md
 
-# Replit
-.cache/
-.local/
+# User-uploaded screenshots & ad-hoc assets (large, not needed for build)
+attached_assets/
+screenshots/
