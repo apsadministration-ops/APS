@@ -224,6 +224,10 @@ export default function EarningsScreen() {
                     </View>
                   </View>
 
+                  <Text style={[styles.estimateNote, { color: colors.mutedForeground }]}>
+                    * Rough estimate — actual numbers will vary based on the real job total, parts cost, vehicle, and any tips.
+                  </Text>
+
                   {!canAccept && (
                     <Text style={[styles.lockedNote, { color: colors.mutedForeground }]}>
                       🔒 Above your current tier — not accepted yet
@@ -350,6 +354,7 @@ const styles = StyleSheet.create({
   breakdownLabel: { fontSize: 12, flexShrink: 1, paddingRight: 8 },
   breakdownValue: { fontSize: 13, fontWeight: "600", fontVariant: ["tabular-nums"] },
   lockedNote: { fontSize: 11, marginTop: 8, fontStyle: "italic" },
+  estimateNote: { fontSize: 10, marginTop: 8, fontStyle: "italic", lineHeight: 14 },
   tierBlock: { borderRadius: 14, padding: 14, marginTop: 10 },
   tierHead: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 12 },
   tierBadge: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
