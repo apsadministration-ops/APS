@@ -59,18 +59,26 @@ export default function EarningsScreen() {
       const partsCostCents = partsCostCentsFor(sample, totalCents);
       const { mechanicPayoutCents, platformFeeCents, netProfitCents } =
         splitOnNetProfit(totalCents, partsCostCents, c);
-      const mechanicTake = mechanicPayoutCents / 100;
+      // EARNINGS = mechanic's share of True Net Profit only. The parts
+      // reimbursement (`partsPassthroughCents`) is included in the gross
+      // deposit but it just refunds money the mechanic already spent on
+      // parts — it is NOT earnings. We display earnings prominently and
+      // show the parts reimbursement separately.
+      const grossPayout = mechanicPayoutCents / 100;
+      const earningsCents = mechanicPayoutCents - partsCostCents;
+      const earnings = earningsCents / 100;
       const platformTake = platformFeeCents / 100;
       const partsCost = partsCostCents / 100;
       const netProfit = netProfitCents / 100;
-      return { tier: t, sample, c, quote, total, mechanicTake, platformTake, partsCost, netProfit };
+      return { tier: t, sample, c, quote, total, earnings, grossPayout, platformTake, partsCost, netProfit };
     }).filter(Boolean) as Array<{
       tier: typeof TIERS[number];
       sample: typeof JOB_CATALOG[number];
       c: ReturnType<typeof commissionForJob>;
       quote: NonNullable<ReturnType<typeof quoteForService>>;
       total: number;
-      mechanicTake: number;
+      earnings: number;
+      grossPayout: number;
       platformTake: number;
       partsCost: number;
       netProfit: number;
@@ -89,7 +97,7 @@ export default function EarningsScreen() {
       <ScrollView style={[styles.container, { backgroundColor: colors.background }]} contentContainerStyle={{ padding: 16, paddingBottom: 120 }}>
         <Text style={[styles.h1, { color: colors.foreground }]}>Earn more by leveling up</Text>
         <Text style={[styles.lede, { color: colors.mutedForeground }]}>
-          APS commission is calculated on True Net Profit — your job revenue (labor + parts markup) minus the cost of parts. Three simple rules: same-tier work pays the most, detailing always pays best, and "working down" to a lower-tier job is a small cut. Parts, fees, and tips pass through 100%.
+          APS commission is calculated on True Net Profit — that's the job total minus what you actually paid for parts. You keep 75–85% of that net profit as take-home earnings. The parts cost is fully reimbursed on top (not earnings — it just pays you back what you spent). Detailing always pays best at 85%.
         </Text>
 
         {/* The three rates */}
@@ -164,16 +172,20 @@ export default function EarningsScreen() {
                   </View>
                   <View style={{ alignItems: "flex-end" }}>
                     <Text style={[styles.calcTake, { color: row.c.reason === "detailing" ? "#15803D" : row.c.reason === "working_down" ? "#B45309" : colors.primary }]}>
-                      ${row.mechanicTake.toFixed(2)}
+                      ${row.earnings.toFixed(2)}
                     </Text>
                     <Text style={[styles.calcSplit, { color: colors.mutedForeground }]}>
-                      of ${row.total} · {row.c.mechanicPct}% / {row.c.platformPct}%
+                      take-home · {row.c.mechanicPct}% of ${row.netProfit.toFixed(2)} net profit
                     </Text>
                     {row.partsCost > 0 ? (
                       <Text style={[styles.calcSplit, { color: colors.mutedForeground, fontSize: 10 }]}>
-                        Net profit ${row.netProfit} · parts ${row.partsCost} passes through
+                        +${row.partsCost.toFixed(2)} parts reimbursed = ${row.grossPayout.toFixed(2)} deposited (of ${row.total})
                       </Text>
-                    ) : null}
+                    ) : (
+                      <Text style={[styles.calcSplit, { color: colors.mutedForeground, fontSize: 10 }]}>
+                        ${row.grossPayout.toFixed(2)} deposited (of ${row.total} job total)
+                      </Text>
+                    )}
                   </View>
                 </View>
               );
@@ -229,7 +241,7 @@ export default function EarningsScreen() {
         <View style={[styles.footnote, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Feather name="info" size={14} color={colors.mutedForeground} />
           <Text style={[styles.footnoteText, { color: colors.mutedForeground }]}>
-            Earnings estimates include average labor + typical parts markup for each job. Your actual take-home will be 75–85% of the True Net Profit after parts cost. Parts, fees, and tips pass through 100% to the mechanic. Refunded jobs reverse both sides of the ledger.
+            Take-home = your 75–85% share of True Net Profit (job total − actual parts cost). On top of that, you're reimbursed 100% of what you spent on parts and 100% of any tips — but those aren't earnings, they're pass-through. Example: $144 job with $43.20 parts cost at the working-down rate (25%) → net profit $100.80 → take-home $75.60, plus $43.20 parts reimbursement = $118.80 deposited. Refunded jobs reverse both sides of the ledger.
           </Text>
         </View>
 
