@@ -30,3 +30,4 @@ export * from "./disputes";
 export * from "./tips";
 export * from "./payoutEvents";
 export * from "./workConfirmations";
+export * from "./partsItems";

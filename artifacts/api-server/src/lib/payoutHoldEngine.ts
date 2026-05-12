@@ -33,11 +33,12 @@
 import { and, eq, isNull, lte, sql } from "drizzle-orm";
 import {
   db, paymentsTable, jobsTable, usersTable, vehiclesTable,
-  workConfirmationsTable, disputesTable,
+  workConfirmationsTable, disputesTable, partsItemsTable, workLogsTable,
 } from "@workspace/db";
 import { logger } from "./logger";
 import { getUncachableStripeClient } from "./stripeClient";
-import { commissionForJob, splitOnNetProfit, findServiceBySlug, partsCostCentsFor, defaultPartsCostPct, type TierKey, type ServiceCategory } from "@workspace/tier-catalog";
+import { findServiceBySlug, partsCostCentsFor, defaultPartsCostPct, type ServiceCategory } from "@workspace/tier-catalog";
+import { computeBreakdown } from "./financialEngine";
 import {
   notifyCustomerWorkAwaitingConfirmation,
   notifyMechanicWorkUnderReview,
@@ -245,45 +246,61 @@ export async function captureNow(
   try {
     const stripe = await getUncachableStripeClient();
     const finalCents = pmt.amountCents ?? Math.round(pmt.amount * 100);
+    const taxCents = pmt.taxCents ?? 0;
     const [mechRow] = await db
       .select({ mechanicTier: usersTable.mechanicTier, pushToken: usersTable.pushToken })
       .from(usersTable)
       .where(eq(usersTable.id, job.mechanicId!));
-    const commission = commissionForJob({
-      category: job.jobType as ServiceCategory,
-      jobTier: ((job.requiredTier ?? "detailer") as TierKey),
-      mechanicTier: (mechRow?.mechanicTier ?? "detailer") as TierKey,
-    });
-    // True Net Profit split — commission applies only to (revenue − parts
-    // cost). MUST mirror the parts-cost rule used at authorization in
-    // payments.ts so the mechanic's payout matches what was visible at accept.
+    // True Net Profit split using ACTUAL mechanic-entered parts cost when a
+    // worklog with itemized parts exists. Falls back to catalog-derived
+    // estimate for legacy jobs without a worklog/parts_items.
+    const [wl] = await db.select().from(workLogsTable).where(eq(workLogsTable.jobId, jobId));
+    let actualPartsCents: number | null = null;
+    if (wl) {
+      const items = await db.select().from(partsItemsTable).where(eq(partsItemsTable.workLogId, wl.id));
+      if (items.length > 0) {
+        actualPartsCents = items.reduce((s, p) => s + (p.totalCents ?? 0), 0);
+      }
+    }
     const svcEntry = findServiceBySlug(job.serviceSlug);
-    const partsCostCents = svcEntry
-      ? partsCostCentsFor(svcEntry, finalCents)
-      : Math.round(finalCents * defaultPartsCostPct(job.jobType as ServiceCategory));
-    const { platformFeeCents, mechanicPayoutCents } = splitOnNetProfit(finalCents, partsCostCents, commission);
+    const partsCostCents = actualPartsCents ?? (svcEntry
+      ? partsCostCentsFor(svcEntry, Math.max(0, finalCents - taxCents))
+      : Math.round(Math.max(0, finalCents - taxCents) * defaultPartsCostPct(job.jobType as ServiceCategory)));
+
+    const breakdown = computeBreakdown({
+      amountCents: finalCents,
+      taxCents,
+      partsCostCents,
+      category: job.jobType as ServiceCategory,
+      jobTier: (job.requiredTier ?? "detailer") as import("@workspace/tier-catalog").TierKey,
+      mechanicTier: (mechRow?.mechanicTier ?? "detailer") as import("@workspace/tier-catalog").TierKey,
+    });
 
     await stripe.paymentIntents.capture(pmt.providerPaymentIntentId, {
       amount_to_capture: finalCents,
-      application_fee_amount: platformFeeCents,
+      application_fee_amount: breakdown.apsCommissionCents,
     });
-    // payment_intent.succeeded webhook will flip status → captured. We mirror
-    // the split here so dashboards stay consistent if the webhook is delayed.
+    // Snapshot the FULL True Net Profit breakdown to the payment row.
+    // payment_intent.succeeded webhook will flip status → captured AND
+    // backfill stripeFeeCents from balance_transaction.
     await db.update(paymentsTable)
       .set({
         amount: finalCents / 100,
-        platformFee: platformFeeCents / 100,
-        mechanicPayout: mechanicPayoutCents / 100,
+        platformFee: breakdown.apsCommissionCents / 100,
+        mechanicPayout: breakdown.mechanicPayoutCents / 100,
         amountCents: finalCents,
-        platformFeeCents,
-        mechanicPayoutCents,
+        platformFeeCents: breakdown.apsCommissionCents,
+        mechanicPayoutCents: breakdown.mechanicPayoutCents,
+        partsCostAppliedCents: partsCostCents,
+        laborRevenueCents: breakdown.laborCents,
+        netProfitCents: breakdown.netProfitCents,
       })
       .where(eq(paymentsTable.id, pmt.id));
 
     if (mechRow?.pushToken) {
-      void notifyMechanicPayoutInitiated(mechRow.pushToken, jobId, mechanicPayoutCents / 100);
+      void notifyMechanicPayoutInitiated(mechRow.pushToken, jobId, breakdown.mechanicPayoutCents / 100);
     }
-    logger.info({ jobId, trigger, captureCents: finalCents }, "24h-hold capture fired");
+    logger.info({ jobId, trigger, captureCents: finalCents, partsCents: partsCostCents, source: actualPartsCents !== null ? "actual" : "estimate" }, "24h-hold capture fired");
     return { ok: true };
   } catch (err) {
     // Roll back the claim so a manual retry can try again.

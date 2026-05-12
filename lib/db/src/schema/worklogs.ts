@@ -49,6 +49,11 @@ export const workLogsTable = pgTable("work_logs", {
   preInspectionId: integer("pre_inspection_id"),
   postInspectionId: integer("post_inspection_id"),
   immutableFlag: boolean("immutable_flag").notNull().default(true),
+  // Fraud / risk flagging — set true when actual parts cost diverges
+  // suspiciously from estimates (see fraudHeuristics.ts). Admin reviews
+  // these from /admin/finance/flagged before payout finalisation.
+  flaggedForReview: boolean("flagged_for_review").notNull().default(false),
+  flagReason: text("flag_reason"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   index("worklogs_vin_idx").on(t.vin),

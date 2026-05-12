@@ -32,6 +32,8 @@ import workConfirmationsRouter from "./workConfirmations";
 import tipsRouter from "./tips";
 import disputesRouter from "./disputes";
 import payoutsRouter from "./payouts";
+import invoiceRouter from "./invoice";
+import adminFinanceRouter from "./adminFinance";
 
 const router: IRouter = Router();
 
@@ -68,5 +70,7 @@ router.use(workConfirmationsRouter);
 router.use(tipsRouter);
 router.use(disputesRouter);
 router.use(payoutsRouter);
+router.use(invoiceRouter);
+router.use(adminFinanceRouter);
 
 export default router;

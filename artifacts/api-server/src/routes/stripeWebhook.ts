@@ -162,6 +162,24 @@ async function handleEvent(event: Stripe.Event): Promise<void> {
         return;
       }
       const payment = updated[0]!;
+      // Backfill actual Stripe processing fee from the balance_transaction.
+      // Best-effort — not a blocker for capture state. Used by admin finance
+      // reporting + future "deduct stripe fee from net profit" toggle.
+      try {
+        const stripe = await getUncachableStripeClient();
+        const charge = intent.latest_charge
+          ? typeof intent.latest_charge === "string"
+            ? await stripe.charges.retrieve(intent.latest_charge, { expand: ["balance_transaction"] })
+            : intent.latest_charge
+          : null;
+        const bt = charge?.balance_transaction;
+        const feeCents = typeof bt === "object" && bt !== null && "fee" in bt ? (bt as { fee: number }).fee : null;
+        if (typeof feeCents === "number" && Number.isFinite(feeCents)) {
+          await db.update(paymentsTable).set({ stripeFeeCents: feeCents }).where(eq(paymentsTable.id, payment.id));
+        }
+      } catch (err) {
+        logger.warn({ err, intentId: intent.id }, "stripe fee backfill failed (non-fatal)");
+      }
       await db.update(jobsTable).set({ status: "PAID" }).where(eq(jobsTable.id, payment.jobId));
       const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, payment.jobId));
       // Trigger tier-progression evaluation now that the mechanic has another paid job.

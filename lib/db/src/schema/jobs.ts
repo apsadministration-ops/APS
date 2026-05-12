@@ -32,6 +32,10 @@ export const jobsTable = pgTable("jobs", {
   mechanicLocationUpdatedAt: timestamp("mechanic_location_updated_at", { withTimezone: true }),
   estimatedPrice: real("estimated_price"),
   finalPrice: real("final_price"),
+  // Sales tax in cents — included in customer's total invoice but EXCLUDED
+  // from APS commission base. Computed by the server from the customer's
+  // billing address at checkout time (defaults 0 when no rate set).
+  taxCents: integer("tax_cents").notNull().default(0),
   rating: integer("rating"),
   ratingNote: text("rating_note"),
   mechanicReviewText: text("mechanic_review_text"),

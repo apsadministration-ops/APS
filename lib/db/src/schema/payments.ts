@@ -31,6 +31,16 @@ export const paymentsTable = pgTable("payments", {
   amountCents: integer("amount_cents"),
   platformFeeCents: integer("platform_fee_cents"),
   mechanicPayoutCents: integer("mechanic_payout_cents"),
+  // True Net Profit financial snapshots (set at authorization, finalized at capture).
+  // taxCents: sales tax included in amountCents but EXCLUDED from commission base.
+  // stripeFeeCents: actual processing fee from balance_transaction (filled post-capture).
+  // partsCostAppliedCents: actual parts reimbursement used for commission calc.
+  // laborRevenueCents: labor portion of amount used as commission base (= amount - tax - parts).
+  taxCents: integer("tax_cents").notNull().default(0),
+  stripeFeeCents: integer("stripe_fee_cents"),
+  partsCostAppliedCents: integer("parts_cost_applied_cents"),
+  laborRevenueCents: integer("labor_revenue_cents"),
+  netProfitCents: integer("net_profit_cents"),
   failureReason: text("failure_reason"),
 
   // 24h escrow hold — when the customer's confirmation window expires.

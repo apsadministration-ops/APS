@@ -28,9 +28,23 @@ export default function WorkLogScreen() {
   const [description, setDescription] = useState("");
   const [mileageAtService, setMileageAtService] = useState("");
   const [laborCost, setLaborCost] = useState("");
-  const [partsCost, setPartsCost] = useState("");
+  // Itemized parts (True Net Profit). partsCost is derived from this list.
+  const [partsItems, setPartsItems] = useState<Array<{
+    name: string; partNumber: string; brand: string; supplier: string;
+    quantity: string; unitPriceDollars: string;
+  }>>([]);
   const [partsUsed, setPartsUsed] = useState<string[]>([]);
   const [newPart, setNewPart] = useState("");
+
+  const addPartsItem = () => setPartsItems((prev) => [...prev, { name: "", partNumber: "", brand: "", supplier: "", quantity: "1", unitPriceDollars: "" }]);
+  const removePartsItem = (idx: number) => setPartsItems((prev) => prev.filter((_, i) => i !== idx));
+  const updatePartsItem = (idx: number, field: keyof typeof partsItems[number], value: string) =>
+    setPartsItems((prev) => prev.map((p, i) => i === idx ? { ...p, [field]: value } : p));
+  const partsTotalDollars = partsItems.reduce((s, p) => {
+    const q = parseInt(p.quantity, 10) || 0;
+    const price = parseFloat(p.unitPriceDollars) || 0;
+    return s + q * price;
+  }, 0);
   const [notes, setNotes] = useState("");
   const [beforeImages, setBeforeImages] = useState<string[]>([]);
   const [afterImages, setAfterImages] = useState<string[]>([]);
@@ -82,7 +96,9 @@ export default function WorkLogScreen() {
     setPartsUsed((prev) => prev.filter((_, i) => i !== idx));
   };
 
-  const totalCost = (parseFloat(laborCost) || 0) + (parseFloat(partsCost) || 0);
+  // Parts cost is derived from itemized entries (True Net Profit source of truth).
+  const partsCost = partsTotalDollars;
+  const totalCost = (parseFloat(laborCost) || 0) + partsCost;
 
   const handleSubmit = () => {
     setError("");
@@ -108,6 +124,21 @@ export default function WorkLogScreen() {
       return;
     }
 
+    // Validate itemized parts — each row must have a name + valid unit price.
+    const invalidIdx = partsItems.findIndex((p) => !p.name.trim() || !(parseFloat(p.unitPriceDollars) >= 0));
+    if (invalidIdx >= 0) {
+      setError(`Parts row ${invalidIdx + 1}: please enter a name and unit price.`);
+      return;
+    }
+    const cleanPartsItems = partsItems.map((p) => ({
+      name: p.name.trim(),
+      partNumber: p.partNumber.trim() || undefined,
+      brand: p.brand.trim() || undefined,
+      supplier: p.supplier.trim() || undefined,
+      quantity: Math.max(1, parseInt(p.quantity, 10) || 1),
+      unitPriceCents: Math.round((parseFloat(p.unitPriceDollars) || 0) * 100),
+    }));
+
     const hoursNum = parseFloat(laborHours);
     createMutation.mutate(
       {
@@ -117,7 +148,7 @@ export default function WorkLogScreen() {
           serviceDescription: description,
           mileageAtService: mileageNum,
           laborCost: parseFloat(laborCost) || 0,
-          partsCost: parseFloat(partsCost) || 0,
+          partsCost,
           partsUsed,
           notes: notes || undefined,
           beforeImages,
@@ -130,7 +161,10 @@ export default function WorkLogScreen() {
           recommendedMonitoring: recommendedMonitoring.trim() || undefined,
           recurringIssueTags: recurringIssueTags.length > 0 ? recurringIssueTags : undefined,
           bayBookingId: matchingBooking?.id,
-        },
+          // Itemized parts — server uses these as True Net Profit source of truth.
+          // Field is server-accepted and validated; not yet in OpenAPI schema.
+          ...(cleanPartsItems.length > 0 ? { partsItems: cleanPartsItems } : {}),
+        } as any,
       },
       {
         onSuccess: async () => {
@@ -229,20 +263,86 @@ export default function WorkLogScreen() {
             </View>
             <View style={styles.costField}>
               <Text style={[styles.costLabel, { color: colors.foreground }]}>Parts ($)</Text>
-              <TextInput
-                style={[styles.input, { backgroundColor: colors.card, color: colors.foreground, borderColor: colors.border }]}
-                placeholder="0.00"
-                placeholderTextColor={colors.mutedForeground}
-                keyboardType="decimal-pad"
-                value={partsCost}
-                onChangeText={setPartsCost}
-              />
+              <View style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, justifyContent: "center" }]}>
+                <Text style={{ color: colors.mutedForeground }}>${partsCost.toFixed(2)} (auto)</Text>
+              </View>
             </View>
             <View style={styles.totalBox}>
               <Text style={[styles.costLabel, { color: colors.mutedForeground }]}>Total</Text>
               <Text style={[styles.totalValue, { color: colors.primary }]}>${totalCost.toFixed(2)}</Text>
             </View>
           </View>
+
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 16 }}>
+            <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>ITEMIZED PARTS (RECEIPT)</Text>
+            <Pressable onPress={addPartsItem} style={[styles.addPartBtn, { backgroundColor: colors.primary, paddingHorizontal: 12, height: 32 }]}>
+              <Feather name="plus" size={14} color="white" />
+              <Text style={{ color: "white", marginLeft: 4, fontWeight: "600" }}>Add</Text>
+            </Pressable>
+          </View>
+          {partsItems.length === 0 && (
+            <Text style={{ color: colors.mutedForeground, fontSize: 12, marginTop: 4 }}>
+              Add each part you actually purchased — name, supplier, and unit price.
+              APS reimburses 100% of these costs to you (excluded from commission).
+            </Text>
+          )}
+          {partsItems.map((p, idx) => {
+            const lineTotal = (parseInt(p.quantity, 10) || 0) * (parseFloat(p.unitPriceDollars) || 0);
+            return (
+              <View key={idx} style={{ marginTop: 8, padding: 10, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card }}>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                  <Text style={{ color: colors.mutedForeground, fontSize: 12, fontWeight: "600" }}>PART #{idx + 1}</Text>
+                  <Pressable onPress={() => removePartsItem(idx)}><Feather name="trash-2" size={14} color={colors.mutedForeground} /></Pressable>
+                </View>
+                <TextInput
+                  style={[styles.input, { backgroundColor: colors.background, color: colors.foreground, borderColor: colors.border, marginTop: 6 }]}
+                  placeholder="Part name (e.g. Front brake pads)"
+                  placeholderTextColor={colors.mutedForeground}
+                  value={p.name} onChangeText={(t) => updatePartsItem(idx, "name", t)}
+                />
+                <View style={{ flexDirection: "row", gap: 6, marginTop: 6 }}>
+                  <TextInput
+                    style={[styles.input, { flex: 1, backgroundColor: colors.background, color: colors.foreground, borderColor: colors.border }]}
+                    placeholder="Brand" placeholderTextColor={colors.mutedForeground}
+                    value={p.brand} onChangeText={(t) => updatePartsItem(idx, "brand", t)}
+                  />
+                  <TextInput
+                    style={[styles.input, { flex: 1, backgroundColor: colors.background, color: colors.foreground, borderColor: colors.border }]}
+                    placeholder="Part #" placeholderTextColor={colors.mutedForeground}
+                    value={p.partNumber} onChangeText={(t) => updatePartsItem(idx, "partNumber", t)}
+                  />
+                </View>
+                <TextInput
+                  style={[styles.input, { backgroundColor: colors.background, color: colors.foreground, borderColor: colors.border, marginTop: 6 }]}
+                  placeholder="Supplier (e.g. NAPA, AutoZone)" placeholderTextColor={colors.mutedForeground}
+                  value={p.supplier} onChangeText={(t) => updatePartsItem(idx, "supplier", t)}
+                />
+                <View style={{ flexDirection: "row", gap: 6, marginTop: 6, alignItems: "center" }}>
+                  <View style={{ width: 70 }}>
+                    <Text style={{ color: colors.mutedForeground, fontSize: 11 }}>Qty</Text>
+                    <TextInput
+                      style={[styles.input, { backgroundColor: colors.background, color: colors.foreground, borderColor: colors.border }]}
+                      keyboardType="number-pad" value={p.quantity}
+                      onChangeText={(t) => updatePartsItem(idx, "quantity", t.replace(/[^0-9]/g, ""))}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: colors.mutedForeground, fontSize: 11 }}>Unit price ($)</Text>
+                    <TextInput
+                      style={[styles.input, { backgroundColor: colors.background, color: colors.foreground, borderColor: colors.border }]}
+                      keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor={colors.mutedForeground}
+                      value={p.unitPriceDollars}
+                      onChangeText={(t) => updatePartsItem(idx, "unitPriceDollars", t)}
+                    />
+                  </View>
+                  <View style={{ width: 90, alignItems: "flex-end" }}>
+                    <Text style={{ color: colors.mutedForeground, fontSize: 11 }}>Line total</Text>
+                    <Text style={{ color: colors.primary, fontWeight: "700", fontSize: 16 }}>${lineTotal.toFixed(2)}</Text>
+                  </View>
+                </View>
+              </View>
+            );
+          })}
 
           <Text style={[styles.sectionLabel, { color: colors.mutedForeground, marginTop: 16 }]}>PARTS USED</Text>
           <View style={styles.partsInput}>

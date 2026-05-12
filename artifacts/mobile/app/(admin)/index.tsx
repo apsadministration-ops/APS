@@ -6,6 +6,7 @@ import { Feather } from "@expo/vector-icons";
 import { useState, useEffect, useCallback } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
+import { useRouter } from "expo-router";
 
 interface DashboardStats {
   totalUsers: number;
@@ -38,6 +39,7 @@ function StatCard({ icon, label, value, sub, color }: {
 
 export default function AdminDashboard() {
   const colors = useColors();
+  const router = useRouter();
   const { user, logout } = useAuth();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -164,6 +166,17 @@ export default function AdminDashboard() {
               </View>
             )}
           </View>
+
+          <Pressable
+            onPress={() => router.push("/(admin)/finance")}
+            style={[styles.heldNote, { backgroundColor: colors.card, borderColor: colors.border, marginTop: 12, alignItems: "center" }]}
+          >
+            <Feather name="bar-chart-2" size={16} color={colors.primary} />
+            <Text style={[styles.heldNoteText, { color: colors.foreground, fontWeight: "600" }]}>
+              Open Financial Dashboard (True Net Profit)
+            </Text>
+            <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+          </Pressable>
         </>
       ) : null}
     </ScrollView>

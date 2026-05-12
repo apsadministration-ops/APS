@@ -109,7 +109,19 @@ router.post("/payments/jobs/:jobId/checkout", authenticate, async (req: AuthRequ
     await db.update(usersTable).set({ stripeCustomerId }).where(eq(usersTable.id, customer.id));
   }
 
-  const amountCents = Math.round(job.estimatedPrice * 100);
+  // Tax handling — customer can pass a sales-tax rate (decimal 0..0.15)
+  // OR explicit cents override. Tax is included in the customer total but
+  // EXCLUDED from APS commission. Rate is server-clamped.
+  const body = (req.body ?? {}) as { taxRate?: number; taxCents?: number };
+  const subtotalCents = Math.round(job.estimatedPrice * 100);
+  let taxCents = 0;
+  if (typeof body.taxCents === "number" && Number.isFinite(body.taxCents) && body.taxCents > 0) {
+    taxCents = Math.min(Math.round(body.taxCents), Math.round(subtotalCents * 0.15));
+  } else if (typeof body.taxRate === "number" && Number.isFinite(body.taxRate) && body.taxRate > 0) {
+    const clampedRate = Math.min(Math.max(body.taxRate, 0), 0.15);
+    taxCents = Math.round(subtotalCents * clampedRate);
+  }
+  const amountCents = subtotalCents + taxCents;
   // Tier-aware commission: detailing → 15/85; same-tier → 20/80; mechanic
   // working down a level (or more) → 25/75. Single source of truth in
   // `@workspace/tier-catalog`. Legacy jobs without a `requiredTier` fall back
@@ -122,11 +134,13 @@ router.post("/payments/jobs/:jobId/checkout", authenticate, async (req: AuthRequ
   // True Net Profit: APS commission applies ONLY to (revenue − parts cost).
   // Mechanic gets the parts-cost passthrough at 100% plus their share of net
   // profit. Catalog entry preferred; if missing, fall back to category default.
+  // Catalog estimate — final actual parts cost lands at capture time from
+  // mechanic-entered parts_items. Tax is excluded from the commission base.
   const svcEntry = findServiceBySlug(job.serviceSlug);
   const partsCostCents = svcEntry
-    ? partsCostCentsFor(svcEntry, amountCents)
-    : Math.round(amountCents * defaultPartsCostPct(job.jobType as ServiceCategory));
-  const { platformFeeCents, mechanicPayoutCents } = splitOnNetProfit(amountCents, partsCostCents, commission);
+    ? partsCostCentsFor(svcEntry, subtotalCents)
+    : Math.round(subtotalCents * defaultPartsCostPct(job.jobType as ServiceCategory));
+  const { platformFeeCents, mechanicPayoutCents } = splitOnNetProfit(subtotalCents, partsCostCents, commission);
 
   // Per-job payout destination — `existing` may have been pre-stamped by an
   // admin or shop owner via PATCH /payouts/job/:jobId/destination BEFORE the
@@ -159,17 +173,27 @@ router.post("/payments/jobs/:jobId/checkout", authenticate, async (req: AuthRequ
     customer: stripeCustomerId,
     payment_method_types: ["card"],
     // Apple Pay & Google Pay are auto-enabled for `card` on supported devices/browsers.
-    line_items: [{
-      quantity: 1,
-      price_data: {
-        currency: "usd",
-        unit_amount: amountCents,
-        product_data: {
-          name: `APS Service — Job #${jobId}`,
-          description: job.description?.slice(0, 200) ?? "Automotive service",
+    line_items: [
+      {
+        quantity: 1,
+        price_data: {
+          currency: "usd",
+          unit_amount: subtotalCents,
+          product_data: {
+            name: `APS Service — Job #${jobId}`,
+            description: job.description?.slice(0, 200) ?? "Automotive service",
+          },
         },
       },
-    }],
+      ...(taxCents > 0 ? [{
+        quantity: 1,
+        price_data: {
+          currency: "usd" as const,
+          unit_amount: taxCents,
+          product_data: { name: "Sales tax" },
+        },
+      }] : []),
+    ],
     payment_intent_data: {
       capture_method: "manual",
       application_fee_amount: platformFeeCents,
@@ -183,6 +207,9 @@ router.post("/payments/jobs/:jobId/checkout", authenticate, async (req: AuthRequ
 
   // Upsert payment row — pre-record so webhook can find it by session id.
   const totalCost = amountCents / 100;
+  // Stamp the tax + estimate snapshot on both the payment row AND the job
+  // row so admin reporting + customer invoice are consistent before capture.
+  await db.update(jobsTable).set({ taxCents }).where(eq(jobsTable.id, jobId));
   if (existing) {
     // Reset Stripe references so a late webhook from the previous (now
     // canceled) intent can't flip this fresh row back to authorized.
@@ -194,6 +221,10 @@ router.post("/payments/jobs/:jobId/checkout", authenticate, async (req: AuthRequ
         amountCents,
         platformFeeCents,
         mechanicPayoutCents,
+        taxCents,
+        partsCostAppliedCents: partsCostCents,
+        laborRevenueCents: subtotalCents - partsCostCents,
+        netProfitCents: subtotalCents - partsCostCents,
         providerSessionId: session.id,
         providerPaymentIntentId: null,
         failureReason: null,
@@ -211,6 +242,10 @@ router.post("/payments/jobs/:jobId/checkout", authenticate, async (req: AuthRequ
       amountCents,
       platformFeeCents,
       mechanicPayoutCents,
+      taxCents,
+      partsCostAppliedCents: partsCostCents,
+      laborRevenueCents: subtotalCents - partsCostCents,
+      netProfitCents: subtotalCents - partsCostCents,
       providerSessionId: session.id,
       status: "pending",
       payoutDestination: resolvedDestination,

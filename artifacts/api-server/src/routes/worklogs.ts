@@ -1,21 +1,67 @@
 import { Router, type IRouter } from "express";
 import { eq, and } from "drizzle-orm";
-import { db, workLogsTable, jobsTable, usersTable, paymentsTable, vehiclesTable, ownershipTable, inspectionsTable, bayBookingsTable } from "@workspace/db";
+import { db, workLogsTable, jobsTable, usersTable, paymentsTable, vehiclesTable, ownershipTable, inspectionsTable, bayBookingsTable, partsItemsTable } from "@workspace/db";
 import { authenticate, requireActiveMechanic, type AuthRequest } from "../middlewares/authenticate";
 import { notifyCustomerJobComplete, notifyMechanicWorkUnderReview } from "../lib/notifications";
 import { awardMechanicPoints, RULES } from "../lib/loyaltyEngine";
 import { openWorkConfirmation } from "../lib/payoutHoldEngine";
+import { checkPartsFraud } from "../lib/fraudHeuristics";
+import { findServiceBySlug, partsCostCentsFor, defaultPartsCostPct, type ServiceCategory } from "@workspace/tier-catalog";
+
+interface PartsItemInput {
+  name: string;
+  partNumber?: string | null;
+  brand?: string | null;
+  supplier?: string | null;
+  quantity: number;
+  unitPriceCents: number;
+  receiptImageUrl?: string | null;
+  notes?: string | null;
+}
+
+function cleanPartsItems(items: unknown): PartsItemInput[] {
+  if (!Array.isArray(items)) return [];
+  const out: PartsItemInput[] = [];
+  for (const raw of items) {
+    if (!raw || typeof raw !== "object") continue;
+    const r = raw as Record<string, unknown>;
+    const name = typeof r["name"] === "string" ? r["name"].trim().slice(0, 200) : "";
+    const quantity = typeof r["quantity"] === "number" && Number.isFinite(r["quantity"]) ? Math.max(1, Math.floor(r["quantity"])) : 1;
+    const unitPriceCents = typeof r["unitPriceCents"] === "number" && Number.isFinite(r["unitPriceCents"]) ? Math.max(0, Math.round(r["unitPriceCents"])) : -1;
+    if (!name || unitPriceCents < 0) continue;
+    out.push({
+      name,
+      partNumber: typeof r["partNumber"] === "string" ? r["partNumber"].trim().slice(0, 100) : null,
+      brand: typeof r["brand"] === "string" ? r["brand"].trim().slice(0, 100) : null,
+      supplier: typeof r["supplier"] === "string" ? r["supplier"].trim().slice(0, 100) : null,
+      quantity,
+      unitPriceCents,
+      receiptImageUrl: typeof r["receiptImageUrl"] === "string" ? r["receiptImageUrl"].slice(0, 1000) : null,
+      notes: typeof r["notes"] === "string" ? r["notes"].trim().slice(0, 500) : null,
+    });
+    if (out.length >= 50) break;
+  }
+  return out;
+}
 
 const router: IRouter = Router();
 
 async function formatWorkLog(log: typeof workLogsTable.$inferSelect) {
   const [mechanic] = await db.select().from(usersTable).where(eq(usersTable.id, log.mechanicId));
+  const items = await db.select().from(partsItemsTable).where(eq(partsItemsTable.workLogId, log.id));
   return {
     id: log.id, jobId: log.jobId, vehicleId: log.vehicleId, vin: log.vin,
     mechanicId: log.mechanicId, mechanicName: mechanic?.name ?? "Unknown", customerId: log.customerId,
     serviceCategory: log.serviceCategory, serviceDescription: log.serviceDescription,
     mileageAtService: log.mileageAtService ?? 0,
     laborCost: log.laborCost, partsCost: log.partsCost, totalCost: log.totalCost,
+    partsItems: items.map((p) => ({
+      id: p.id, name: p.name, partNumber: p.partNumber, brand: p.brand,
+      supplier: p.supplier, quantity: p.quantity,
+      unitPriceCents: p.unitPriceCents, totalCents: p.totalCents,
+      receiptImageUrl: p.receiptImageUrl, notes: p.notes,
+    })),
+    flaggedForReview: log.flaggedForReview, flagReason: log.flagReason,
     partsUsed: (log.partsUsed as string[]) ?? [], notes: log.notes ?? null,
     beforeImages: (log.beforeImages as string[]) ?? [], afterImages: (log.afterImages as string[]) ?? [],
     upsells: (log.upsells as { description: string; amount: number; customerApproved: boolean }[]) ?? [],
@@ -36,13 +82,14 @@ async function formatWorkLog(log: typeof workLogsTable.$inferSelect) {
 router.post("/worklogs", authenticate, requireActiveMechanic, async (req: AuthRequest, res): Promise<void> => {
   const {
     jobId, serviceCategory, serviceDescription, mileageAtService,
-    laborCost, partsCost, partsUsed, notes, beforeImages, afterImages, upsells,
+    laborCost, partsCost: legacyPartsCost, partsUsed, notes, beforeImages, afterImages, upsells,
     laborHours, diagnosticCodes, rootCauseDiagnosis, repairSteps,
     observedSymptoms, recommendedMonitoring, recurringIssueTags, bayBookingId,
+    partsItems: rawPartsItems,
   } = req.body as {
     jobId: number; serviceCategory: string; serviceDescription: string;
     mileageAtService: number;
-    laborCost: number; partsCost: number; partsUsed: string[];
+    laborCost: number; partsCost?: number; partsUsed: string[];
     notes?: string; beforeImages: string[]; afterImages: string[];
     upsells?: { description: string; amount: number; customerApproved?: boolean }[];
     laborHours?: number;
@@ -53,7 +100,15 @@ router.post("/worklogs", authenticate, requireActiveMechanic, async (req: AuthRe
     recommendedMonitoring?: string;
     recurringIssueTags?: string[];
     bayBookingId?: number;
+    partsItems?: unknown;
   };
+  // True Net Profit: itemized parts are the source of truth. Legacy
+  // `partsCost` body field is a fallback ONLY when no items were sent.
+  const partsItems = cleanPartsItems(rawPartsItems);
+  const itemsTotalCents = partsItems.reduce((s, p) => s + p.quantity * p.unitPriceCents, 0);
+  const partsCost = partsItems.length > 0
+    ? itemsTotalCents / 100
+    : Math.max(0, Number(legacyPartsCost ?? 0));
   // Validate upsells: non-empty description, positive amount, and an explicit
   // boolean `customerApproved` attesting the customer agreed in person.
   // Only upsells with customerApproved === true earn mechanic points downstream.
@@ -164,6 +219,28 @@ router.post("/worklogs", authenticate, requireActiveMechanic, async (req: AuthRe
   }
   const isStripeFlow = isStripeManaged;
 
+  // Fraud heuristic: compare actual itemized parts cost against catalog estimate.
+  let flagReason: string | null = null;
+  if (partsItems.length > 0) {
+    const svcEntry = findServiceBySlug(job.serviceSlug);
+    const subtotalCents = Math.round((laborCost + partsCost) * 100);
+    const estimateCents = svcEntry
+      ? partsCostCentsFor(svcEntry, subtotalCents)
+      : Math.round(subtotalCents * defaultPartsCostPct(serviceCategory as ServiceCategory));
+    flagReason = await checkPartsFraud({
+      mechanicId: req.userId!,
+      partsCostActualCents: itemsTotalCents,
+      partsCostEstimateCents: estimateCents,
+      laborRevenueCents: Math.round(laborCost * 100),
+      partsItems: partsItems.map((p) => ({
+        name: p.name,
+        partNumber: p.partNumber ?? null,
+        supplier: p.supplier ?? null,
+        totalCents: p.quantity * p.unitPriceCents,
+      })),
+    });
+  }
+
   const workLog = await db.transaction(async (tx) => {
     const [created] = await tx.insert(workLogsTable).values({
       jobId, vehicleId: job.vehicleId, vin: job.vin, mechanicId: req.userId!, customerId: job.customerId,
@@ -185,7 +262,27 @@ router.post("/worklogs", authenticate, requireActiveMechanic, async (req: AuthRe
       bayBookingId: resolvedBayBookingId,
       preInspectionId, postInspectionId,
       immutableFlag: true,
+      flaggedForReview: flagReason !== null,
+      flagReason,
     }).returning();
+
+    // Persist itemized parts — these are the True Net Profit source of truth.
+    if (partsItems.length > 0) {
+      await tx.insert(partsItemsTable).values(partsItems.map((p) => ({
+        workLogId: created!.id,
+        jobId,
+        mechanicId: req.userId!,
+        name: p.name,
+        partNumber: p.partNumber ?? null,
+        brand: p.brand ?? null,
+        supplier: p.supplier ?? null,
+        quantity: p.quantity,
+        unitPriceCents: p.unitPriceCents,
+        totalCents: p.quantity * p.unitPriceCents,
+        receiptImageUrl: p.receiptImageUrl ?? null,
+        notes: p.notes ?? null,
+      })));
+    }
 
     await tx.update(jobsTable).set({ status: "COMPLETED", finalPrice: totalCost, completedAt: new Date() }).where(eq(jobsTable.id, jobId));
     await tx.update(vehiclesTable).set({ mileage: mileageInt }).where(eq(vehiclesTable.id, job.vehicleId));
@@ -206,7 +303,11 @@ router.post("/worklogs", authenticate, requireActiveMechanic, async (req: AuthRe
     // before opening the window, so the captureNow() call later sees the
     // correct amount and split.
     const authorizedCents = existingPayment!.amountCents ?? Math.round((existingPayment!.amount ?? totalCost) * 100);
-    const finalCents = Math.min(authorizedCents, Math.round(totalCost * 100));
+    // Tax was stamped at checkout and is part of the authorized amount. Preserve
+    // it in the synced final so capture sees subtotal+tax (not just subtotal).
+    // True Net Profit: tax is excluded from commission base inside captureNow().
+    const taxCentsOnPayment = existingPayment!.taxCents ?? 0;
+    const finalCents = Math.min(authorizedCents, Math.round(totalCost * 100) + taxCentsOnPayment);
     await db.update(paymentsTable)
       .set({
         amount: finalCents / 100,

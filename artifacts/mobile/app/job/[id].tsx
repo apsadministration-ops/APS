@@ -603,6 +603,16 @@ export default function JobDetailScreen() {
             </Pressable>
           )}
 
+          {isCustomer && (job.status === "PAID" || job.status === "COMPLETED") && (
+            <Pressable
+              style={[styles.flagBtn, { borderColor: colors.border, backgroundColor: colors.card, marginTop: 8 }]}
+              onPress={() => router.push(`/job/${job.id}/invoice`)}
+            >
+              <Feather name="file-text" size={14} color={colors.primary} />
+              <Text style={[styles.flagBtnText, { color: colors.primary }]}>View Invoice</Text>
+            </Pressable>
+          )}
+
           {(canFlagMechanic || canFlagCustomer) && (
             <Pressable
               style={[styles.flagBtn, { borderColor: colors.border, backgroundColor: colors.card }]}
