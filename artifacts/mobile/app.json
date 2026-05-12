@@ -123,11 +123,6 @@
       "typedRoutes": true,
       "reactCompiler": true
     },
-    "extra": {
-      "eas": {
-        "projectId": "TODO-replace-with-eas-project-id-after-running-eas-init"
-      }
-    },
-    "owner": "TODO-replace-with-expo-account-owner"
+    "extra": {}
   }
 }
