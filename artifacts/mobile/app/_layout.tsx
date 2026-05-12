@@ -5,6 +5,7 @@ import {
   Inter_700Bold,
   useFonts,
 } from "@expo-google-fonts/inter";
+import { Feather, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
@@ -103,6 +104,12 @@ export default function RootLayout() {
     Inter_500Medium,
     Inter_600SemiBold,
     Inter_700Bold,
+    // Preload icon fonts so glyphs render correctly on first paint.
+    // Without this, Android falls back to a CJK font and shows
+    // Chinese-looking characters where icons should be.
+    ...Ionicons.font,
+    ...Feather.font,
+    ...MaterialCommunityIcons.font,
   });
 
   // Set the native window background color BEFORE first paint so Android

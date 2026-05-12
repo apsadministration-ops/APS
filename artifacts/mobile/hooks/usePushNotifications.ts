@@ -1,18 +1,28 @@
 import { useEffect, useRef } from "react";
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
+import Constants, { ExecutionEnvironment } from "expo-constants";
 import { useRouter } from "expo-router";
 import { useAuth } from "@/context/AuthContext";
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+// Push notification registration was removed from Expo Go in SDK 53.
+// Calling getExpoPushTokenAsync / addNotificationReceivedListener inside
+// Expo Go throws hard on Android. Detect and no-op in that env so the app
+// boots; native notification flow still works in dev/preview/production builds.
+const IS_EXPO_GO =
+  Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+
+if (!IS_EXPO_GO) {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+      shouldShowBanner: true,
+      shouldShowList: true,
+    }),
+  });
+}
 
 async function registerForPushNotificationsAsync(): Promise<string | null> {
   if (Platform.OS === "web") return null;
@@ -43,6 +53,7 @@ export function usePushNotifications() {
 
   useEffect(() => {
     if (!user) return;
+    if (IS_EXPO_GO) return; // skip in Expo Go (push removed in SDK 53)
 
     // Register token and send to server
     registerForPushNotificationsAsync().then(async (pushToken) => {
