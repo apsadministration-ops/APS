@@ -1,9 +1,6 @@
 import { BlurView } from "expo-blur";
-import { isLiquidGlassAvailable } from "expo-glass-effect";
 import { Redirect, Tabs } from "expo-router";
 import { useAuth } from "@/context/AuthContext";
-import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
-import { SymbolView } from "expo-symbols";
 import { Feather } from "@expo/vector-icons";
 import React from "react";
 import { Platform, StyleSheet, View, useColorScheme } from "react-native";
@@ -11,7 +8,26 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useColors } from "@/hooks/useColors";
 
+// iOS-only modules. Loading them on Android Expo Go can crash the app
+// silently because the native modules aren't shipped on Android. We
+// lazy-require them inside the iOS-only NativeTabLayout component.
+const isIOSPlatform = Platform.OS === "ios";
+
+function isLiquidGlassAvailableSafe(): boolean {
+  if (!isIOSPlatform) return false;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const mod = require("expo-glass-effect") as typeof import("expo-glass-effect");
+    return mod.isLiquidGlassAvailable();
+  } catch {
+    return false;
+  }
+}
+
 function NativeTabLayout() {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { Icon, Label, NativeTabs } =
+    require("expo-router/unstable-native-tabs") as typeof import("expo-router/unstable-native-tabs");
   return (
     <NativeTabs>
       <NativeTabs.Trigger name="index">
@@ -95,11 +111,7 @@ function ClassicTabLayout() {
         options={{
           title: "Dashboard",
           tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="house" tintColor={color} size={24} />
-            ) : (
-              <Feather name="home" size={22} color={color} />
-            ),
+            <Feather name="home" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -107,11 +119,7 @@ function ClassicTabLayout() {
         options={{
           title: "Available",
           tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="list.bullet.clipboard" tintColor={color} size={24} />
-            ) : (
-              <Feather name="list" size={22} color={color} />
-            ),
+            <Feather name="list" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -119,11 +127,7 @@ function ClassicTabLayout() {
         options={{
           title: "Active",
           tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="play.circle" tintColor={color} size={24} />
-            ) : (
-              <Feather name="play-circle" size={22} color={color} />
-            ),
+            <Feather name="play-circle" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -131,11 +135,7 @@ function ClassicTabLayout() {
         options={{
           title: "History",
           tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="clock" tintColor={color} size={24} />
-            ) : (
-              <Feather name="clock" size={22} color={color} />
-            ),
+            <Feather name="clock" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -143,11 +143,7 @@ function ClassicTabLayout() {
         options={{
           title: "Profile",
           tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="person.circle" tintColor={color} size={24} />
-            ) : (
-              <Feather name="user" size={22} color={color} />
-            ),
+            <Feather name="user" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -155,11 +151,7 @@ function ClassicTabLayout() {
         options={{
           title: "Tier",
           tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="chart.line.uptrend.xyaxis" tintColor={color} size={24} />
-            ) : (
-              <Feather name="award" size={22} color={color} />
-            ),
+            <Feather name="award" size={22} color={color} />,
         }}
       />
       <Tabs.Screen name="amplification" options={{ href: null }} />
@@ -174,7 +166,7 @@ export default function TabLayout() {
   if (user.role !== "mechanic") {
     return <Redirect href={user.role === "admin" ? "/(admin)" : "/(customer)"} />;
   }
-  if (isLiquidGlassAvailable()) {
+  if (isLiquidGlassAvailableSafe()) {
     return <NativeTabLayout />;
   }
   return <ClassicTabLayout />;

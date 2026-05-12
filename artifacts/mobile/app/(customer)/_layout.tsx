@@ -1,9 +1,6 @@
 import { BlurView } from "expo-blur";
-import { isLiquidGlassAvailable } from "expo-glass-effect";
 import { Redirect, Tabs } from "expo-router";
 import { useAuth } from "@/context/AuthContext";
-import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
-import { SymbolView } from "expo-symbols";
 import { Feather } from "@expo/vector-icons";
 import React from "react";
 import { Platform, StyleSheet, View, useColorScheme } from "react-native";
@@ -11,7 +8,26 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useColors } from "@/hooks/useColors";
 
+// iOS-only modules. Loading them on Android Expo Go can crash the app
+// silently because the native modules aren't shipped on Android. We
+// lazy-require them inside the iOS-only NativeTabLayout component.
+const isIOSPlatform = Platform.OS === "ios";
+
+function isLiquidGlassAvailableSafe(): boolean {
+  if (!isIOSPlatform) return false;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const mod = require("expo-glass-effect") as typeof import("expo-glass-effect");
+    return mod.isLiquidGlassAvailable();
+  } catch {
+    return false;
+  }
+}
+
 function NativeTabLayout() {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { Icon, Label, NativeTabs } =
+    require("expo-router/unstable-native-tabs") as typeof import("expo-router/unstable-native-tabs");
   return (
     <NativeTabs>
       <NativeTabs.Trigger name="index">
@@ -83,11 +99,7 @@ function ClassicTabLayout() {
         options={{
           title: "Home",
           tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="house" tintColor={color} size={24} />
-            ) : (
-              <Feather name="home" size={22} color={color} />
-            ),
+            <Feather name="home" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -95,11 +107,7 @@ function ClassicTabLayout() {
         options={{
           title: "Vehicles",
           tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="car" tintColor={color} size={24} />
-            ) : (
-              <Feather name="truck" size={22} color={color} />
-            ),
+            <Feather name="truck" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -107,11 +115,7 @@ function ClassicTabLayout() {
         options={{
           title: "Jobs",
           tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="wrench.and.screwdriver" tintColor={color} size={24} />
-            ) : (
-              <Feather name="tool" size={22} color={color} />
-            ),
+            <Feather name="tool" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -119,11 +123,7 @@ function ClassicTabLayout() {
         options={{
           title: "Profile",
           tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="person" tintColor={color} size={24} />
-            ) : (
-              <Feather name="user" size={22} color={color} />
-            ),
+            <Feather name="user" size={22} color={color} />,
         }}
       />
     </Tabs>
@@ -137,7 +137,7 @@ export default function TabLayout() {
   if (user.role !== "customer") {
     return <Redirect href={user.role === "admin" ? "/(admin)" : "/(mechanic)"} />;
   }
-  if (isLiquidGlassAvailable()) {
+  if (isLiquidGlassAvailableSafe()) {
     return <NativeTabLayout />;
   }
   return <ClassicTabLayout />;
