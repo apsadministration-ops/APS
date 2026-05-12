@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
 import { db, jobsTable, paymentsTable, workLogsTable, partsItemsTable, vehiclesTable, usersTable } from "@workspace/db";
 import { authenticate, type AuthRequest } from "../middlewares/authenticate";
+import { customerView as installedPartsCustomerView } from "../lib/partsOrderEngine";
 
 const router: IRouter = Router();
 
@@ -37,6 +38,11 @@ router.get("/jobs/:jobId/invoice", authenticate, async (req: AuthRequest, res): 
     : [];
   const [veh] = await db.select().from(vehiclesTable).where(eq(vehiclesTable.id, job.vehicleId));
   const [customer] = await db.select().from(usersTable).where(eq(usersTable.id, job.customerId));
+  // VIN-Integrated Parts Matching: pull brand + warranty + msrp for any
+  // parts the mechanic actually installed via the new parts_orders flow.
+  // customerView() is intentionally airgapped — it never returns
+  // supplier_key, supplier sku, internal cost, or margin/payout numbers.
+  const installedParts = await installedPartsCustomerView(jobId);
 
   // Source-of-truth amounts: prefer the captured payment row, fall back to
   // worklog (legacy) and finally to job.estimatedPrice (pre-completion).
@@ -68,6 +74,16 @@ router.get("/jobs/:jobId/invoice", authenticate, async (req: AuthRequest, res): 
         // We deliberately surface ONLY the line total, not the unit cost
         // and not the supplier — that's mechanic/admin-only data.
         amountCents: p.totalCents,
+      })),
+      // Curated parts the mechanic installed via Source Parts. Brand +
+      // warranty are intentionally surfaced (helps the customer file
+      // warranty claims later); supplier/cost/margin are NOT.
+      installedParts: installedParts.map((p) => ({
+        brand: p.brand,
+        name: p.name,
+        quantity: p.qty,
+        warrantyMonths: p.warrantyMonths,
+        msrpCents: p.msrpCents,
       })),
       tax: { amountCents: taxCents },
     },

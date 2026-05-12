@@ -1376,6 +1376,212 @@ export interface PromoteMechanicBody {
   bypassThresholds?: boolean;
 }
 
+export type PartsOrderStatus =
+  (typeof PartsOrderStatus)[keyof typeof PartsOrderStatus];
+
+export const PartsOrderStatus = {
+  candidate: "candidate",
+  ordered: "ordered",
+  received: "received",
+  installed: "installed",
+  returned: "returned",
+  cancelled: "cancelled",
+} as const;
+
+export type PartsOrderConfidence =
+  (typeof PartsOrderConfidence)[keyof typeof PartsOrderConfidence];
+
+export const PartsOrderConfidence = {
+  exact_vin: "exact_vin",
+  oem_confirmed: "oem_confirmed",
+  supplier_confirmed: "supplier_confirmed",
+  universal: "universal",
+  manual_verify: "manual_verify",
+} as const;
+
+export type PartsOrderValidation =
+  (typeof PartsOrderValidation)[keyof typeof PartsOrderValidation];
+
+export const PartsOrderValidation = {
+  passed: "passed",
+  warned: "warned",
+  blocked: "blocked",
+} as const;
+
+export type PartsQualityTier =
+  (typeof PartsQualityTier)[keyof typeof PartsQualityTier];
+
+export const PartsQualityTier = {
+  oem: "oem",
+  premium: "premium",
+  standard: "standard",
+  economy: "economy",
+} as const;
+
+export interface VinDecodedFields {
+  year: number | null;
+  make: string | null;
+  model: string | null;
+  trim: string | null;
+  series: string | null;
+  manufacturer: string | null;
+  plantCountry: string | null;
+  engine: string | null;
+  transmission: string | null;
+  drivetrain: string | null;
+  fuelType: string | null;
+  bodyClass: string | null;
+}
+
+export interface VinDecodeResponse {
+  vin: string;
+  decoded: VinDecodedFields;
+}
+
+export interface PartsOffer {
+  supplierKey: string;
+  sku: string;
+  priceCents: number;
+  currency: string;
+  inStock: boolean;
+  etaDays: number;
+}
+
+export interface PartsRecommendation {
+  catalogId: number;
+  category: string;
+  brand: string;
+  oemPartNumber: string;
+  name: string;
+  qualityTier: PartsQualityTier;
+  warrantyMonths: number;
+  msrpCents: number;
+  confidence: PartsOrderConfidence;
+  reasons: string[];
+  offers: PartsOffer[];
+}
+
+export type PartsRecommendationsVehicle = {
+  vin?: string | null;
+  year?: number | null;
+  make?: string | null;
+  model?: string | null;
+  trim?: string | null;
+  engine?: string | null;
+  drivetrain?: string | null;
+};
+
+export interface PartsRecommendations {
+  vehicle: PartsRecommendationsVehicle;
+  recommendations: PartsRecommendation[];
+}
+
+export interface PartsOrder {
+  id: number;
+  jobId: number;
+  vehicleId: number;
+  vin: string;
+  mechanicId: number;
+  catalogId: number;
+  supplierKey: string;
+  sku: string;
+  qty: number;
+  unitPriceCents: number;
+  totalPriceCents: number;
+  status: PartsOrderStatus;
+  confidence: PartsOrderConfidence;
+  validationState: PartsOrderValidation;
+  validationReasons: string[];
+  supplierInvoiceUrl?: string | null;
+  supplierOrderRef?: string | null;
+  orderedAt?: string | null;
+  receivedAt?: string | null;
+  installedAt?: string | null;
+  cancelledAt?: string | null;
+  createdAt: string;
+}
+
+export interface PartsCatalogEntry {
+  id: number;
+  category: string;
+  brand: string;
+  oemPartNumber: string;
+  crossRefs: string[];
+  name: string;
+  qualityTier: PartsQualityTier;
+  warrantyMonths: number;
+  msrpCents: number;
+  notes?: string | null;
+  active: boolean;
+  createdAt: string;
+}
+
+export type PartsOrderWithCatalog = PartsOrder & {
+  catalog?: PartsCatalogEntry | null;
+};
+
+export interface CustomerPartLine {
+  brand: string;
+  name: string;
+  qty: number;
+  warrantyMonths: number;
+  msrpCents: number;
+}
+
+export interface CreatePartsOrderBody {
+  catalogId: number;
+  supplierKey: string;
+  sku: string;
+  /**
+   * @minimum 1
+   * @maximum 99
+   */
+  qty: number;
+  /** @minimum 0 */
+  unitPriceCents: number;
+}
+
+export interface UpdatePartsOrderBody {
+  status?: PartsOrderStatus;
+  supplierInvoiceUrl?: string;
+  supplierOrderRef?: string;
+}
+
+export interface PartsCatalogFitmentBody {
+  yearMin?: number | null;
+  yearMax?: number | null;
+  make?: string | null;
+  model?: string | null;
+  enginePattern?: string | null;
+  transmissionPattern?: string | null;
+  drivetrainPattern?: string | null;
+  trimPattern?: string | null;
+  notes?: string | null;
+}
+
+export interface PartsOfferBody {
+  supplierKey?: string;
+  sku: string;
+  priceCents: number;
+  currency?: string;
+  inStock?: boolean;
+  etaDays?: number;
+}
+
+export interface PartsCatalogEntryBody {
+  category: string;
+  brand: string;
+  oemPartNumber: string;
+  name: string;
+  qualityTier?: PartsQualityTier;
+  warrantyMonths?: number;
+  msrpCents?: number;
+  crossRefs?: string[];
+  notes?: string;
+  fitments?: PartsCatalogFitmentBody[];
+  offers?: PartsOfferBody[];
+}
+
 export type ListUsersParams = {
   role?: ListUsersRole;
   status?: ListUsersStatus;
@@ -1537,3 +1743,44 @@ export const ListAdminCertificationsStatus = {
   verified: "verified",
   rejected: "rejected",
 } as const;
+
+export type ListRecommendedPartsParams = {
+  category: string;
+};
+
+export type CreatePartsOrder201 = {
+  order: PartsOrder;
+};
+
+export type UpdatePartsOrder200 = {
+  order: PartsOrder;
+};
+
+export type ListJobPartsOrders200 = {
+  orders: PartsOrderWithCatalog[];
+};
+
+export type GetJobPartsCustomerView200 = {
+  parts: CustomerPartLine[];
+};
+
+export type ListPartsCatalog200 = {
+  catalog: PartsCatalogEntry[];
+};
+
+export type CreatePartsCatalogEntry201 = {
+  id: number;
+};
+
+export type BulkSeedPartsCatalogBody = {
+  entries: PartsCatalogEntryBody[];
+};
+
+export type BulkSeedPartsCatalog201 = {
+  ids: number[];
+  count: number;
+};
+
+export type ListFlaggedPartsOrders200 = {
+  orders: PartsOrder[];
+};

@@ -38,6 +38,8 @@ tags:
     description: Pre and post-service vehicle inspections (Ghost Garage)
   - name: progression
     description: Mechanic tier progression — certifications, performance, promotions
+  - name: parts
+    description: VIN-Integrated Parts Matching System
 
 paths:
   /healthz:
@@ -1702,6 +1704,213 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ProgressionSnapshot" }
 
+  /vin/{vin}/decode:
+    get:
+      operationId: decodeVin
+      tags: [parts]
+      summary: Decode a VIN via NHTSA vPIC and lazily refresh the mechanic profile
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: vin, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Decoded VIN
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VinDecodeResponse" }
+
+  /jobs/{jobId}/parts/recommended:
+    get:
+      operationId: listRecommendedParts
+      tags: [parts]
+      summary: VIN-aware parts recommendations for a job
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: jobId, in: path, required: true, schema: { type: integer } }
+        - { name: category, in: query, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Recommendations
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PartsRecommendations" }
+
+  /jobs/{jobId}/parts/order:
+    post:
+      operationId: createPartsOrder
+      tags: [parts]
+      summary: Place a parts order on a job (validates server-side)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: jobId, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreatePartsOrderBody" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  order: { $ref: "#/components/schemas/PartsOrder" }
+                required: [order]
+
+  /parts/orders/{id}:
+    patch:
+      operationId: updatePartsOrder
+      tags: [parts]
+      summary: Transition a parts order (ordered/received/installed/...) or attach supplier ref/invoice
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdatePartsOrderBody" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  order: { $ref: "#/components/schemas/PartsOrder" }
+                required: [order]
+
+  /jobs/{jobId}/parts:
+    get:
+      operationId: listJobPartsOrders
+      tags: [parts]
+      summary: All parts orders on a job (mechanic+admin)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: jobId, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Orders
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  orders:
+                    type: array
+                    items: { $ref: "#/components/schemas/PartsOrderWithCatalog" }
+                required: [orders]
+
+  /jobs/{jobId}/parts/customer-view:
+    get:
+      operationId: getJobPartsCustomerView
+      tags: [parts]
+      summary: Customer-safe parts list — brand/warranty/qty/msrp only
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: jobId, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Customer-safe parts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  parts:
+                    type: array
+                    items: { $ref: "#/components/schemas/CustomerPartLine" }
+                required: [parts]
+
+  /admin/parts-catalog:
+    get:
+      operationId: listPartsCatalog
+      tags: [parts]
+      summary: Admin — list every parts catalog entry
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Catalog
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  catalog:
+                    type: array
+                    items: { $ref: "#/components/schemas/PartsCatalogEntry" }
+                required: [catalog]
+    post:
+      operationId: createPartsCatalogEntry
+      tags: [parts]
+      summary: Admin — create / upsert a parts catalog entry with fitments + offers
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PartsCatalogEntryBody" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { id: { type: integer } }
+                required: [id]
+
+  /admin/parts-catalog/bulk-seed:
+    post:
+      operationId: bulkSeedPartsCatalog
+      tags: [parts]
+      summary: Admin — bulk seed parts catalog entries
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                entries:
+                  type: array
+                  items: { $ref: "#/components/schemas/PartsCatalogEntryBody" }
+              required: [entries]
+      responses:
+        "201":
+          description: Seeded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ids: { type: array, items: { type: integer } }
+                  count: { type: integer }
+                required: [ids, count]
+
+  /admin/parts-orders/flagged:
+    get:
+      operationId: listFlaggedPartsOrders
+      tags: [parts]
+      summary: Admin — parts orders flagged by the validation engine (warned or blocked)
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Flagged orders
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  orders:
+                    type: array
+                    items: { $ref: "#/components/schemas/PartsOrder" }
+                required: [orders]
+
 components:
   securitySchemes:
     bearerAuth:
@@ -3270,3 +3479,209 @@ components:
       type: object
       properties:
         bypassThresholds: { type: boolean }
+
+    # ──────────────────────────────────────────────────────────────────
+    # VIN-Integrated Parts Matching System
+    # ──────────────────────────────────────────────────────────────────
+    PartsOrderStatus:
+      type: string
+      enum: [candidate, ordered, received, installed, returned, cancelled]
+    PartsOrderConfidence:
+      type: string
+      enum: [exact_vin, oem_confirmed, supplier_confirmed, universal, manual_verify]
+    PartsOrderValidation:
+      type: string
+      enum: [passed, warned, blocked]
+    PartsQualityTier:
+      type: string
+      enum: [oem, premium, standard, economy]
+
+    VinDecodedFields:
+      type: object
+      properties:
+        year: { type: integer, nullable: true }
+        make: { type: string, nullable: true }
+        model: { type: string, nullable: true }
+        trim: { type: string, nullable: true }
+        series: { type: string, nullable: true }
+        manufacturer: { type: string, nullable: true }
+        plantCountry: { type: string, nullable: true }
+        engine: { type: string, nullable: true }
+        transmission: { type: string, nullable: true }
+        drivetrain: { type: string, nullable: true }
+        fuelType: { type: string, nullable: true }
+        bodyClass: { type: string, nullable: true }
+      required: [year, make, model, trim, series, manufacturer, plantCountry, engine, transmission, drivetrain, fuelType, bodyClass]
+
+    VinDecodeResponse:
+      type: object
+      properties:
+        vin: { type: string }
+        decoded: { $ref: "#/components/schemas/VinDecodedFields" }
+      required: [vin, decoded]
+
+    PartsOffer:
+      type: object
+      properties:
+        supplierKey: { type: string }
+        sku: { type: string }
+        priceCents: { type: integer }
+        currency: { type: string }
+        inStock: { type: boolean }
+        etaDays: { type: integer }
+      required: [supplierKey, sku, priceCents, currency, inStock, etaDays]
+
+    PartsRecommendation:
+      type: object
+      properties:
+        catalogId: { type: integer }
+        category: { type: string }
+        brand: { type: string }
+        oemPartNumber: { type: string }
+        name: { type: string }
+        qualityTier: { $ref: "#/components/schemas/PartsQualityTier" }
+        warrantyMonths: { type: integer }
+        msrpCents: { type: integer }
+        confidence: { $ref: "#/components/schemas/PartsOrderConfidence" }
+        reasons: { type: array, items: { type: string } }
+        offers: { type: array, items: { $ref: "#/components/schemas/PartsOffer" } }
+      required: [catalogId, category, brand, oemPartNumber, name, qualityTier, warrantyMonths, msrpCents, confidence, reasons, offers]
+
+    PartsRecommendations:
+      type: object
+      properties:
+        vehicle:
+          type: object
+          properties:
+            vin: { type: string, nullable: true }
+            year: { type: integer, nullable: true }
+            make: { type: string, nullable: true }
+            model: { type: string, nullable: true }
+            trim: { type: string, nullable: true }
+            engine: { type: string, nullable: true }
+            drivetrain: { type: string, nullable: true }
+        recommendations:
+          type: array
+          items: { $ref: "#/components/schemas/PartsRecommendation" }
+      required: [vehicle, recommendations]
+
+    PartsOrder:
+      type: object
+      properties:
+        id: { type: integer }
+        jobId: { type: integer }
+        vehicleId: { type: integer }
+        vin: { type: string }
+        mechanicId: { type: integer }
+        catalogId: { type: integer }
+        supplierKey: { type: string }
+        sku: { type: string }
+        qty: { type: integer }
+        unitPriceCents: { type: integer }
+        totalPriceCents: { type: integer }
+        status: { $ref: "#/components/schemas/PartsOrderStatus" }
+        confidence: { $ref: "#/components/schemas/PartsOrderConfidence" }
+        validationState: { $ref: "#/components/schemas/PartsOrderValidation" }
+        validationReasons: { type: array, items: { type: string } }
+        supplierInvoiceUrl: { type: string, nullable: true }
+        supplierOrderRef: { type: string, nullable: true }
+        orderedAt: { type: string, format: date-time, nullable: true }
+        receivedAt: { type: string, format: date-time, nullable: true }
+        installedAt: { type: string, format: date-time, nullable: true }
+        cancelledAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+      required: [id, jobId, vehicleId, vin, mechanicId, catalogId, supplierKey, sku, qty, unitPriceCents, totalPriceCents, status, confidence, validationState, validationReasons, createdAt]
+
+    PartsCatalogEntry:
+      type: object
+      properties:
+        id: { type: integer }
+        category: { type: string }
+        brand: { type: string }
+        oemPartNumber: { type: string }
+        crossRefs: { type: array, items: { type: string } }
+        name: { type: string }
+        qualityTier: { $ref: "#/components/schemas/PartsQualityTier" }
+        warrantyMonths: { type: integer }
+        msrpCents: { type: integer }
+        notes: { type: string, nullable: true }
+        active: { type: boolean }
+        createdAt: { type: string, format: date-time }
+      required: [id, category, brand, oemPartNumber, crossRefs, name, qualityTier, warrantyMonths, msrpCents, active, createdAt]
+
+    PartsOrderWithCatalog:
+      allOf:
+        - $ref: "#/components/schemas/PartsOrder"
+        - type: object
+          properties:
+            catalog:
+              oneOf:
+                - $ref: "#/components/schemas/PartsCatalogEntry"
+                - { type: "null" }
+
+    CustomerPartLine:
+      type: object
+      properties:
+        brand: { type: string }
+        name: { type: string }
+        qty: { type: integer }
+        warrantyMonths: { type: integer }
+        msrpCents: { type: integer }
+      required: [brand, name, qty, warrantyMonths, msrpCents]
+
+    CreatePartsOrderBody:
+      type: object
+      properties:
+        catalogId: { type: integer }
+        supplierKey: { type: string }
+        sku: { type: string }
+        qty: { type: integer, minimum: 1, maximum: 99 }
+        unitPriceCents: { type: integer, minimum: 0 }
+      required: [catalogId, supplierKey, sku, qty, unitPriceCents]
+
+    UpdatePartsOrderBody:
+      type: object
+      properties:
+        status: { $ref: "#/components/schemas/PartsOrderStatus" }
+        supplierInvoiceUrl: { type: string }
+        supplierOrderRef: { type: string }
+
+    PartsCatalogFitmentBody:
+      type: object
+      properties:
+        yearMin: { type: integer, nullable: true }
+        yearMax: { type: integer, nullable: true }
+        make: { type: string, nullable: true }
+        model: { type: string, nullable: true }
+        enginePattern: { type: string, nullable: true }
+        transmissionPattern: { type: string, nullable: true }
+        drivetrainPattern: { type: string, nullable: true }
+        trimPattern: { type: string, nullable: true }
+        notes: { type: string, nullable: true }
+
+    PartsOfferBody:
+      type: object
+      properties:
+        supplierKey: { type: string }
+        sku: { type: string }
+        priceCents: { type: integer }
+        currency: { type: string }
+        inStock: { type: boolean }
+        etaDays: { type: integer }
+      required: [sku, priceCents]
+
+    PartsCatalogEntryBody:
+      type: object
+      properties:
+        category: { type: string }
+        brand: { type: string }
+        oemPartNumber: { type: string }
+        name: { type: string }
+        qualityTier: { $ref: "#/components/schemas/PartsQualityTier" }
+        warrantyMonths: { type: integer }
+        msrpCents: { type: integer }
+        crossRefs: { type: array, items: { type: string } }
+        notes: { type: string }
+        fitments: { type: array, items: { $ref: "#/components/schemas/PartsCatalogFitmentBody" } }
+        offers: { type: array, items: { $ref: "#/components/schemas/PartsOfferBody" } }
+      required: [category, brand, oemPartNumber, name]

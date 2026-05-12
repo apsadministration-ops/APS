@@ -42,6 +42,16 @@ export const mechanicVehicleProfilesTable = pgTable("mechanic_vehicle_profiles",
   drivetrain: text("drivetrain"),
   fuelType: text("fuel_type"),
   bodyClass: text("body_class"),
+  // Enriched VIN-decode fields used by the parts-matching engine. All
+  // nullable so legacy rows decoded before this column existed continue to
+  // work — the engine treats null as "wildcard" when scoring fitment.
+  make: text("make"),
+  model: text("model"),
+  modelYear: integer("model_year"),
+  trim: text("trim"),
+  series: text("series"),
+  manufacturer: text("manufacturer"),
+  plantCountry: text("plant_country"),
   // Mechanic-uploaded headshot of the actual vehicle (overrides any
   // customer-side image for the workspace view).
   imageUrl: text("image_url"),

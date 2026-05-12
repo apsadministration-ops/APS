@@ -6,6 +6,7 @@ import { stripeWebhookHandler } from "./routes/stripeWebhook";
 import { logger } from "./lib/logger";
 import { initStripeWebhook } from "./lib/stripeInit";
 import { startPayoutScheduler } from "./lib/payoutSchedulerInit";
+import { initSuppliers } from "./lib/suppliers/init";
 
 const app: Express = express();
 
@@ -44,5 +45,10 @@ void initStripeWebhook();
 // In-process cron — sweeps approval expiry (60s) and work-confirmation
 // expiry (24h capture release) every minute. See payoutSchedulerInit.ts.
 startPayoutScheduler();
+
+// Register the in-house APS-curated supplier + any external supplier
+// stubs (PartsTech, Nexpart, ...) so the parts-catalog engine can fan
+// offer queries out the moment a request lands.
+initSuppliers();
 
 export default app;

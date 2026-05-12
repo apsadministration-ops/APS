@@ -26,6 +26,8 @@ import type {
   Bay,
   BayBooking,
   BayWithShop,
+  BulkSeedPartsCatalog201,
+  BulkSeedPartsCatalogBody,
   CancelBayBookingBody,
   ComponentSpecs,
   CreateBayBody,
@@ -34,6 +36,9 @@ import type {
   CreateFlagBody,
   CreateInspectionBody,
   CreateJobBody,
+  CreatePartsCatalogEntry201,
+  CreatePartsOrder201,
+  CreatePartsOrderBody,
   CreateShopBody,
   CreateVehicleBody,
   CreateWorkLogBody,
@@ -42,6 +47,7 @@ import type {
   Favorite,
   FinishTransportLegBody,
   Flag,
+  GetJobPartsCustomerView200,
   GetVehicleComponentSpecsParams,
   GetVehiclePartsCatalogParams,
   GetVehicleRecommendationsParams,
@@ -51,8 +57,12 @@ import type {
   ListAdminCertificationsParams,
   ListAvailableBaysParams,
   ListAvailableJobsParams,
+  ListFlaggedPartsOrders200,
+  ListJobPartsOrders200,
   ListJobsParams,
   ListMechanicsParams,
+  ListPartsCatalog200,
+  ListRecommendedPartsParams,
   ListUsersParams,
   LoginBody,
   MasterCandidate,
@@ -62,7 +72,9 @@ import type {
   MechanicProfile,
   MechanicSummary,
   OwnershipRecord,
+  PartsCatalogEntryBody,
   PartsCatalogResponse,
+  PartsRecommendations,
   Payment,
   ProgressionSnapshot,
   PromoteMechanicBody,
@@ -83,11 +95,14 @@ import type {
   TransportLeg,
   UpdateBayBody,
   UpdateJobStatusBody,
+  UpdatePartsOrder200,
+  UpdatePartsOrderBody,
   UpdateShopBody,
   UpdateTransportLegLocationBody,
   UpdateUserBody,
   User,
   VehicleWithOwnership,
+  VinDecodeResponse,
   WorkLog,
 } from "./api.schemas";
 
@@ -6693,3 +6708,893 @@ export const usePromoteMechanic = <
 > => {
   return useMutation(getPromoteMechanicMutationOptions(options));
 };
+
+/**
+ * @summary Decode a VIN via NHTSA vPIC and lazily refresh the mechanic profile
+ */
+export const getDecodeVinUrl = (vin: string) => {
+  return `/api/vin/${vin}/decode`;
+};
+
+export const decodeVin = async (
+  vin: string,
+  options?: RequestInit,
+): Promise<VinDecodeResponse> => {
+  return customFetch<VinDecodeResponse>(getDecodeVinUrl(vin), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getDecodeVinQueryKey = (vin: string) => {
+  return [`/api/vin/${vin}/decode`] as const;
+};
+
+export const getDecodeVinQueryOptions = <
+  TData = Awaited<ReturnType<typeof decodeVin>>,
+  TError = ErrorType<unknown>,
+>(
+  vin: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof decodeVin>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getDecodeVinQueryKey(vin);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof decodeVin>>> = ({
+    signal,
+  }) => decodeVin(vin, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!vin,
+    ...queryOptions,
+  } as UseQueryOptions<Awaited<ReturnType<typeof decodeVin>>, TError, TData> & {
+    queryKey: QueryKey;
+  };
+};
+
+export type DecodeVinQueryResult = NonNullable<
+  Awaited<ReturnType<typeof decodeVin>>
+>;
+export type DecodeVinQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Decode a VIN via NHTSA vPIC and lazily refresh the mechanic profile
+ */
+
+export function useDecodeVin<
+  TData = Awaited<ReturnType<typeof decodeVin>>,
+  TError = ErrorType<unknown>,
+>(
+  vin: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof decodeVin>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getDecodeVinQueryOptions(vin, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary VIN-aware parts recommendations for a job
+ */
+export const getListRecommendedPartsUrl = (
+  jobId: number,
+  params: ListRecommendedPartsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/jobs/${jobId}/parts/recommended?${stringifiedParams}`
+    : `/api/jobs/${jobId}/parts/recommended`;
+};
+
+export const listRecommendedParts = async (
+  jobId: number,
+  params: ListRecommendedPartsParams,
+  options?: RequestInit,
+): Promise<PartsRecommendations> => {
+  return customFetch<PartsRecommendations>(
+    getListRecommendedPartsUrl(jobId, params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getListRecommendedPartsQueryKey = (
+  jobId: number,
+  params?: ListRecommendedPartsParams,
+) => {
+  return [
+    `/api/jobs/${jobId}/parts/recommended`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getListRecommendedPartsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listRecommendedParts>>,
+  TError = ErrorType<unknown>,
+>(
+  jobId: number,
+  params: ListRecommendedPartsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listRecommendedParts>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListRecommendedPartsQueryKey(jobId, params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listRecommendedParts>>
+  > = ({ signal }) =>
+    listRecommendedParts(jobId, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!jobId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listRecommendedParts>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListRecommendedPartsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listRecommendedParts>>
+>;
+export type ListRecommendedPartsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary VIN-aware parts recommendations for a job
+ */
+
+export function useListRecommendedParts<
+  TData = Awaited<ReturnType<typeof listRecommendedParts>>,
+  TError = ErrorType<unknown>,
+>(
+  jobId: number,
+  params: ListRecommendedPartsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listRecommendedParts>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListRecommendedPartsQueryOptions(
+    jobId,
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Place a parts order on a job (validates server-side)
+ */
+export const getCreatePartsOrderUrl = (jobId: number) => {
+  return `/api/jobs/${jobId}/parts/order`;
+};
+
+export const createPartsOrder = async (
+  jobId: number,
+  createPartsOrderBody: CreatePartsOrderBody,
+  options?: RequestInit,
+): Promise<CreatePartsOrder201> => {
+  return customFetch<CreatePartsOrder201>(getCreatePartsOrderUrl(jobId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createPartsOrderBody),
+  });
+};
+
+export const getCreatePartsOrderMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createPartsOrder>>,
+    TError,
+    { jobId: number; data: BodyType<CreatePartsOrderBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createPartsOrder>>,
+  TError,
+  { jobId: number; data: BodyType<CreatePartsOrderBody> },
+  TContext
+> => {
+  const mutationKey = ["createPartsOrder"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createPartsOrder>>,
+    { jobId: number; data: BodyType<CreatePartsOrderBody> }
+  > = (props) => {
+    const { jobId, data } = props ?? {};
+
+    return createPartsOrder(jobId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreatePartsOrderMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createPartsOrder>>
+>;
+export type CreatePartsOrderMutationBody = BodyType<CreatePartsOrderBody>;
+export type CreatePartsOrderMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Place a parts order on a job (validates server-side)
+ */
+export const useCreatePartsOrder = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createPartsOrder>>,
+    TError,
+    { jobId: number; data: BodyType<CreatePartsOrderBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createPartsOrder>>,
+  TError,
+  { jobId: number; data: BodyType<CreatePartsOrderBody> },
+  TContext
+> => {
+  return useMutation(getCreatePartsOrderMutationOptions(options));
+};
+
+/**
+ * @summary Transition a parts order (ordered/received/installed/...) or attach supplier ref/invoice
+ */
+export const getUpdatePartsOrderUrl = (id: number) => {
+  return `/api/parts/orders/${id}`;
+};
+
+export const updatePartsOrder = async (
+  id: number,
+  updatePartsOrderBody: UpdatePartsOrderBody,
+  options?: RequestInit,
+): Promise<UpdatePartsOrder200> => {
+  return customFetch<UpdatePartsOrder200>(getUpdatePartsOrderUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updatePartsOrderBody),
+  });
+};
+
+export const getUpdatePartsOrderMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updatePartsOrder>>,
+    TError,
+    { id: number; data: BodyType<UpdatePartsOrderBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updatePartsOrder>>,
+  TError,
+  { id: number; data: BodyType<UpdatePartsOrderBody> },
+  TContext
+> => {
+  const mutationKey = ["updatePartsOrder"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updatePartsOrder>>,
+    { id: number; data: BodyType<UpdatePartsOrderBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updatePartsOrder(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdatePartsOrderMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updatePartsOrder>>
+>;
+export type UpdatePartsOrderMutationBody = BodyType<UpdatePartsOrderBody>;
+export type UpdatePartsOrderMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Transition a parts order (ordered/received/installed/...) or attach supplier ref/invoice
+ */
+export const useUpdatePartsOrder = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updatePartsOrder>>,
+    TError,
+    { id: number; data: BodyType<UpdatePartsOrderBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updatePartsOrder>>,
+  TError,
+  { id: number; data: BodyType<UpdatePartsOrderBody> },
+  TContext
+> => {
+  return useMutation(getUpdatePartsOrderMutationOptions(options));
+};
+
+/**
+ * @summary All parts orders on a job (mechanic+admin)
+ */
+export const getListJobPartsOrdersUrl = (jobId: number) => {
+  return `/api/jobs/${jobId}/parts`;
+};
+
+export const listJobPartsOrders = async (
+  jobId: number,
+  options?: RequestInit,
+): Promise<ListJobPartsOrders200> => {
+  return customFetch<ListJobPartsOrders200>(getListJobPartsOrdersUrl(jobId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListJobPartsOrdersQueryKey = (jobId: number) => {
+  return [`/api/jobs/${jobId}/parts`] as const;
+};
+
+export const getListJobPartsOrdersQueryOptions = <
+  TData = Awaited<ReturnType<typeof listJobPartsOrders>>,
+  TError = ErrorType<unknown>,
+>(
+  jobId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listJobPartsOrders>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListJobPartsOrdersQueryKey(jobId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listJobPartsOrders>>
+  > = ({ signal }) => listJobPartsOrders(jobId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!jobId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listJobPartsOrders>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListJobPartsOrdersQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listJobPartsOrders>>
+>;
+export type ListJobPartsOrdersQueryError = ErrorType<unknown>;
+
+/**
+ * @summary All parts orders on a job (mechanic+admin)
+ */
+
+export function useListJobPartsOrders<
+  TData = Awaited<ReturnType<typeof listJobPartsOrders>>,
+  TError = ErrorType<unknown>,
+>(
+  jobId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listJobPartsOrders>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListJobPartsOrdersQueryOptions(jobId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Customer-safe parts list — brand/warranty/qty/msrp only
+ */
+export const getGetJobPartsCustomerViewUrl = (jobId: number) => {
+  return `/api/jobs/${jobId}/parts/customer-view`;
+};
+
+export const getJobPartsCustomerView = async (
+  jobId: number,
+  options?: RequestInit,
+): Promise<GetJobPartsCustomerView200> => {
+  return customFetch<GetJobPartsCustomerView200>(
+    getGetJobPartsCustomerViewUrl(jobId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetJobPartsCustomerViewQueryKey = (jobId: number) => {
+  return [`/api/jobs/${jobId}/parts/customer-view`] as const;
+};
+
+export const getGetJobPartsCustomerViewQueryOptions = <
+  TData = Awaited<ReturnType<typeof getJobPartsCustomerView>>,
+  TError = ErrorType<unknown>,
+>(
+  jobId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getJobPartsCustomerView>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetJobPartsCustomerViewQueryKey(jobId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getJobPartsCustomerView>>
+  > = ({ signal }) =>
+    getJobPartsCustomerView(jobId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!jobId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getJobPartsCustomerView>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetJobPartsCustomerViewQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getJobPartsCustomerView>>
+>;
+export type GetJobPartsCustomerViewQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Customer-safe parts list — brand/warranty/qty/msrp only
+ */
+
+export function useGetJobPartsCustomerView<
+  TData = Awaited<ReturnType<typeof getJobPartsCustomerView>>,
+  TError = ErrorType<unknown>,
+>(
+  jobId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getJobPartsCustomerView>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetJobPartsCustomerViewQueryOptions(jobId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Admin — list every parts catalog entry
+ */
+export const getListPartsCatalogUrl = () => {
+  return `/api/admin/parts-catalog`;
+};
+
+export const listPartsCatalog = async (
+  options?: RequestInit,
+): Promise<ListPartsCatalog200> => {
+  return customFetch<ListPartsCatalog200>(getListPartsCatalogUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListPartsCatalogQueryKey = () => {
+  return [`/api/admin/parts-catalog`] as const;
+};
+
+export const getListPartsCatalogQueryOptions = <
+  TData = Awaited<ReturnType<typeof listPartsCatalog>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listPartsCatalog>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListPartsCatalogQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listPartsCatalog>>
+  > = ({ signal }) => listPartsCatalog({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listPartsCatalog>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListPartsCatalogQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listPartsCatalog>>
+>;
+export type ListPartsCatalogQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Admin — list every parts catalog entry
+ */
+
+export function useListPartsCatalog<
+  TData = Awaited<ReturnType<typeof listPartsCatalog>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listPartsCatalog>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListPartsCatalogQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Admin — create / upsert a parts catalog entry with fitments + offers
+ */
+export const getCreatePartsCatalogEntryUrl = () => {
+  return `/api/admin/parts-catalog`;
+};
+
+export const createPartsCatalogEntry = async (
+  partsCatalogEntryBody: PartsCatalogEntryBody,
+  options?: RequestInit,
+): Promise<CreatePartsCatalogEntry201> => {
+  return customFetch<CreatePartsCatalogEntry201>(
+    getCreatePartsCatalogEntryUrl(),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(partsCatalogEntryBody),
+    },
+  );
+};
+
+export const getCreatePartsCatalogEntryMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createPartsCatalogEntry>>,
+    TError,
+    { data: BodyType<PartsCatalogEntryBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createPartsCatalogEntry>>,
+  TError,
+  { data: BodyType<PartsCatalogEntryBody> },
+  TContext
+> => {
+  const mutationKey = ["createPartsCatalogEntry"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createPartsCatalogEntry>>,
+    { data: BodyType<PartsCatalogEntryBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createPartsCatalogEntry(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreatePartsCatalogEntryMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createPartsCatalogEntry>>
+>;
+export type CreatePartsCatalogEntryMutationBody =
+  BodyType<PartsCatalogEntryBody>;
+export type CreatePartsCatalogEntryMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Admin — create / upsert a parts catalog entry with fitments + offers
+ */
+export const useCreatePartsCatalogEntry = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createPartsCatalogEntry>>,
+    TError,
+    { data: BodyType<PartsCatalogEntryBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createPartsCatalogEntry>>,
+  TError,
+  { data: BodyType<PartsCatalogEntryBody> },
+  TContext
+> => {
+  return useMutation(getCreatePartsCatalogEntryMutationOptions(options));
+};
+
+/**
+ * @summary Admin — bulk seed parts catalog entries
+ */
+export const getBulkSeedPartsCatalogUrl = () => {
+  return `/api/admin/parts-catalog/bulk-seed`;
+};
+
+export const bulkSeedPartsCatalog = async (
+  bulkSeedPartsCatalogBody: BulkSeedPartsCatalogBody,
+  options?: RequestInit,
+): Promise<BulkSeedPartsCatalog201> => {
+  return customFetch<BulkSeedPartsCatalog201>(getBulkSeedPartsCatalogUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(bulkSeedPartsCatalogBody),
+  });
+};
+
+export const getBulkSeedPartsCatalogMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof bulkSeedPartsCatalog>>,
+    TError,
+    { data: BodyType<BulkSeedPartsCatalogBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof bulkSeedPartsCatalog>>,
+  TError,
+  { data: BodyType<BulkSeedPartsCatalogBody> },
+  TContext
+> => {
+  const mutationKey = ["bulkSeedPartsCatalog"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof bulkSeedPartsCatalog>>,
+    { data: BodyType<BulkSeedPartsCatalogBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return bulkSeedPartsCatalog(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type BulkSeedPartsCatalogMutationResult = NonNullable<
+  Awaited<ReturnType<typeof bulkSeedPartsCatalog>>
+>;
+export type BulkSeedPartsCatalogMutationBody =
+  BodyType<BulkSeedPartsCatalogBody>;
+export type BulkSeedPartsCatalogMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Admin — bulk seed parts catalog entries
+ */
+export const useBulkSeedPartsCatalog = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof bulkSeedPartsCatalog>>,
+    TError,
+    { data: BodyType<BulkSeedPartsCatalogBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof bulkSeedPartsCatalog>>,
+  TError,
+  { data: BodyType<BulkSeedPartsCatalogBody> },
+  TContext
+> => {
+  return useMutation(getBulkSeedPartsCatalogMutationOptions(options));
+};
+
+/**
+ * @summary Admin — parts orders flagged by the validation engine (warned or blocked)
+ */
+export const getListFlaggedPartsOrdersUrl = () => {
+  return `/api/admin/parts-orders/flagged`;
+};
+
+export const listFlaggedPartsOrders = async (
+  options?: RequestInit,
+): Promise<ListFlaggedPartsOrders200> => {
+  return customFetch<ListFlaggedPartsOrders200>(
+    getListFlaggedPartsOrdersUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getListFlaggedPartsOrdersQueryKey = () => {
+  return [`/api/admin/parts-orders/flagged`] as const;
+};
+
+export const getListFlaggedPartsOrdersQueryOptions = <
+  TData = Awaited<ReturnType<typeof listFlaggedPartsOrders>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listFlaggedPartsOrders>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListFlaggedPartsOrdersQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listFlaggedPartsOrders>>
+  > = ({ signal }) => listFlaggedPartsOrders({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listFlaggedPartsOrders>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListFlaggedPartsOrdersQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listFlaggedPartsOrders>>
+>;
+export type ListFlaggedPartsOrdersQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Admin — parts orders flagged by the validation engine (warned or blocked)
+ */
+
+export function useListFlaggedPartsOrders<
+  TData = Awaited<ReturnType<typeof listFlaggedPartsOrders>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listFlaggedPartsOrders>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListFlaggedPartsOrdersQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}

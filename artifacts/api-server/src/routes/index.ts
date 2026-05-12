@@ -34,6 +34,7 @@ import disputesRouter from "./disputes";
 import payoutsRouter from "./payouts";
 import invoiceRouter from "./invoice";
 import adminFinanceRouter from "./adminFinance";
+import partsRouter from "./parts";
 
 const router: IRouter = Router();
 
@@ -72,5 +73,6 @@ router.use(disputesRouter);
 router.use(payoutsRouter);
 router.use(invoiceRouter);
 router.use(adminFinanceRouter);
+router.use(partsRouter);
 
 export default router;

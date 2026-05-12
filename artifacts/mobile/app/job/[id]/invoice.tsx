@@ -15,6 +15,7 @@ interface Invoice {
   lineItems: {
     labor: { description: string; amountCents: number };
     parts: Array<{ name: string; brand: string | null; quantity: number; amountCents: number }>;
+    installedParts: Array<{ brand: string; name: string; quantity: number; warrantyMonths: number; msrpCents: number }>;
     tax: { amountCents: number };
   };
   totalCents: number;
@@ -114,6 +115,18 @@ export default function InvoiceScreen() {
                 <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>Qty {p.quantity}</Text>
               </View>
               <Text style={{ color: colors.foreground }}>{fmt(p.amountCents)}</Text>
+            </View>
+          ))}
+
+          {(invoice.lineItems.installedParts ?? []).map((p, i) => (
+            <View key={`ip-${i}`} style={styles.line}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: colors.foreground }}>{p.brand} · {p.name}</Text>
+                <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>
+                  Qty {p.quantity} · {p.warrantyMonths}mo warranty
+                </Text>
+              </View>
+              <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>MSRP {fmt(p.msrpCents)}</Text>
             </View>
           ))}
 

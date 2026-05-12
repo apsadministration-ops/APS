@@ -3426,3 +3426,416 @@ export const PromoteMechanicResponse = zod.object({
     .optional(),
   tierLabels: zod.record(zod.string(), zod.string()).optional(),
 });
+
+/**
+ * @summary Decode a VIN via NHTSA vPIC and lazily refresh the mechanic profile
+ */
+export const DecodeVinParams = zod.object({
+  vin: zod.coerce.string(),
+});
+
+export const DecodeVinResponse = zod.object({
+  vin: zod.string(),
+  decoded: zod.object({
+    year: zod.number().nullable(),
+    make: zod.string().nullable(),
+    model: zod.string().nullable(),
+    trim: zod.string().nullable(),
+    series: zod.string().nullable(),
+    manufacturer: zod.string().nullable(),
+    plantCountry: zod.string().nullable(),
+    engine: zod.string().nullable(),
+    transmission: zod.string().nullable(),
+    drivetrain: zod.string().nullable(),
+    fuelType: zod.string().nullable(),
+    bodyClass: zod.string().nullable(),
+  }),
+});
+
+/**
+ * @summary VIN-aware parts recommendations for a job
+ */
+export const ListRecommendedPartsParams = zod.object({
+  jobId: zod.coerce.number(),
+});
+
+export const ListRecommendedPartsQueryParams = zod.object({
+  category: zod.coerce.string(),
+});
+
+export const ListRecommendedPartsResponse = zod.object({
+  vehicle: zod.object({
+    vin: zod.string().nullish(),
+    year: zod.number().nullish(),
+    make: zod.string().nullish(),
+    model: zod.string().nullish(),
+    trim: zod.string().nullish(),
+    engine: zod.string().nullish(),
+    drivetrain: zod.string().nullish(),
+  }),
+  recommendations: zod.array(
+    zod.object({
+      catalogId: zod.number(),
+      category: zod.string(),
+      brand: zod.string(),
+      oemPartNumber: zod.string(),
+      name: zod.string(),
+      qualityTier: zod.enum(["oem", "premium", "standard", "economy"]),
+      warrantyMonths: zod.number(),
+      msrpCents: zod.number(),
+      confidence: zod.enum([
+        "exact_vin",
+        "oem_confirmed",
+        "supplier_confirmed",
+        "universal",
+        "manual_verify",
+      ]),
+      reasons: zod.array(zod.string()),
+      offers: zod.array(
+        zod.object({
+          supplierKey: zod.string(),
+          sku: zod.string(),
+          priceCents: zod.number(),
+          currency: zod.string(),
+          inStock: zod.boolean(),
+          etaDays: zod.number(),
+        }),
+      ),
+    }),
+  ),
+});
+
+/**
+ * @summary Place a parts order on a job (validates server-side)
+ */
+export const CreatePartsOrderParams = zod.object({
+  jobId: zod.coerce.number(),
+});
+
+export const createPartsOrderBodyQtyMax = 99;
+
+export const createPartsOrderBodyUnitPriceCentsMin = 0;
+
+export const CreatePartsOrderBody = zod.object({
+  catalogId: zod.number(),
+  supplierKey: zod.string(),
+  sku: zod.string(),
+  qty: zod.number().min(1).max(createPartsOrderBodyQtyMax),
+  unitPriceCents: zod.number().min(createPartsOrderBodyUnitPriceCentsMin),
+});
+
+/**
+ * @summary Transition a parts order (ordered/received/installed/...) or attach supplier ref/invoice
+ */
+export const UpdatePartsOrderParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdatePartsOrderBody = zod.object({
+  status: zod
+    .enum([
+      "candidate",
+      "ordered",
+      "received",
+      "installed",
+      "returned",
+      "cancelled",
+    ])
+    .optional(),
+  supplierInvoiceUrl: zod.string().optional(),
+  supplierOrderRef: zod.string().optional(),
+});
+
+export const UpdatePartsOrderResponse = zod.object({
+  order: zod.object({
+    id: zod.number(),
+    jobId: zod.number(),
+    vehicleId: zod.number(),
+    vin: zod.string(),
+    mechanicId: zod.number(),
+    catalogId: zod.number(),
+    supplierKey: zod.string(),
+    sku: zod.string(),
+    qty: zod.number(),
+    unitPriceCents: zod.number(),
+    totalPriceCents: zod.number(),
+    status: zod.enum([
+      "candidate",
+      "ordered",
+      "received",
+      "installed",
+      "returned",
+      "cancelled",
+    ]),
+    confidence: zod.enum([
+      "exact_vin",
+      "oem_confirmed",
+      "supplier_confirmed",
+      "universal",
+      "manual_verify",
+    ]),
+    validationState: zod.enum(["passed", "warned", "blocked"]),
+    validationReasons: zod.array(zod.string()),
+    supplierInvoiceUrl: zod.string().nullish(),
+    supplierOrderRef: zod.string().nullish(),
+    orderedAt: zod.coerce.date().nullish(),
+    receivedAt: zod.coerce.date().nullish(),
+    installedAt: zod.coerce.date().nullish(),
+    cancelledAt: zod.coerce.date().nullish(),
+    createdAt: zod.coerce.date(),
+  }),
+});
+
+/**
+ * @summary All parts orders on a job (mechanic+admin)
+ */
+export const ListJobPartsOrdersParams = zod.object({
+  jobId: zod.coerce.number(),
+});
+
+export const ListJobPartsOrdersResponse = zod.object({
+  orders: zod.array(
+    zod
+      .object({
+        id: zod.number(),
+        jobId: zod.number(),
+        vehicleId: zod.number(),
+        vin: zod.string(),
+        mechanicId: zod.number(),
+        catalogId: zod.number(),
+        supplierKey: zod.string(),
+        sku: zod.string(),
+        qty: zod.number(),
+        unitPriceCents: zod.number(),
+        totalPriceCents: zod.number(),
+        status: zod.enum([
+          "candidate",
+          "ordered",
+          "received",
+          "installed",
+          "returned",
+          "cancelled",
+        ]),
+        confidence: zod.enum([
+          "exact_vin",
+          "oem_confirmed",
+          "supplier_confirmed",
+          "universal",
+          "manual_verify",
+        ]),
+        validationState: zod.enum(["passed", "warned", "blocked"]),
+        validationReasons: zod.array(zod.string()),
+        supplierInvoiceUrl: zod.string().nullish(),
+        supplierOrderRef: zod.string().nullish(),
+        orderedAt: zod.coerce.date().nullish(),
+        receivedAt: zod.coerce.date().nullish(),
+        installedAt: zod.coerce.date().nullish(),
+        cancelledAt: zod.coerce.date().nullish(),
+        createdAt: zod.coerce.date(),
+      })
+      .and(
+        zod.object({
+          catalog: zod
+            .union([
+              zod.object({
+                id: zod.number(),
+                category: zod.string(),
+                brand: zod.string(),
+                oemPartNumber: zod.string(),
+                crossRefs: zod.array(zod.string()),
+                name: zod.string(),
+                qualityTier: zod.enum([
+                  "oem",
+                  "premium",
+                  "standard",
+                  "economy",
+                ]),
+                warrantyMonths: zod.number(),
+                msrpCents: zod.number(),
+                notes: zod.string().nullish(),
+                active: zod.boolean(),
+                createdAt: zod.coerce.date(),
+              }),
+              zod.null(),
+            ])
+            .optional(),
+        }),
+      ),
+  ),
+});
+
+/**
+ * @summary Customer-safe parts list — brand/warranty/qty/msrp only
+ */
+export const GetJobPartsCustomerViewParams = zod.object({
+  jobId: zod.coerce.number(),
+});
+
+export const GetJobPartsCustomerViewResponse = zod.object({
+  parts: zod.array(
+    zod.object({
+      brand: zod.string(),
+      name: zod.string(),
+      qty: zod.number(),
+      warrantyMonths: zod.number(),
+      msrpCents: zod.number(),
+    }),
+  ),
+});
+
+/**
+ * @summary Admin — list every parts catalog entry
+ */
+export const ListPartsCatalogResponse = zod.object({
+  catalog: zod.array(
+    zod.object({
+      id: zod.number(),
+      category: zod.string(),
+      brand: zod.string(),
+      oemPartNumber: zod.string(),
+      crossRefs: zod.array(zod.string()),
+      name: zod.string(),
+      qualityTier: zod.enum(["oem", "premium", "standard", "economy"]),
+      warrantyMonths: zod.number(),
+      msrpCents: zod.number(),
+      notes: zod.string().nullish(),
+      active: zod.boolean(),
+      createdAt: zod.coerce.date(),
+    }),
+  ),
+});
+
+/**
+ * @summary Admin — create / upsert a parts catalog entry with fitments + offers
+ */
+export const CreatePartsCatalogEntryBody = zod.object({
+  category: zod.string(),
+  brand: zod.string(),
+  oemPartNumber: zod.string(),
+  name: zod.string(),
+  qualityTier: zod.enum(["oem", "premium", "standard", "economy"]).optional(),
+  warrantyMonths: zod.number().optional(),
+  msrpCents: zod.number().optional(),
+  crossRefs: zod.array(zod.string()).optional(),
+  notes: zod.string().optional(),
+  fitments: zod
+    .array(
+      zod.object({
+        yearMin: zod.number().nullish(),
+        yearMax: zod.number().nullish(),
+        make: zod.string().nullish(),
+        model: zod.string().nullish(),
+        enginePattern: zod.string().nullish(),
+        transmissionPattern: zod.string().nullish(),
+        drivetrainPattern: zod.string().nullish(),
+        trimPattern: zod.string().nullish(),
+        notes: zod.string().nullish(),
+      }),
+    )
+    .optional(),
+  offers: zod
+    .array(
+      zod.object({
+        supplierKey: zod.string().optional(),
+        sku: zod.string(),
+        priceCents: zod.number(),
+        currency: zod.string().optional(),
+        inStock: zod.boolean().optional(),
+        etaDays: zod.number().optional(),
+      }),
+    )
+    .optional(),
+});
+
+/**
+ * @summary Admin — bulk seed parts catalog entries
+ */
+export const BulkSeedPartsCatalogBody = zod.object({
+  entries: zod.array(
+    zod.object({
+      category: zod.string(),
+      brand: zod.string(),
+      oemPartNumber: zod.string(),
+      name: zod.string(),
+      qualityTier: zod
+        .enum(["oem", "premium", "standard", "economy"])
+        .optional(),
+      warrantyMonths: zod.number().optional(),
+      msrpCents: zod.number().optional(),
+      crossRefs: zod.array(zod.string()).optional(),
+      notes: zod.string().optional(),
+      fitments: zod
+        .array(
+          zod.object({
+            yearMin: zod.number().nullish(),
+            yearMax: zod.number().nullish(),
+            make: zod.string().nullish(),
+            model: zod.string().nullish(),
+            enginePattern: zod.string().nullish(),
+            transmissionPattern: zod.string().nullish(),
+            drivetrainPattern: zod.string().nullish(),
+            trimPattern: zod.string().nullish(),
+            notes: zod.string().nullish(),
+          }),
+        )
+        .optional(),
+      offers: zod
+        .array(
+          zod.object({
+            supplierKey: zod.string().optional(),
+            sku: zod.string(),
+            priceCents: zod.number(),
+            currency: zod.string().optional(),
+            inStock: zod.boolean().optional(),
+            etaDays: zod.number().optional(),
+          }),
+        )
+        .optional(),
+    }),
+  ),
+});
+
+/**
+ * @summary Admin — parts orders flagged by the validation engine (warned or blocked)
+ */
+export const ListFlaggedPartsOrdersResponse = zod.object({
+  orders: zod.array(
+    zod.object({
+      id: zod.number(),
+      jobId: zod.number(),
+      vehicleId: zod.number(),
+      vin: zod.string(),
+      mechanicId: zod.number(),
+      catalogId: zod.number(),
+      supplierKey: zod.string(),
+      sku: zod.string(),
+      qty: zod.number(),
+      unitPriceCents: zod.number(),
+      totalPriceCents: zod.number(),
+      status: zod.enum([
+        "candidate",
+        "ordered",
+        "received",
+        "installed",
+        "returned",
+        "cancelled",
+      ]),
+      confidence: zod.enum([
+        "exact_vin",
+        "oem_confirmed",
+        "supplier_confirmed",
+        "universal",
+        "manual_verify",
+      ]),
+      validationState: zod.enum(["passed", "warned", "blocked"]),
+      validationReasons: zod.array(zod.string()),
+      supplierInvoiceUrl: zod.string().nullish(),
+      supplierOrderRef: zod.string().nullish(),
+      orderedAt: zod.coerce.date().nullish(),
+      receivedAt: zod.coerce.date().nullish(),
+      installedAt: zod.coerce.date().nullish(),
+      cancelledAt: zod.coerce.date().nullish(),
+      createdAt: zod.coerce.date(),
+    }),
+  ),
+});

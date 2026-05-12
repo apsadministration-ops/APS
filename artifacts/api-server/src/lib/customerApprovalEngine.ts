@@ -20,6 +20,7 @@
 
 import { and, eq, lte, sql } from "drizzle-orm";
 import { db, customerApprovalsTable, jobsTable, usersTable, vehiclesTable } from "@workspace/db";
+import { ensureProfileForJob } from "./jobAcceptHook";
 import {
   notifyMechanicApprovalAccepted, notifyCustomerJobAccepted,
 } from "./notifications";
@@ -118,6 +119,10 @@ export async function fireApprovalAcceptedNotifications(jobId: number): Promise<
         `${veh.year} ${veh.make} ${veh.model}`, jobId);
     }
   } catch { /* best-effort */ }
+  // Side-effect: enrich the vehicle profile so the parts-matching engine
+  // has VIN-decoded data the moment the mechanic opens "Source Parts".
+  // Best-effort + fire-and-forget — never blocks the notification path.
+  void ensureProfileForJob(jobId);
 }
 
 /**

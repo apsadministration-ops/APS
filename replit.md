@@ -138,6 +138,25 @@ artifacts/mobile/app/mechanic/earnings.tsx     — "How Much Can You Earn?" page
 - **Mechanic:** Register (pending approval), browse/accept jobs (tier-filtered), update status, share GPS, submit work logs, add certifications, rate/review/report customers, view profile, access OBD2/parts catalog.
 - **Admin:** Manage users, promote mechanic tiers, release payments, resolve user reports, view platform dashboard.
 
+## VIN-Integrated Parts Matching
+
+End-to-end parts sourcing system that runs from the moment a job is accepted.
+
+- **Auto-decode on accept:** `fireApprovalAcceptedNotifications()` calls `ensureProfileForJob()` (best-effort, never throws) which idempotently NHTSA-decodes the VIN and stamps `mechanic_vehicle_profiles` with `make/model/modelYear/trim/series/manufacturer/plantCountry/engine/transmission/drivetrain/...`.
+- **Catalog + fitment + offers:** `parts_catalog` (brand + OEM PN + quality tier + warranty + MSRP) → `parts_catalog_fitment` (yearMin/Max/make/model/engine/transmission/drivetrain/trim patterns, case-insensitive substring) → `parts_offers` (per-supplier sku + price + ETA + stock).
+- **Confidence engine:** `partsCatalogEngine.searchCompatibleParts` scores recommendations on a 5-step ladder — `exact_vin` (year+make+model+engine+drivetrain) > `oem_confirmed` (year+make+model + engine pattern) > `supplier_confirmed` (make+model only) > `universal` > `manual_verify`. Mobile renders color-coded badges (green/blue/amber/gray/red).
+- **Supplier abstraction:** `lib/suppliers/{types,registry,init}.ts` defines a pluggable `SupplierAdapter` interface. `apsCuratedAdapter` (key `aps-curated`) reads from `parts_offers` and is always registered. `partsTechStub` is registered when env keys exist but `placeOrder` always throws `SupplierNotConfiguredError` — explicit failure, never silent fallback. PartsTech / Nexpart / WHI plug into the same interface later.
+- **Server-side order validation:** `partsOrderEngine.validateOrder` enforces the gate. `manual_verify` confidence → `warned` (allowed but flagged), missing/invalid catalog or qty<1 → `blocked` (route returns 422). Validation reasons are persisted to `parts_orders.validation_reasons` jsonb.
+- **Order lifecycle:** `candidate → ordered → received → installed → returned` (with `cancelled` at any point). `NEXT_STATES` rejects illegal transitions with 409 (e.g. `installed → ordered`). Each transition stamps its timestamp column.
+- **Customer-safe airgap:** `customerView()` and the customer invoice (`/jobs/:id/invoice` → `lineItems.installedParts`) return ONLY `{brand, name, qty, warrantyMonths, msrpCents}` for `status="installed"` rows. `supplierKey`, `sku`, `unitPriceCents`, `totalPriceCents`, `supplierInvoiceUrl`, `supplierOrderRef`, validation state — all strictly mechanic/admin-only.
+- **Where things live:**
+  - `lib/db/src/schema/{partsCatalog.ts,partsOrders.ts}` — schema (catalog + fitment + offers + orders, with unique idx `(brand, oem_part_number)` and `(supplier_key, sku)`)
+  - `artifacts/api-server/src/lib/{vinDecodeService.ts,jobAcceptHook.ts,partsCatalogEngine.ts,partsOrderEngine.ts,suppliers/}` — engines + supplier registry
+  - `artifacts/api-server/src/routes/parts.ts` — 10 routes (decode, recommended, order, patch, list, customer-view, admin catalog GET/POST/bulk-seed, admin flagged orders)
+  - `artifacts/mobile/app/mechanic/parts/[jobId].tsx` — Source Parts screen (category chips, confidence-badged recs, order modal, lifecycle pills)
+  - `artifacts/mobile/app/job/[id]/invoice.tsx` — customer invoice now renders `installedParts` rows under Parts
+  - `scripts/src/{migrate_parts_system.mjs,seed_parts_catalog.mjs}` — idempotent migration + 32-entry seed (Ford / Toyota / Honda / Chevy / Subaru — filters, brake pads/rotors, batteries, alternators, plugs, wipers, belts) with aps-curated offers at 95% MSRP
+
 ## User preferences
 
 _None recorded yet._
