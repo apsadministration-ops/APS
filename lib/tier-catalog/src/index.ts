@@ -147,10 +147,10 @@ export const JOB_CATALOG: readonly ServiceDef[] = [
   { slug: "ball_joint_replacement",       name: "Ball Joint Replacement",               tier: "senior", category: "repair" },
   { slug: "sway_bar_link_replacement",    name: "Sway Bar Link Replacement",            tier: "senior", category: "repair" },
   { slug: "idler_tensioner_pulley",       name: "Idler / Tensioner Pulley Replacement", tier: "senior", category: "repair" },
+  { slug: "full_brake_job",               name: "Full Front Brake Job (Pads + Rotors + Calipers)", tier: "senior", category: "repair",      priceMin: 799, priceMax: 999 },
+  { slug: "full_brake_job_rear",          name: "Full Rear Brake Job (Pads + Rotors + Calipers)",  tier: "senior", category: "repair",      priceMin: 749, priceMax: 949 },
 
   // ── TIER 4 — ADVANCED MECHANIC ───────────────────────────────────────────
-  { slug: "full_brake_job",               name: "Full Front Brake Job (Pads + Rotors + Calipers)", tier: "advanced", category: "repair",      priceMin: 799, priceMax: 999 },
-  { slug: "full_brake_job_rear",          name: "Full Rear Brake Job (Pads + Rotors + Calipers)",  tier: "advanced", category: "repair",      priceMin: 749, priceMax: 949 },
   { slug: "steering_rack_replacement",    name: "Steering Rack Replacement",            tier: "advanced", category: "repair",      priceMin: 899, priceMax: 1199 },
   { slug: "timing_belt_chain_service",    name: "Timing Belt Service (incl. Water Pump)", tier: "advanced", category: "repair",    priceMin: 899, priceMax: 1299 },
   { slug: "ac_compressor_replacement",    name: "AC Compressor Replacement",            tier: "advanced", category: "repair",      priceMin: 679, priceMax: 899 },
