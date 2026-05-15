@@ -64,6 +64,20 @@ import {
 } from "../lib/adminGrowthPolicy";
 import { buildAmplificationKit } from "../lib/mechanicAmplification";
 import { FUTURE_CAPABILITIES } from "../lib/_futureGrowth";
+import {
+  iteratePost,
+  listWinnerCandidates,
+  engagementScore as engagementScoreOf,
+  WINNER_THRESHOLD,
+} from "../lib/iterationEngine";
+import {
+  reusePost,
+  listReuseCandidates,
+  REUSE_THRESHOLD,
+  REUSE_COOLDOWN_DAYS,
+  MAX_REUSES_PER_POST,
+} from "../lib/reuseEngine";
+import { publishOne } from "../lib/publishingEngine";
 
 const router: IRouter = Router();
 
@@ -379,8 +393,22 @@ router.post("/admin/growth/content/:id/engagement", async (req: AuthRequest, res
   if (!existing) { res.status(404).json({ error: "Not found" }); return; }
   if (existing.status !== "published") { res.status(409).json({ error: "Engagement can only be recorded on published posts" }); return; }
   const merged = { ...existing.engagement, ...parsed.data };
-  const [post] = await db.update(socialPostsTable).set({ engagement: merged })
-    .where(eq(socialPostsTable.id, id)).returning();
+  // Merge the engagement jsonb AND recompute the cached weighted score in a
+  // single transaction so the winner/reuse sweeps (which filter on
+  // engagement_score) never see a stale score for the new metrics.
+  const post = await db.transaction(async (tx) => {
+    const [updated] = await tx.update(socialPostsTable)
+      .set({ engagement: merged })
+      .where(eq(socialPostsTable.id, id))
+      .returning();
+    if (!updated) return null;
+    const score = engagementScoreOf(updated.engagement);
+    const [final] = await tx.update(socialPostsTable)
+      .set({ engagementScore: score })
+      .where(eq(socialPostsTable.id, id))
+      .returning();
+    return final ?? updated;
+  });
   res.json(post);
 });
 
@@ -409,6 +437,115 @@ router.delete("/admin/growth/content/:id", async (req: AuthRequest, res): Promis
   if (existing.status === "published") { res.status(409).json({ error: "Cannot delete a published post — use reject instead" }); return; }
   await db.delete(socialPostsTable).where(eq(socialPostsTable.id, id));
   res.status(204).end();
+});
+
+/* -------------------------------------------------------------------------- */
+/* Phase B: analytics-driven iteration                                        */
+/* -------------------------------------------------------------------------- */
+
+/** Iterate a single winner: clone topic + regenerate caption into a new draft. */
+const iterateSchema = z.object({ force: z.boolean().optional() });
+router.post("/admin/growth/content/:id/iterate", async (req: AuthRequest, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const parsed = iterateSchema.safeParse(req.body ?? {});
+  if (!parsed.success) { res.status(400).json({ error: "Invalid body", issues: parsed.error.issues }); return; }
+
+  try { await assertAiGenerationAllowed(); }
+  catch (err) {
+    if (err instanceof PolicyError) { res.status(err.statusCode).json({ error: err.message }); return; }
+    throw err;
+  }
+
+  try {
+    const draft = await iteratePost({
+      sourcePostId: id,
+      generatedById: req.userId ?? null,
+      force: parsed.data.force,
+    });
+    res.status(201).json(draft);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "iterate_failed";
+    if (msg === "source_post_not_found") { res.status(404).json({ error: msg }); return; }
+    if (msg === "source_not_published" || msg === "already_iterated") {
+      res.status(409).json({ error: msg }); return;
+    }
+    req.log?.error({ err, postId: id }, "iterate failed");
+    res.status(500).json({ error: "iterate_failed" });
+  }
+});
+
+/** List eligible winners (manually or automatically). */
+router.get("/admin/growth/iterations/winners", async (req: AuthRequest, res): Promise<void> => {
+  const threshold = Number(req.query.threshold);
+  const winners = await listWinnerCandidates({
+    threshold: Number.isFinite(threshold) ? threshold : WINNER_THRESHOLD,
+  });
+  res.json({
+    threshold: Number.isFinite(threshold) ? threshold : WINNER_THRESHOLD,
+    winners,
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* Phase C: auto-publish + reuse                                              */
+/* -------------------------------------------------------------------------- */
+
+/** Force-publish a scheduled or approved post immediately via the configured provider. */
+router.post("/admin/growth/content/:id/publish-now", async (req: AuthRequest, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const out = await publishOne(id);
+  if (out.ok) {
+    res.status(200).json(out);
+    return;
+  }
+  // Map known failure modes to actionable HTTP codes.
+  if (out.error === "post_not_publishable") { res.status(409).json(out); return; }
+  if (out.error?.startsWith("no_provider_registered_for_")) { res.status(503).json(out); return; }
+  // Other failures: the underlying message is the provider's not-configured
+  // error or a transient error. 502 — admin can retry from the UI.
+  res.status(502).json(out);
+});
+
+/** Clone a proven winner into a new scheduled post. */
+const reuseSchema = z.object({ scheduledFor: z.string().datetime().optional() });
+router.post("/admin/growth/content/:id/reuse", async (req: AuthRequest, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const parsed = reuseSchema.safeParse(req.body ?? {});
+  if (!parsed.success) { res.status(400).json({ error: "Invalid body", issues: parsed.error.issues }); return; }
+
+  try {
+    const clone = await reusePost({
+      sourcePostId: id,
+      generatedById: req.userId ?? null,
+      scheduledFor: parsed.data.scheduledFor ? new Date(parsed.data.scheduledFor) : undefined,
+    });
+    res.status(201).json(clone);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "reuse_failed";
+    if (msg === "source_post_not_found") { res.status(404).json({ error: msg }); return; }
+    if (
+      msg === "source_not_published" ||
+      msg === "source_below_threshold" ||
+      msg === "reuse_cap_reached" ||
+      msg === "cooldown_active"
+    ) { res.status(409).json({ error: msg }); return; }
+    req.log?.error({ err, postId: id }, "reuse failed");
+    res.status(500).json({ error: "reuse_failed" });
+  }
+});
+
+/** List published winners that are currently eligible for reuse. */
+router.get("/admin/growth/reuse/candidates", async (_req: AuthRequest, res): Promise<void> => {
+  const candidates = await listReuseCandidates();
+  res.json({
+    threshold: REUSE_THRESHOLD,
+    cooldownDays: REUSE_COOLDOWN_DAYS,
+    maxReusesPerPost: MAX_REUSES_PER_POST,
+    candidates,
+  });
 });
 
 /* -------------------------------------------------------------------------- */

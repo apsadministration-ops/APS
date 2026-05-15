@@ -34,6 +34,25 @@ export interface GeneratedImage {
   meta: Record<string, unknown>;
 }
 
+export interface GenerateVideoRequest {
+  prompt: string;
+  negativePrompt?: string;
+  aspectRatio: AspectRatio;
+  /** Duration hint in seconds (provider clamps to its own limits). */
+  durationSeconds?: number;
+  seed?: number;
+}
+
+export interface GeneratedVideo {
+  /** Raw MP4 bytes — the engine handles persisting them. */
+  mp4Bytes: Buffer;
+  width: number;
+  height: number;
+  durationSeconds: number;
+  model: string;
+  meta: Record<string, unknown>;
+}
+
 export class MediaProviderNotConfiguredError extends Error {
   constructor(public providerKey: string, message?: string) {
     super(message ?? `Media provider "${providerKey}" is not configured.`);
@@ -62,4 +81,10 @@ export interface MediaProvider {
   isConfigured(): boolean;
   /** Generate a single image. Throws `MediaProviderNotConfiguredError` if not configured. */
   generateImage(req: GenerateImageRequest): Promise<GeneratedImage>;
+  /**
+   * Generate a single short video clip. Optional — providers that don't
+   * support video should leave this undefined; the engine will then surface
+   * a clean "no video provider configured" error.
+   */
+  generateVideo?(req: GenerateVideoRequest): Promise<GeneratedVideo>;
 }

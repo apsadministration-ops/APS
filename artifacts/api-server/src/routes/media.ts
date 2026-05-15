@@ -23,6 +23,7 @@ import { authenticate, requireRole, type AuthRequest } from "../middlewares/auth
 import { assertAiGenerationAllowed, PolicyError } from "../lib/adminGrowthPolicy";
 import {
   generateImagesForPost,
+  generateVideosForPost,
   deleteAssetFile,
   mediaStorageDir,
   INTENT_SPECS,
@@ -38,12 +39,14 @@ const router: IRouter = Router();
 
 router.get("/media/files/:filename", async (req, res): Promise<void> => {
   const filename = req.params.filename;
-  // Defence in depth: only allow `<safe>.png`. Reject path-traversal and
+  // Defence in depth: only allow `<safe>.{png,mp4}`. Reject path-traversal and
   // dotfiles. The UUIDs we emit only contain [A-Za-z0-9-].
-  if (!/^[A-Za-z0-9_-]+\.png$/.test(filename)) {
+  const match = filename.match(/^[A-Za-z0-9_-]+\.(png|mp4)$/);
+  if (!match) {
     res.status(400).json({ error: "Invalid filename" });
     return;
   }
+  const ext = match[1].toLowerCase();
   const filepath = path.join(mediaStorageDir(), filename);
   // Re-resolve to make absolutely sure we're inside the storage dir.
   if (!path.resolve(filepath).startsWith(path.resolve(mediaStorageDir()))) {
@@ -53,7 +56,7 @@ router.get("/media/files/:filename", async (req, res): Promise<void> => {
   try {
     const stat = await fs.stat(filepath);
     if (!stat.isFile()) { res.status(404).end(); return; }
-    res.setHeader("Content-Type", "image/png");
+    res.setHeader("Content-Type", ext === "mp4" ? "video/mp4" : "image/png");
     res.setHeader("Cache-Control", "public, max-age=86400");
     res.setHeader("Content-Length", String(stat.size));
     const stream = (await import("node:fs")).createReadStream(filepath);
@@ -140,6 +143,66 @@ router.post("/admin/growth/content/:id/media/generate", async (req: AuthRequest,
     }
     req.log?.error({ err, postId: id }, "media generate failed");
     res.status(500).json({ error: "Media generation failed" });
+  }
+});
+
+const generateVideoSchema = z.object({
+  intents: z
+    .array(z.enum(["square_feed", "vertical_reel", "landscape_header", "thumbnail", "generic"]))
+    .min(1).max(2),
+  promptOverride: z.string().trim().max(2000).nullable().optional(),
+  providerKey: z.string().trim().min(1).max(80).optional(),
+  durationSeconds: z.number().int().min(2).max(60).optional(),
+});
+
+router.post("/admin/growth/content/:id/media/generate-video", async (req: AuthRequest, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const parsed = generateVideoSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid body", issues: parsed.error.issues });
+    return;
+  }
+
+  const [post] = await db.select().from(socialPostsTable).where(eq(socialPostsTable.id, id));
+  if (!post) { res.status(404).json({ error: "Post not found" }); return; }
+  if (post.status === "published") {
+    res.status(409).json({ error: "Cannot generate media for a published post" });
+    return;
+  }
+
+  try { await assertAiGenerationAllowed(); }
+  catch (err) {
+    if (err instanceof PolicyError) { res.status(err.statusCode).json({ error: err.message }); return; }
+    throw err;
+  }
+
+  try {
+    const result = await generateVideosForPost({
+      post,
+      intents: parsed.data.intents,
+      promptOverride: parsed.data.promptOverride ?? null,
+      providerKey: parsed.data.providerKey,
+      durationSeconds: parsed.data.durationSeconds,
+      userId: req.userId!,
+    });
+    res.status(result.errors.length === parsed.data.intents.length ? 502 : 201).json(result);
+  } catch (err) {
+    if (err instanceof MediaProviderNotConfiguredError) {
+      res.status(503).json({
+        error: "video_provider_not_configured",
+        message: err.message,
+        providerKey: err.providerKey,
+      });
+      return;
+    }
+    if (err instanceof MediaProviderError) {
+      res.status(502).json({ error: "video_provider_error", message: err.message });
+      return;
+    }
+    req.log?.error({ err, postId: id }, "video generate failed");
+    res.status(500).json({ error: "Video generation failed" });
   }
 });
 

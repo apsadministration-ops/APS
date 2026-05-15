@@ -8,6 +8,8 @@ import { initStripeWebhook } from "./lib/stripeInit";
 import { startPayoutScheduler } from "./lib/payoutSchedulerInit";
 import { initSuppliers } from "./lib/suppliers/init";
 import { initMediaProviders } from "./lib/mediaProviders";
+import { initPostingProviders } from "./lib/publishingProviders";
+import { startGrowthScheduler } from "./lib/growthSchedulerInit";
 
 const app: Express = express();
 
@@ -53,7 +55,16 @@ startPayoutScheduler();
 initSuppliers();
 
 // Register AI media-generation providers (OpenAI gpt-image-1 today; Runway /
-// Pika / Kling slot into the same registry in Phase C).
+// Pika / Kling slot into the same registry as they're wired up).
 initMediaProviders();
+
+// Register social-posting providers — all stubs today; real Facebook /
+// Instagram / TikTok / X adapters plug into the same registry.
+initPostingProviders();
+
+// Growth scheduler: 1-min publish sweep, 30-min winner-iteration sweep,
+// 60-min reuse sweep. Separate from the payout scheduler so a slow
+// platform API can't block payout ticks.
+startGrowthScheduler();
 
 export default app;

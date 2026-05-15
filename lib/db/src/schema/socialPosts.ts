@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, timestamp, jsonb, index } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, timestamp, jsonb, index, AnyPgColumn } from "drizzle-orm/pg-core";
 import { usersTable } from "./users";
 
 /**
@@ -7,6 +7,12 @@ import { usersTable } from "./users";
  * SAFETY: status starts as `draft` or `pending_review`. The system MUST NOT
  * mark a post as `published` without an admin transitioning it through
  * `approved` first. The publishing endpoint enforces this in code.
+ *
+ * Lineage columns:
+ *   - `parentPostId`  — set when this row is an analytics-driven iteration
+ *                       (variant) of another post. See iterationEngine.ts.
+ *   - `reusedFromId`  — set when this row is a scheduled reuse-clone of
+ *                       a proven winner. See reuseEngine.ts.
  */
 export const socialPostsTable = pgTable("social_posts", {
   id: serial("id").primaryKey(),
@@ -30,6 +36,8 @@ export const socialPostsTable = pgTable("social_posts", {
     clicks?: number; impressions?: number; signupConversions?: number;
     bookingConversions?: number;
   }>().notNull().default({}),
+  /** Cached weighted engagement score; recomputed on engagement updates. */
+  engagementScore: integer("engagement_score").notNull().default(0),
   generationModel: text("generation_model"),
   generationPrompt: text("generation_prompt"),
   generatedById: integer("generated_by_id").references(() => usersTable.id),
@@ -39,6 +47,17 @@ export const socialPostsTable = pgTable("social_posts", {
   scheduledFor: timestamp("scheduled_for", { withTimezone: true }),
   publishedAt: timestamp("published_at", { withTimezone: true }),
   externalUrl: text("external_url"),
+  /** Self-FK: parent post when this row is an analytics-driven iteration. */
+  parentPostId: integer("parent_post_id").references((): AnyPgColumn => socialPostsTable.id, { onDelete: "set null" }),
+  iteratedAt: timestamp("iterated_at", { withTimezone: true }),
+  /** Self-FK: original post when this row is a reuse-clone of a winner. */
+  reusedFromId: integer("reused_from_id").references((): AnyPgColumn => socialPostsTable.id, { onDelete: "set null" }),
+  reuseCount: integer("reuse_count").notNull().default(0),
+  lastReusedAt: timestamp("last_reused_at", { withTimezone: true }),
+  /** Publishing attempt counters — managed by publishingEngine. */
+  publishAttemptCount: integer("publish_attempt_count").notNull().default(0),
+  lastPublishError: text("last_publish_error"),
+  lastPublishAttemptAt: timestamp("last_publish_attempt_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (t) => [
@@ -46,6 +65,9 @@ export const socialPostsTable = pgTable("social_posts", {
   index("social_posts_platform_idx").on(t.platform),
   index("social_posts_topic_kind_idx").on(t.topicKind),
   index("social_posts_scheduled_idx").on(t.scheduledFor),
+  index("social_posts_parent_idx").on(t.parentPostId),
+  index("social_posts_reused_from_idx").on(t.reusedFromId),
+  index("social_posts_engagement_score_idx").on(t.engagementScore),
 ]);
 
 export type SocialPost = typeof socialPostsTable.$inferSelect;

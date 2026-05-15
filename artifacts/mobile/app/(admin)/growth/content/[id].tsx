@@ -15,11 +15,26 @@ interface Post {
   region: string | null; caption: string; hashtags: string[]; mediaIdeas: string[];
   hookText: string | null; callToAction: string | null;
   engagement: { likes?: number; shares?: number; comments?: number; saves?: number; clicks?: number; impressions?: number; signupConversions?: number; bookingConversions?: number };
+  engagementScore: number;
   generationModel: string | null;
   reviewedAt: string | null; reviewNote: string | null;
   scheduledFor: string | null; publishedAt: string | null;
   externalUrl: string | null; createdAt: string;
+  parentPostId: number | null;
+  iteratedAt: string | null;
+  reusedFromId: number | null;
+  reuseCount: number;
+  lastReusedAt: string | null;
+  publishAttemptCount: number;
+  lastPublishError: string | null;
 }
+
+// Mirror server-side iteration/reuse thresholds so the UI only offers
+// actions that the server will actually accept.
+const WINNER_THRESHOLD = 50;
+const REUSE_THRESHOLD = 75;
+const REUSE_COOLDOWN_DAYS = 30;
+const MAX_REUSES_PER_POST = 3;
 
 interface MediaAsset {
   id: number;
@@ -73,6 +88,7 @@ export default function ContentDetail() {
   );
   const [promptOverride, setPromptOverride] = useState("");
   const [generating, setGenerating] = useState(false);
+  const [generatingVideo, setGeneratingVideo] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -129,6 +145,121 @@ export default function ContentDetail() {
         await alertMessage("Generation failed", msg);
       }
     } finally { setGenerating(false); }
+  };
+
+  const generateVideo = async () => {
+    // Default to the first selected intent (or square if none) — providers
+    // typically cap to one clip per call to control cost.
+    const intents = selectedIntents.size > 0
+      ? [Array.from(selectedIntents)[0]]
+      : ["vertical_reel"];
+    setGeneratingVideo(true);
+    try {
+      const body: Record<string, unknown> = { intents };
+      if (promptOverride.trim()) body.promptOverride = promptOverride.trim();
+      const result = await growthSend<{ assets: MediaAsset[]; errors: { intent: string; error: string }[] }>(
+        "POST", `/admin/growth/content/${id}/media/generate-video`, body,
+      );
+      await load();
+      if (result?.errors?.length) {
+        await alertMessage(
+          "Video generation failed",
+          result.errors.map((e) => `${e.intent}: ${e.error}`).join("\n"),
+        );
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Unknown";
+      if (msg.includes("video_provider_not_configured") || msg.includes("No video provider")) {
+        await alertMessage(
+          "Video generation not configured",
+          "No video provider is connected yet. Wire up Runway, Pika, Google Veo, or OpenAI Sora through the MediaProvider interface to enable AI video.",
+        );
+      } else {
+        await alertMessage("Video generation failed", msg);
+      }
+    } finally { setGeneratingVideo(false); }
+  };
+
+  const iterateWinner = async () => {
+    const ok = await confirm({
+      title: "Iterate this winner?",
+      message: "We'll generate a fresh caption variant in the same topic + platform and queue it for review.",
+      confirmText: "Generate variant",
+    });
+    if (!ok) return;
+    setBusy(true);
+    try {
+      const draft = await growthSend<{ id: number }>("POST", `/admin/growth/content/${id}/iterate`, {});
+      await load();
+      await alertMessage("Variant queued", `Draft #${draft?.id ?? "?"} is now in pending review.`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Unknown";
+      if (msg.includes("already_iterated")) {
+        await alertMessage("Already iterated", "This winner already has a variant. Force-iterate from the API if you need another.");
+      } else {
+        await alertMessage("Iterate failed", msg);
+      }
+    } finally { setBusy(false); }
+  };
+
+  const reuseWinner = async () => {
+    const ok = await confirm({
+      title: "Reuse this winner?",
+      message: `Clone this post into a new scheduled slot. The original stays published; the clone goes back through the publishing engine.`,
+      confirmText: "Schedule reuse",
+    });
+    if (!ok) return;
+    setBusy(true);
+    try {
+      const clone = await growthSend<{ id: number; scheduledFor: string | null }>(
+        "POST", `/admin/growth/content/${id}/reuse`, {},
+      );
+      await load();
+      const when = clone?.scheduledFor ? new Date(clone.scheduledFor).toLocaleString() : "an upcoming slot";
+      await alertMessage("Reuse scheduled", `Clone #${clone?.id ?? "?"} scheduled for ${when}.`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Unknown";
+      if (msg.includes("cooldown_active")) {
+        await alertMessage("Cooldown active", `This post can be reused again after ${REUSE_COOLDOWN_DAYS} days since the last reuse.`);
+      } else if (msg.includes("reuse_cap_reached")) {
+        await alertMessage("Reuse cap reached", `This post has already been reused ${MAX_REUSES_PER_POST} times.`);
+      } else if (msg.includes("source_below_threshold")) {
+        await alertMessage("Engagement too low", `Reuse requires an engagement score of at least ${REUSE_THRESHOLD}.`);
+      } else {
+        await alertMessage("Reuse failed", msg);
+      }
+    } finally { setBusy(false); }
+  };
+
+  const publishNow = async () => {
+    const ok = await confirm({
+      title: "Publish to platform now?",
+      message: `This calls the ${post?.platform} posting adapter and pushes the post live immediately. Make sure approved media is attached.`,
+      confirmText: "Publish",
+    });
+    if (!ok) return;
+    setBusy(true);
+    try {
+      const out = await growthSend<{ ok: boolean; externalUrl?: string; error?: string }>(
+        "POST", `/admin/growth/content/${id}/publish-now`, {},
+      );
+      await load();
+      if (out?.ok && out.externalUrl) {
+        await alertMessage("Published", `Live at ${out.externalUrl}`);
+      } else if (out && !out.ok) {
+        await alertMessage("Publish failed", out.error ?? "Unknown error");
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Unknown";
+      if (msg.includes("not configured") || msg.includes("not connected")) {
+        await alertMessage(
+          "Platform not connected",
+          "No live posting adapter is configured for this platform yet. Connect the platform's Graph/Marketing API and register a posting provider to enable auto-publishing.",
+        );
+      } else {
+        await alertMessage("Publish failed", msg);
+      }
+    } finally { setBusy(false); }
   };
 
   const reviewAsset = async (assetId: number, status: "approved" | "rejected") => {
@@ -385,18 +516,32 @@ export default function ContentDetail() {
           style={[s.editInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.background, minHeight: 80 }]}
         />
 
-        <Pressable
-          style={[s.btn, { backgroundColor: colors.primary, marginTop: 12, opacity: generating ? 0.6 : 1 }]}
-          onPress={generateImages}
-          disabled={generating || post.status === "published"}
-        >
-          {generating ? <ActivityIndicator color="#fff" size="small" /> : (
-            <>
-              <Feather name="image" size={14} color="#fff" />
-              <Text style={s.btnText}>Generate images</Text>
-            </>
-          )}
-        </Pressable>
+        <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
+          <Pressable
+            style={[s.btn, { backgroundColor: colors.primary, flex: 1, opacity: generating ? 0.6 : 1 }]}
+            onPress={generateImages}
+            disabled={generating || generatingVideo || post.status === "published"}
+          >
+            {generating ? <ActivityIndicator color="#fff" size="small" /> : (
+              <>
+                <Feather name="image" size={14} color="#fff" />
+                <Text style={s.btnText}>Generate images</Text>
+              </>
+            )}
+          </Pressable>
+          <Pressable
+            style={[s.btn, { backgroundColor: "#7C3AED", flex: 1, opacity: generatingVideo ? 0.6 : 1 }]}
+            onPress={generateVideo}
+            disabled={generating || generatingVideo || post.status === "published"}
+          >
+            {generatingVideo ? <ActivityIndicator color="#fff" size="small" /> : (
+              <>
+                <Feather name="video" size={14} color="#fff" />
+                <Text style={s.btnText}>Generate video</Text>
+              </>
+            )}
+          </Pressable>
+        </View>
       </View>
 
       {assets.length > 0 && (
@@ -499,15 +644,31 @@ export default function ContentDetail() {
         {post.status === "approved" && (
           <>
             <ActionBtn icon="clock" label="Auto-schedule" color="#6366F1" busy={busy} onPress={recommendAndSchedule} />
-            <ActionBtn icon="upload" label="Mark published" color="#0EA5E9" busy={busy} onPress={publishWithUrl} />
+            <ActionBtn icon="send" label="Publish now" color="#0EA5E9" busy={busy} onPress={publishNow} />
+            <ActionBtn icon="upload" label="Mark published" color="#22C55E" busy={busy} onPress={publishWithUrl} />
             <ActionBtn icon="x" label="Reject" color="#EF4444" busy={busy} onPress={() => transition("reject")} />
           </>
         )}
         {post.status === "scheduled" && (
           <>
-            <ActionBtn icon="upload" label="Mark published" color="#0EA5E9" busy={busy} onPress={publishWithUrl} />
+            <ActionBtn icon="send" label="Publish now" color="#0EA5E9" busy={busy} onPress={publishNow} />
+            <ActionBtn icon="upload" label="Mark published" color="#22C55E" busy={busy} onPress={publishWithUrl} />
             <ActionBtn icon="x" label="Reject" color="#EF4444" busy={busy} onPress={() => transition("reject")} />
           </>
+        )}
+        {post.status === "published" && post.engagementScore >= WINNER_THRESHOLD && (
+          <ActionBtn
+            icon="zap"
+            label={post.iteratedAt ? "Iterate again" : "Iterate winner"}
+            color="#F59E0B"
+            busy={busy}
+            onPress={iterateWinner}
+          />
+        )}
+        {post.status === "published"
+          && post.engagementScore >= REUSE_THRESHOLD
+          && post.reuseCount < MAX_REUSES_PER_POST && (
+          <ActionBtn icon="repeat" label="Reuse winner" color="#10B981" busy={busy} onPress={reuseWinner} />
         )}
         {post.status === "rejected" && (
           <ActionBtn icon="check" label="Re-approve" color="#22C55E" busy={busy} onPress={() => transition("approve")} />
@@ -520,6 +681,28 @@ export default function ContentDetail() {
       {post.scheduledFor && (
         <Text style={[s.metaLine, { color: colors.mutedForeground }]}>
           Scheduled for {new Date(post.scheduledFor).toLocaleString()}
+        </Text>
+      )}
+      {post.status === "published" && (
+        <Text style={[s.metaLine, { color: colors.mutedForeground }]}>
+          Engagement score: {post.engagementScore}
+          {post.iteratedAt ? ` · iterated ${new Date(post.iteratedAt).toLocaleDateString()}` : ""}
+          {post.reuseCount > 0 ? ` · reused ${post.reuseCount}×` : ""}
+        </Text>
+      )}
+      {post.parentPostId && (
+        <Text style={[s.metaLine, { color: colors.mutedForeground }]}>
+          Variant of post #{post.parentPostId}
+        </Text>
+      )}
+      {post.reusedFromId && (
+        <Text style={[s.metaLine, { color: colors.mutedForeground }]}>
+          Reuse of post #{post.reusedFromId}
+        </Text>
+      )}
+      {post.lastPublishError && (
+        <Text style={[s.metaLine, { color: "#EF4444" }]}>
+          Last publish error: {post.lastPublishError} (attempts: {post.publishAttemptCount})
         </Text>
       )}
       {post.publishedAt && (

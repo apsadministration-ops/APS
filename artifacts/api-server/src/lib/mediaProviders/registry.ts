@@ -3,6 +3,7 @@
  * adapters by key (e.g. when re-generating a specific asset).
  */
 import { openaiImageProvider } from "./openaiImage";
+import { videoStubProvider } from "./videoStub";
 import type { MediaProvider } from "./types";
 
 const providers = new Map<string, MediaProvider>();
@@ -32,6 +33,18 @@ export function defaultImageProvider(): MediaProvider | undefined {
   return undefined;
 }
 
+/** Default provider for video generation. First configured video-capable adapter. */
+export function defaultVideoProvider(): MediaProvider | undefined {
+  for (const p of providers.values()) {
+    if (p.capabilities.video && p.isConfigured() && p.generateVideo) return p;
+  }
+  for (const p of providers.values()) {
+    if (p.capabilities.video) return p;
+  }
+  return undefined;
+}
+
 export function initMediaProviders(): void {
   registerMediaProvider(openaiImageProvider);
+  registerMediaProvider(videoStubProvider);
 }

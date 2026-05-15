@@ -23,6 +23,7 @@ import {
   MediaProviderError,
   MediaProviderNotConfiguredError,
   defaultImageProvider,
+  defaultVideoProvider,
   getMediaProvider,
   type AspectRatio,
   type MediaIntent,
@@ -202,14 +203,101 @@ export async function generateImagesForPost(opts: GenerateForPostOptions): Promi
   return { assets, errors };
 }
 
-/** Delete the underlying PNG file for an asset (best-effort). */
+/* -------------------------------------------------------------------------- */
+/* Video generation                                                           */
+/* -------------------------------------------------------------------------- */
+
+export interface GenerateVideoForPostOptions {
+  post: SocialPost;
+  intents: MediaIntent[];
+  promptOverride?: string | null;
+  providerKey?: string;
+  durationSeconds?: number;
+  userId: number;
+}
+
+export async function generateVideosForPost(
+  opts: GenerateVideoForPostOptions,
+): Promise<GenerateForPostResult> {
+  const provider = opts.providerKey
+    ? getMediaProvider(opts.providerKey)
+    : defaultVideoProvider();
+
+  if (!provider) {
+    throw new MediaProviderNotConfiguredError(
+      opts.providerKey ?? "default",
+      "No video provider is registered.",
+    );
+  }
+  if (!provider.capabilities.video || !provider.generateVideo) {
+    throw new MediaProviderError(provider.key, "Provider does not support video generation");
+  }
+
+  await ensureStorageDir();
+
+  const assets: MediaAsset[] = [];
+  const errors: GenerateForPostResult["errors"] = [];
+
+  for (const intent of opts.intents) {
+    const spec = INTENT_SPECS[intent];
+    const prompt = buildImagePrompt({ post: opts.post, promptOverride: opts.promptOverride, intent });
+
+    const [placeholder] = await db.insert(mediaAssetsTable).values({
+      kind: "video",
+      status: "generating",
+      socialPostId: opts.post.id,
+      aspectRatio: spec.aspectRatio,
+      intent,
+      providerKey: provider.key,
+      prompt,
+      negativePrompt: NEGATIVE_PROMPT,
+      generatedById: opts.userId,
+    }).returning();
+
+    try {
+      const generated = await provider.generateVideo!({
+        prompt,
+        negativePrompt: NEGATIVE_PROMPT,
+        aspectRatio: spec.aspectRatio,
+        durationSeconds: opts.durationSeconds,
+      });
+
+      const filename = `${randomUUID()}.mp4`;
+      const filepath = path.join(STORAGE_DIR, filename);
+      await fs.writeFile(filepath, generated.mp4Bytes);
+
+      const [ready] = await db.update(mediaAssetsTable).set({
+        status: "ready",
+        url: `/api/media/files/${filename}`,
+        width: generated.width,
+        height: generated.height,
+        providerModel: generated.model,
+        providerMeta: { ...generated.meta, durationSeconds: generated.durationSeconds },
+      }).where(eq(mediaAssetsTable.id, placeholder.id)).returning();
+      assets.push(ready);
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : "unknown";
+      logger.error({ err, postId: opts.post.id, intent }, "video generation failed");
+      const [failed] = await db.update(mediaAssetsTable).set({
+        status: "failed",
+        failureReason: reason,
+      }).where(eq(mediaAssetsTable.id, placeholder.id)).returning();
+      assets.push(failed);
+      errors.push({ intent, error: reason });
+    }
+  }
+
+  return { assets, errors };
+}
+
+/** Delete the underlying media file for an asset (best-effort). */
 export async function deleteAssetFile(asset: MediaAsset): Promise<void> {
   if (!asset.url) return;
   const m = asset.url.match(/\/api\/media\/files\/([A-Za-z0-9._-]+)$/);
   if (!m) return;
   const filename = m[1];
-  // Defence in depth: only allow the uuid.png shape we generate.
-  if (!/^[A-Za-z0-9_-]+\.png$/i.test(filename)) return;
+  // Defence in depth: only allow the uuid.{png,mp4} shape we generate.
+  if (!/^[A-Za-z0-9_-]+\.(png|mp4)$/i.test(filename)) return;
   const filepath = path.join(STORAGE_DIR, filename);
   try {
     await fs.unlink(filepath);
