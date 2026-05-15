@@ -65,3 +65,6 @@ Thumbs.db
 # User-uploaded screenshots & ad-hoc assets (large, not needed for build)
 attached_assets/
 screenshots/
+
+# AI-generated media (local dev storage)
+artifacts/api-server/storage/

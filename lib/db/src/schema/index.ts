@@ -28,6 +28,7 @@ export * from "./mechanicWorkspace";
 export * from "./transportLegs";
 export * from "./disputes";
 export * from "./tips";
+export * from "./mediaAssets";
 export * from "./payoutEvents";
 export * from "./workConfirmations";
 export * from "./partsItems";

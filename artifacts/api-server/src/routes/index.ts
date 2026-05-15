@@ -35,6 +35,7 @@ import payoutsRouter from "./payouts";
 import invoiceRouter from "./invoice";
 import adminFinanceRouter from "./adminFinance";
 import partsRouter from "./parts";
+import mediaRouter from "./media";
 
 const router: IRouter = Router();
 
@@ -74,5 +75,6 @@ router.use(payoutsRouter);
 router.use(invoiceRouter);
 router.use(adminFinanceRouter);
 router.use(partsRouter);
+router.use(mediaRouter);
 
 export default router;

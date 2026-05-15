@@ -1,10 +1,14 @@
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Pressable, TextInput, RefreshControl } from "react-native";
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Pressable, TextInput, RefreshControl, Image } from "react-native";
 import { useColors } from "@/hooks/useColors";
 import { Feather } from "@expo/vector-icons";
 import { useState, useEffect, useCallback } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { confirm, alertMessage } from "@/utils/confirm";
 import { growthGet, growthSend, PLATFORMS, STATUS_LABELS, TOPIC_LABELS } from "@/lib/growthApi";
+
+// Asset URLs returned by the server already include the `/api` prefix
+// (e.g. `/api/media/files/<uuid>.png`), so we concat against the bare domain.
+const ASSET_ORIGIN = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
 
 interface Post {
   id: number; platform: string; status: string; topicKind: string; topicTitle: string;
@@ -16,6 +20,35 @@ interface Post {
   scheduledFor: string | null; publishedAt: string | null;
   externalUrl: string | null; createdAt: string;
 }
+
+interface MediaAsset {
+  id: number;
+  kind: "image" | "video";
+  status: "generating" | "ready" | "failed" | "approved" | "rejected";
+  aspectRatio: string;
+  intent: string;
+  width: number | null;
+  height: number | null;
+  url: string | null;
+  providerKey: string;
+  providerModel: string | null;
+  failureReason: string | null;
+  createdAt: string;
+}
+
+type IntentKind = "square_feed" | "vertical_reel" | "landscape_header";
+const INTENT_OPTIONS: { value: IntentKind; label: string; aspect: string }[] = [
+  { value: "square_feed",      label: "Square (1:1)",    aspect: "1:1"  },
+  { value: "vertical_reel",    label: "Reel (9:16)",     aspect: "9:16" },
+  { value: "landscape_header", label: "Header (16:9)",   aspect: "16:9" },
+];
+const ASSET_STATUS_LABEL: Record<MediaAsset["status"], { label: string; color: string }> = {
+  generating: { label: "Generating", color: "#6366F1" },
+  ready:      { label: "Ready",      color: "#0EA5E9" },
+  failed:     { label: "Failed",     color: "#EF4444" },
+  approved:   { label: "Approved",   color: "#22C55E" },
+  rejected:   { label: "Rejected",   color: "#9CA3AF" },
+};
 
 export default function ContentDetail() {
   const colors = useColors();
@@ -33,18 +66,94 @@ export default function ContentDetail() {
   // Engagement form
   const [engForm, setEngForm] = useState({ likes: "", shares: "", comments: "", saves: "", clicks: "", impressions: "" });
 
+  // Media assets state
+  const [assets, setAssets] = useState<MediaAsset[]>([]);
+  const [selectedIntents, setSelectedIntents] = useState<Set<IntentKind>>(
+    () => new Set<IntentKind>(["square_feed"]),
+  );
+  const [promptOverride, setPromptOverride] = useState("");
+  const [generating, setGenerating] = useState(false);
+
   const load = useCallback(async () => {
     try {
-      const p = await growthGet<Post>(`/admin/growth/content/${id}`);
+      const [p, a] = await Promise.all([
+        growthGet<Post>(`/admin/growth/content/${id}`),
+        growthGet<MediaAsset[]>(`/admin/growth/content/${id}/media`).catch(() => [] as MediaAsset[]),
+      ]);
       setPost(p);
       setDraftCaption(p.caption);
       setDraftHashtags(p.hashtags.join(" "));
       setDraftCta(p.callToAction ?? "");
+      setAssets(a);
     } catch (e) {
       await alertMessage("Failed to load", e instanceof Error ? e.message : "Unknown");
     } finally { setLoading(false); setRefreshing(false); }
   }, [id]);
   useEffect(() => { load(); }, [load]);
+
+  const toggleIntent = (k: IntentKind) => {
+    setSelectedIntents((cur) => {
+      const next = new Set(cur);
+      if (next.has(k)) next.delete(k); else next.add(k);
+      return next;
+    });
+  };
+
+  const generateImages = async () => {
+    if (selectedIntents.size === 0) {
+      await alertMessage("Select at least one image size");
+      return;
+    }
+    setGenerating(true);
+    try {
+      const body: Record<string, unknown> = { intents: Array.from(selectedIntents) };
+      if (promptOverride.trim()) body.promptOverride = promptOverride.trim();
+      const result = await growthSend<{ assets: MediaAsset[]; errors: { intent: string; error: string }[] }>(
+        "POST", `/admin/growth/content/${id}/media/generate`, body,
+      );
+      await load();
+      if (result?.errors?.length) {
+        await alertMessage(
+          "Some images failed",
+          result.errors.map((e) => `${e.intent}: ${e.error}`).join("\n"),
+        );
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Unknown";
+      if (msg.includes("image_provider_not_configured") || msg.includes("not connected")) {
+        await alertMessage(
+          "Image generation not configured",
+          "Connect the Replit OpenAI integration to enable AI image generation, then try again.",
+        );
+      } else {
+        await alertMessage("Generation failed", msg);
+      }
+    } finally { setGenerating(false); }
+  };
+
+  const reviewAsset = async (assetId: number, status: "approved" | "rejected") => {
+    try {
+      await growthSend("PATCH", `/admin/growth/media/${assetId}`, { status });
+      await load();
+    } catch (e) {
+      await alertMessage("Update failed", e instanceof Error ? e.message : "Unknown");
+    }
+  };
+
+  const deleteAsset = async (assetId: number) => {
+    const ok = await confirm({
+      title: "Delete image?",
+      message: "This permanently deletes the generated image.",
+      confirmText: "Delete", destructive: true,
+    });
+    if (!ok) return;
+    try {
+      await growthSend("DELETE", `/admin/growth/media/${assetId}`);
+      await load();
+    } catch (e) {
+      await alertMessage("Delete failed", e instanceof Error ? e.message : "Unknown");
+    }
+  };
 
   const saveEdits = async () => {
     setBusy(true);
@@ -230,6 +339,154 @@ export default function ContentDetail() {
         </View>
       )}
 
+      {/* AI Image Generation */}
+      <Text style={[s.section, { color: colors.foreground }]}>AI Images</Text>
+      <View style={[s.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <Text style={[s.cardLabel, { color: colors.mutedForeground }]}>
+          Generate visuals from this post
+        </Text>
+        <Text style={{ color: colors.mutedForeground, fontSize: 11, marginTop: 4, marginBottom: 12 }}>
+          Uses the post's caption + media ideas. All images land in this review queue — nothing publishes automatically.
+        </Text>
+
+        {/* Intent chips */}
+        <View style={s.chipRow}>
+          {INTENT_OPTIONS.map((opt) => {
+            const active = selectedIntents.has(opt.value);
+            return (
+              <Pressable
+                key={opt.value}
+                onPress={() => toggleIntent(opt.value)}
+                style={[
+                  s.intentChip,
+                  {
+                    backgroundColor: active ? colors.primary : colors.background,
+                    borderColor: active ? colors.primary : colors.border,
+                  },
+                ]}
+              >
+                <Text style={{ color: active ? "#fff" : colors.foreground, fontSize: 12, fontWeight: "600" }}>
+                  {opt.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        <Text style={[s.cardLabel, { color: colors.mutedForeground, marginTop: 12 }]}>
+          Prompt override (optional)
+        </Text>
+        <TextInput
+          value={promptOverride}
+          onChangeText={setPromptOverride}
+          multiline
+          placeholder="Leave blank to auto-build from caption + media ideas."
+          placeholderTextColor={colors.mutedForeground}
+          style={[s.editInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.background, minHeight: 80 }]}
+        />
+
+        <Pressable
+          style={[s.btn, { backgroundColor: colors.primary, marginTop: 12, opacity: generating ? 0.6 : 1 }]}
+          onPress={generateImages}
+          disabled={generating || post.status === "published"}
+        >
+          {generating ? <ActivityIndicator color="#fff" size="small" /> : (
+            <>
+              <Feather name="image" size={14} color="#fff" />
+              <Text style={s.btnText}>Generate images</Text>
+            </>
+          )}
+        </Pressable>
+      </View>
+
+      {assets.length > 0 && (
+        <View style={[s.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[s.cardLabel, { color: colors.mutedForeground, marginBottom: 10 }]}>
+            Generated assets ({assets.length})
+          </Text>
+          {assets.map((a) => {
+            const meta = ASSET_STATUS_LABEL[a.status];
+            const showImage = a.status !== "generating" && a.status !== "failed" && a.url;
+            const imageUri = showImage ? `${ASSET_ORIGIN}${a.url}` : null;
+            return (
+              <View key={a.id} style={[s.assetRow, { borderColor: colors.border }]}>
+                <View style={[s.assetThumb, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                  {imageUri ? (
+                    <Image source={{ uri: imageUri }} style={s.assetImg} resizeMode="cover" />
+                  ) : a.status === "generating" ? (
+                    <ActivityIndicator size="small" color={colors.primary} />
+                  ) : (
+                    <Feather name="alert-triangle" size={20} color="#EF4444" />
+                  )}
+                </View>
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <View style={[s.miniBadge, { backgroundColor: meta.color + "22" }]}>
+                      <Text style={{ color: meta.color, fontSize: 10, fontWeight: "700" }}>
+                        {meta.label}
+                      </Text>
+                    </View>
+                    <Text style={{ color: colors.mutedForeground, fontSize: 10 }}>
+                      {a.aspectRatio} · {a.intent.replace(/_/g, " ")}
+                    </Text>
+                  </View>
+                  {a.providerModel && (
+                    <Text style={{ color: colors.mutedForeground, fontSize: 10, marginTop: 2 }}>
+                      {a.providerModel}
+                    </Text>
+                  )}
+                  {a.failureReason && (
+                    <Text style={{ color: "#EF4444", fontSize: 10, marginTop: 4 }} numberOfLines={3}>
+                      {a.failureReason}
+                    </Text>
+                  )}
+                  <View style={{ flexDirection: "row", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+                    {a.status === "ready" && (
+                      <>
+                        <Pressable
+                          style={[s.miniBtn, { backgroundColor: "#22C55E22", borderColor: "#22C55E55" }]}
+                          onPress={() => reviewAsset(a.id, "approved")}
+                        >
+                          <Text style={{ color: "#22C55E", fontSize: 11, fontWeight: "700" }}>Approve</Text>
+                        </Pressable>
+                        <Pressable
+                          style={[s.miniBtn, { backgroundColor: "#EF444422", borderColor: "#EF444455" }]}
+                          onPress={() => reviewAsset(a.id, "rejected")}
+                        >
+                          <Text style={{ color: "#EF4444", fontSize: 11, fontWeight: "700" }}>Reject</Text>
+                        </Pressable>
+                      </>
+                    )}
+                    {a.status === "approved" && (
+                      <Pressable
+                        style={[s.miniBtn, { backgroundColor: "#EF444422", borderColor: "#EF444455" }]}
+                        onPress={() => reviewAsset(a.id, "rejected")}
+                      >
+                        <Text style={{ color: "#EF4444", fontSize: 11, fontWeight: "700" }}>Reject</Text>
+                      </Pressable>
+                    )}
+                    {a.status === "rejected" && (
+                      <Pressable
+                        style={[s.miniBtn, { backgroundColor: "#22C55E22", borderColor: "#22C55E55" }]}
+                        onPress={() => reviewAsset(a.id, "approved")}
+                      >
+                        <Text style={{ color: "#22C55E", fontSize: 11, fontWeight: "700" }}>Approve</Text>
+                      </Pressable>
+                    )}
+                    <Pressable
+                      style={[s.miniBtn, { backgroundColor: "#9CA3AF22", borderColor: "#9CA3AF55" }]}
+                      onPress={() => deleteAsset(a.id)}
+                    >
+                      <Feather name="trash-2" size={11} color="#9CA3AF" />
+                    </Pressable>
+                  </View>
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      )}
+
       {/* Workflow actions */}
       <Text style={[s.section, { color: colors.foreground }]}>Workflow</Text>
       <View style={s.actionsGrid}>
@@ -351,4 +608,11 @@ const s = StyleSheet.create({
   btn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 11, borderRadius: 10 },
   btnText: { color: "#fff", fontWeight: "700", fontSize: 13 },
   footnote: { fontSize: 10, marginTop: 16, textAlign: "center" },
+  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  intentChip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, borderWidth: 1 },
+  assetRow: { flexDirection: "row", gap: 10, paddingVertical: 10, borderTopWidth: StyleSheet.hairlineWidth },
+  assetThumb: { width: 72, height: 72, borderRadius: 8, borderWidth: 1, alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  assetImg: { width: "100%", height: "100%" },
+  miniBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  miniBtn: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6, borderWidth: 1, flexDirection: "row", alignItems: "center", gap: 4 },
 });

@@ -7,6 +7,7 @@ import { logger } from "./lib/logger";
 import { initStripeWebhook } from "./lib/stripeInit";
 import { startPayoutScheduler } from "./lib/payoutSchedulerInit";
 import { initSuppliers } from "./lib/suppliers/init";
+import { initMediaProviders } from "./lib/mediaProviders";
 
 const app: Express = express();
 
@@ -50,5 +51,9 @@ startPayoutScheduler();
 // stubs (PartsTech, Nexpart, ...) so the parts-catalog engine can fan
 // offer queries out the moment a request lands.
 initSuppliers();
+
+// Register AI media-generation providers (OpenAI gpt-image-1 today; Runway /
+// Pika / Kling slot into the same registry in Phase C).
+initMediaProviders();
 
 export default app;
