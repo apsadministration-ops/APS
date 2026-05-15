@@ -11,18 +11,37 @@ import {
   type PostingPlatform,
   type PostingProvider,
 } from "./types";
+import { hasCredentialSync } from "../credentialStore";
+
+/**
+ * Per-platform list of credential keys whose presence indicates the
+ * platform "has its keys" — the publish call still throws (no real
+ * adapter wired up yet), but `isConfigured()` becomes true so the admin
+ * UI shows a green status and we can flip the publish call to a real
+ * implementation in a single localized PR.
+ */
+const REQUIRED_KEYS: Record<PostingPlatform, string[]> = {
+  facebook:  ["facebook_page_token",   "facebook_page_id"],
+  instagram: ["instagram_access_token","instagram_user_id"],
+  tiktok:    ["tiktok_access_token",   "tiktok_open_id"],
+  twitter:   ["twitter_access_token"],
+};
 
 function makeStub(platform: PostingPlatform, label: string): PostingProvider {
   return {
     platform,
     label,
     isConfigured(): boolean {
-      return false;
+      return REQUIRED_KEYS[platform].every((k) => hasCredentialSync(k));
     },
     async publish(): Promise<never> {
+      const hasKeys = REQUIRED_KEYS[platform].every((k) => hasCredentialSync(k));
       throw new PostingProviderNotConfiguredError(
         platform,
-        `${label} publishing isn't connected yet. Connect the platform's Graph/Marketing API and register a configured provider to enable auto-publishing.`,
+        hasKeys
+          ? `${label} credentials are saved but the live posting adapter is not yet implemented. ` +
+            `Implement the platform's Graph/Marketing API call in a real PostingProvider to enable publishing.`
+          : `${label} publishing isn't connected yet. Add the required API credentials in Growth → Integrations to enable auto-publishing.`,
       );
     },
   };

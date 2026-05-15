@@ -157,6 +157,21 @@ End-to-end parts sourcing system that runs from the moment a job is accepted.
   - `artifacts/mobile/app/job/[id]/invoice.tsx` — customer invoice now renders `installedParts` rows under Parts
   - `scripts/src/{migrate_parts_system.mjs,seed_parts_catalog.mjs}` — idempotent migration + 32-entry seed (Ford / Toyota / Honda / Chevy / Subaru — filters, brake pads/rotors, batteries, alternators, plugs, wipers, belts) with aps-curated offers at 95% MSRP
 
+## Content Asset Library + Integrations groundwork
+
+- **Content Asset Library:** `/admin/growth/library` (mobile) + `/admin/growth/library` & `/library/stats` (API). Grid of every generated post with its primary media-asset thumbnail, status pill, engagement score badge, lineage (reuse count / parent / reused-from), and engagement breakdown (likes/shares/comments). Filters validated server-side via zod allowlist (platform / status / topicKind / minScore), three sort modes (recent | engagement | published), and pagination. Status-count cards on the screen act as one-tap status filters.
+- **Integrations panel:** `/admin/growth/integrations` (mobile) — admin-only screen where API keys for OpenAI BYO + Facebook / Instagram / TikTok / X are entered. Plaintext is **never** returned to the client; on save, the value is AES-256-GCM-encrypted (key derived via scrypt from `SESSION_SECRET`) and stored in `integration_credentials`. UI only ever shows `configured` + `updatedAt` + source (`db` | `env` | `none`). Single source of truth for available credentials is `integrationCatalog.ts` (5 groups, 10 keys with env fallbacks).
+- **credentialStore:** `getCredential()` is **DB-authoritative** (queries on every read regardless of cache) so a stale cache can never hide a saved key. `hasCredentialSync()` reads an in-memory `dbConfigured` set hydrated at boot by `loadCredentialCache()` — used by `PostingProvider.isConfigured()` on hot paths. Hydrate is **awaited** before `startGrowthScheduler()` fires, and a `hydrateRevision` counter prevents a late-finishing hydrate from clobbering newer `setCredential`/`deleteCredential` mutations.
+- **Publishing stub wiring:** Each platform stub in `publishingProviders/stubs.ts` declares its required keys in `REQUIRED_KEYS` and reports `isConfigured()=true` once they're all in the store. The `publish()` call still throws `PostingProviderNotConfiguredError` with a smarter message ("keys saved but live adapter not implemented" vs "add credentials in Integrations") — replacing the stub with a real Graph/Marketing API call is a localized PR.
+- **Where things live:**
+  - `lib/db/src/schema/integrationCredentials.ts` — `integration_credentials` table (unique key, encrypted value, updatedById, updatedAt)
+  - `artifacts/api-server/src/lib/integrationCatalog.ts` — 5 groups × 10 credential defs
+  - `artifacts/api-server/src/lib/credentialStore.ts` — AES-256-GCM + cache + hydrate-race protection
+  - `artifacts/api-server/src/routes/integrations.ts` — admin-gated GET/PUT/DELETE
+  - `artifacts/api-server/src/routes/growth.ts` — `/library` + `/library/stats` aggregate endpoints (zod-validated filters)
+  - `artifacts/mobile/app/(admin)/growth/library.tsx` — grid + analytics
+  - `artifacts/mobile/app/(admin)/growth/integrations.tsx` — per-credential save/clear UI
+
 ## User preferences
 
 _None recorded yet._

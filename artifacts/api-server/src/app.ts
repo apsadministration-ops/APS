@@ -10,6 +10,7 @@ import { initSuppliers } from "./lib/suppliers/init";
 import { initMediaProviders } from "./lib/mediaProviders";
 import { initPostingProviders } from "./lib/publishingProviders";
 import { startGrowthScheduler } from "./lib/growthSchedulerInit";
+import { loadCredentialCache } from "./lib/credentialStore";
 
 const app: Express = express();
 
@@ -62,9 +63,15 @@ initMediaProviders();
 // Instagram / TikTok / X adapters plug into the same registry.
 initPostingProviders();
 
-// Growth scheduler: 1-min publish sweep, 30-min winner-iteration sweep,
-// 60-min reuse sweep. Separate from the payout scheduler so a slow
-// platform API can't block payout ticks.
-startGrowthScheduler();
+// Hydrate the encrypted credential cache from DB BEFORE the growth
+// scheduler can fire publish ticks — otherwise the first sweep would see
+// `hasCredentialSync()` return false for legitimately-saved credentials
+// and skip the platform with a misleading "not configured" error.
+loadCredentialCache().then(() => {
+  // Growth scheduler: 1-min publish sweep, 30-min winner-iteration sweep,
+  // 60-min reuse sweep. Separate from the payout scheduler so a slow
+  // platform API can't block payout ticks.
+  startGrowthScheduler();
+});
 
 export default app;

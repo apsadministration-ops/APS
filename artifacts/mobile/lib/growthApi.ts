@@ -22,7 +22,7 @@ export async function growthGet<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export async function growthSend<T>(method: "POST" | "PATCH" | "DELETE", path: string, body?: unknown): Promise<T | null> {
+export async function growthSend<T>(method: "POST" | "PUT" | "PATCH" | "DELETE", path: string, body?: unknown): Promise<T | null> {
   const headers = { ...(await authHeaders()), "Content-Type": "application/json" };
   const res = await fetch(`https://${domain}/api${path}`, {
     method,

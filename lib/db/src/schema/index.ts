@@ -34,3 +34,4 @@ export * from "./workConfirmations";
 export * from "./partsItems";
 export * from "./partsCatalog";
 export * from "./partsOrders";
+export * from "./integrationCredentials";

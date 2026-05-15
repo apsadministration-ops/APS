@@ -184,6 +184,8 @@ export default function GrowthCenterIndex() {
           <NavCard icon="zap" title="Mechanic Amplification" subtitle="Top performers, utilization + referral reach" color="#F97316" onPress={() => router.push("/(admin)/growth/amplification")} />
           <NavCard icon="trending-up" title="Trends & Opportunities" subtitle="AI-suggested timely content + 1-tap generate" color="#0EA5E9" onPress={() => router.push("/(admin)/growth/trends")} />
           <NavCard icon="check-square" title="Content Approval Queue" subtitle="Review, edit, approve, schedule, publish" color="#8B5CF6" onPress={() => router.push("/(admin)/growth/queue")} />
+          <NavCard icon="archive" title="Content Asset Library" subtitle="Every post + analytics, sort winners, drill into details" color="#10B981" onPress={() => router.push("/(admin)/growth/library")} />
+          <NavCard icon="key" title="Integrations" subtitle="OpenAI BYO key + Facebook / Instagram / TikTok / X credentials" color="#EAB308" onPress={() => router.push("/(admin)/growth/integrations")} />
           <NavCard icon="shield" title="Admin Controls & AI Policy" subtitle="Pause AI, daily caps, restrictions, future architecture" color="#F43F5E" onPress={() => router.push("/(admin)/growth/admin-controls")} />
 
           <Text style={[styles.section, { color: colors.foreground }]}>Recent signups</Text>

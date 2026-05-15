@@ -78,6 +78,8 @@ import {
   MAX_REUSES_PER_POST,
 } from "../lib/reuseEngine";
 import { publishOne } from "../lib/publishingEngine";
+import { sql as drizzleSql } from "drizzle-orm";
+import { mediaAssetsTable } from "@workspace/db";
 
 const router: IRouter = Router();
 
@@ -717,6 +719,144 @@ router.post("/admin/growth/mechanics/:id/content", async (req: AuthRequest, res)
     generatedById: req.userId!,
   }).returning();
   res.status(201).json(post);
+});
+
+/* -------------------------------------------------------------------------- */
+/* Content Asset Library                                                      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * GET /admin/growth/library
+ *   ?platform=facebook|instagram|tiktok|twitter
+ *   &status=draft|pending_review|approved|scheduled|published|rejected
+ *   &topicKind=...
+ *   &minScore=number
+ *   &sort=recent|engagement|published
+ *   &limit=number (default 50, max 200)
+ *   &offset=number
+ *
+ * Returns posts with their primary media asset thumbnail + a flat
+ * engagement rollup so the library grid can render without N+1 fetches.
+ */
+const LIBRARY_PLATFORMS = ["facebook", "instagram", "tiktok", "twitter"] as const;
+const LIBRARY_STATUSES = ["draft", "pending_review", "approved", "scheduled", "published", "rejected"] as const;
+const LIBRARY_SORTS = ["recent", "engagement", "published"] as const;
+const librarySchema = z.object({
+  platform:  z.enum(LIBRARY_PLATFORMS).optional(),
+  status:    z.enum(LIBRARY_STATUSES).optional(),
+  topicKind: z.enum(TOPIC_KINDS as unknown as readonly [string, ...string[]]).optional(),
+  minScore:  z.coerce.number().int().min(0).max(1000).optional(),
+  sort:      z.enum(LIBRARY_SORTS).default("recent"),
+  limit:     z.coerce.number().int().min(1).max(200).default(50),
+  offset:    z.coerce.number().int().min(0).default(0),
+});
+
+router.get("/admin/growth/library", async (req: AuthRequest, res): Promise<void> => {
+  const parsed = librarySchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid filters", issues: parsed.error.issues });
+    return;
+  }
+  const { platform, status, topicKind, minScore, sort, limit, offset } = parsed.data;
+
+  const where: ReturnType<typeof eq>[] = [];
+  if (platform)  where.push(eq(socialPostsTable.platform,  platform));
+  if (status)    where.push(eq(socialPostsTable.status,    status));
+  if (topicKind) where.push(eq(socialPostsTable.topicKind, topicKind));
+  if (minScore != null) where.push(gte(socialPostsTable.engagementScore, minScore));
+
+  const orderBy = sort === "engagement"
+    ? desc(socialPostsTable.engagementScore)
+    : sort === "published"
+    ? desc(socialPostsTable.publishedAt)
+    : desc(socialPostsTable.createdAt);
+
+  const rows = await db.select().from(socialPostsTable)
+    .where(where.length ? and(...where) : undefined)
+    .orderBy(orderBy)
+    .limit(limit)
+    .offset(offset);
+
+  // Fetch the best (most-recently-ready) media asset for each post in one query.
+  const postIds = rows.map((r) => r.id);
+  const thumbs = postIds.length === 0 ? [] : await db.select({
+    socialPostId: mediaAssetsTable.socialPostId,
+    id: mediaAssetsTable.id,
+    kind: mediaAssetsTable.kind,
+    status: mediaAssetsTable.status,
+    url: mediaAssetsTable.url,
+    aspectRatio: mediaAssetsTable.aspectRatio,
+  }).from(mediaAssetsTable)
+    .where(and(
+      inArray(mediaAssetsTable.socialPostId, postIds),
+      inArray(mediaAssetsTable.status, ["approved", "ready"]),
+    ))
+    .orderBy(desc(mediaAssetsTable.createdAt));
+
+  // First-seen wins (which is the most recent because we ordered desc).
+  const thumbByPost = new Map<number, typeof thumbs[number]>();
+  for (const t of thumbs) {
+    if (t.socialPostId == null) continue;
+    if (!thumbByPost.has(t.socialPostId)) thumbByPost.set(t.socialPostId, t);
+  }
+
+  // Aggregate counts (filtered) — small extra query for the library header.
+  const countRows = await db.select({ count: drizzleSql<number>`count(*)::int` })
+    .from(socialPostsTable)
+    .where(where.length ? and(...where) : undefined);
+  const count = countRows[0]?.count ?? 0;
+
+  res.json({
+    total: count,
+    limit,
+    offset,
+    posts: rows.map((p) => {
+      const t = thumbByPost.get(p.id);
+      return {
+        id: p.id,
+        platform: p.platform,
+        status: p.status,
+        topicKind: p.topicKind,
+        topicTitle: p.topicTitle,
+        caption: p.caption,
+        engagementScore: p.engagementScore,
+        engagement: p.engagement,
+        publishedAt: p.publishedAt,
+        scheduledFor: p.scheduledFor,
+        createdAt: p.createdAt,
+        reuseCount: p.reuseCount,
+        parentPostId: p.parentPostId,
+        reusedFromId: p.reusedFromId,
+        thumb: t ? { id: t.id, kind: t.kind, url: t.url, aspectRatio: t.aspectRatio } : null,
+      };
+    }),
+  });
+});
+
+/**
+ * GET /admin/growth/library/stats — high-level counts the library landing
+ * card uses (totals per status + best-performing post).
+ */
+router.get("/admin/growth/library/stats", async (_req, res): Promise<void> => {
+  const rows = await db.select({
+    status: socialPostsTable.status,
+    count: drizzleSql<number>`count(*)::int`,
+  }).from(socialPostsTable).groupBy(socialPostsTable.status);
+
+  const byStatus: Record<string, number> = {};
+  for (const r of rows) byStatus[r.status] = r.count;
+
+  const [topPost] = await db.select({
+    id: socialPostsTable.id,
+    topicTitle: socialPostsTable.topicTitle,
+    platform: socialPostsTable.platform,
+    engagementScore: socialPostsTable.engagementScore,
+  }).from(socialPostsTable)
+    .where(eq(socialPostsTable.status, "published"))
+    .orderBy(desc(socialPostsTable.engagementScore))
+    .limit(1);
+
+  res.json({ byStatus, topPost: topPost ?? null });
 });
 
 export default router;
