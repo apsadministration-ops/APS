@@ -136,8 +136,9 @@ export async function getCredential(key: string): Promise<string | null> {
       return null;
     }
   }
-  // No DB row — env fallback only.
-  dbConfigured.delete(key);
+  // No DB row — env fallback only. Bump the revision so an in-flight slow
+  // hydrate started before this delete can't clobber the eviction.
+  if (dbConfigured.delete(key)) hydrateRevision++;
   const def = findCredentialDef(key);
   if (def?.envFallback) return process.env[def.envFallback] ?? null;
   return null;

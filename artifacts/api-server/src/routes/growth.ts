@@ -765,15 +765,18 @@ router.get("/admin/growth/library", async (req: AuthRequest, res): Promise<void>
   if (topicKind) where.push(eq(socialPostsTable.topicKind, topicKind));
   if (minScore != null) where.push(gte(socialPostsTable.engagementScore, minScore));
 
+  // Postgres DESC places NULLs first by default, so unpublished rows would
+  // bubble above actually-published ones. Force NULLS LAST + tiebreak on
+  // createdAt for stable ordering.
   const orderBy = sort === "engagement"
-    ? desc(socialPostsTable.engagementScore)
+    ? [desc(socialPostsTable.engagementScore), desc(socialPostsTable.createdAt)]
     : sort === "published"
-    ? desc(socialPostsTable.publishedAt)
-    : desc(socialPostsTable.createdAt);
+    ? [drizzleSql`${socialPostsTable.publishedAt} DESC NULLS LAST`, desc(socialPostsTable.createdAt)]
+    : [desc(socialPostsTable.createdAt)];
 
   const rows = await db.select().from(socialPostsTable)
     .where(where.length ? and(...where) : undefined)
-    .orderBy(orderBy)
+    .orderBy(...orderBy)
     .limit(limit)
     .offset(offset);
 

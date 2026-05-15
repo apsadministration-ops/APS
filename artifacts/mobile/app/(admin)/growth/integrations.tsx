@@ -32,16 +32,20 @@ export default function IntegrationsScreen() {
   const [groups, setGroups] = useState<GroupStatus[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   // Per-credential local input + busy state.
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<Record<string, boolean>>({});
 
   const load = useCallback(async () => {
     try {
+      setLoadError(null);
       const r = await growthGet<{ groups: GroupStatus[] }>("/admin/growth/integrations");
       setGroups(r.groups);
     } catch (e) {
-      await alertMessage("Load failed", e instanceof Error ? e.message : "Unknown");
+      const msg = e instanceof Error ? e.message : "Unknown";
+      setLoadError(msg);
+      await alertMessage("Load failed", msg);
     } finally {
       setLoading(false); setRefreshing(false);
     }
@@ -84,10 +88,30 @@ export default function IntegrationsScreen() {
     }
   };
 
-  if (loading || !groups) {
+  if (loading) {
     return (
       <View style={[s.container, s.center, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+  if (!groups) {
+    return (
+      <View style={[s.container, s.center, { backgroundColor: colors.background, padding: 24 }]}>
+        <Feather name="alert-triangle" size={36} color={colors.destructive ?? "#dc2626"} />
+        <Text style={[s.heroTitle, { color: colors.foreground, marginTop: 12, textAlign: "center" }]}>
+          Couldn't load integrations
+        </Text>
+        <Text style={[s.heroSub, { color: colors.mutedForeground, marginTop: 6, textAlign: "center" }]}>
+          {loadError ?? "Something went wrong fetching the credential list."}
+        </Text>
+        <Pressable
+          onPress={() => { setLoading(true); load(); }}
+          style={[s.btn, { backgroundColor: colors.primary, marginTop: 16, paddingHorizontal: 24, flexDirection: "row", alignItems: "center", gap: 8 }]}
+        >
+          <Feather name="refresh-cw" size={16} color="#fff" />
+          <Text style={s.btnText}>Retry</Text>
+        </Pressable>
       </View>
     );
   }

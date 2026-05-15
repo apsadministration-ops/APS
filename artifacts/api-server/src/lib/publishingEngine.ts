@@ -60,6 +60,11 @@ export async function publishOne(postId: number): Promise<PublishOutcome> {
   // We use a `last_publish_attempt_at = now()` stamp as the claim marker so
   // a concurrent sweep skips it (it'll see the recent attempt and back off).
   const claimedAt = new Date();
+  // Anything claimed within PUBLISH_IN_FLIGHT_MS is considered already in-flight
+  // (another worker/manual call is currently inside provider.publish). Filtering
+  // on the stamp here closes the race: the conditional UPDATE only matches when
+  // no recent claim exists, so two concurrent calls can't both win.
+  const inFlightCutoff = new Date(claimedAt.getTime() - PUBLISH_IN_FLIGHT_MS);
   const [claimed] = await db.update(socialPostsTable)
     .set({
       lastPublishAttemptAt: claimedAt,
@@ -70,6 +75,10 @@ export async function publishOne(postId: number): Promise<PublishOutcome> {
       // Only the row owner of "scheduled" or "approved" (manual publish-now)
       // can be picked up. `published`/`draft`/`rejected` are skipped.
       sql`${socialPostsTable.status} IN ('scheduled','approved')`,
+      or(
+        isNull(socialPostsTable.lastPublishAttemptAt),
+        lte(socialPostsTable.lastPublishAttemptAt, inFlightCutoff),
+      ),
     ))
     .returning();
 
