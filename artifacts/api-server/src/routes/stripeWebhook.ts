@@ -3,7 +3,7 @@
 import type { Request, Response } from "express";
 import { eq, and, ne, isNull } from "drizzle-orm";
 import type Stripe from "stripe";
-import { db, paymentsTable, usersTable, jobsTable, tipsTable } from "@workspace/db";
+import { db, paymentsTable, usersTable, jobsTable, tipsTable, processedStripeEventsTable } from "@workspace/db";
 import { tryConvertReferral, revertReferralForJob } from "../lib/referralEngine";
 import { getUncachableStripeClient, getWebhookSecret } from "../lib/stripeClient";
 import {
@@ -44,10 +44,43 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
     return;
   }
 
+  // Hard idempotency via a dedicated dedup table. Stripe's at-least-once
+  // delivery means the same event id can land twice (their retry on our
+  // 5xx, or a transient network blip on the ACK). INSERT … ON CONFLICT DO
+  // NOTHING; if no row was inserted, another delivery already processed
+  // this event — ack 200 immediately and skip handler work. This is the
+  // defence-in-depth layer on top of the per-handler status guards.
+  let firstDelivery = true;
+  try {
+    const inserted = await db.insert(processedStripeEventsTable)
+      .values({ eventId: event.id, eventType: event.type })
+      .onConflictDoNothing({ target: processedStripeEventsTable.eventId })
+      .returning({ eventId: processedStripeEventsTable.eventId });
+    firstDelivery = inserted.length > 0;
+  } catch (err) {
+    // Dedup-table failure should not block payment processing — log and
+    // proceed (the per-handler idempotency guards still apply).
+    logger.warn({ err, id: event.id }, "Stripe webhook dedup insert failed — proceeding");
+  }
+  if (!firstDelivery) {
+    logger.info({ id: event.id, type: event.type }, "Stripe webhook duplicate delivery — skipping handler");
+    res.status(200).json({ received: true, duplicate: true });
+    return;
+  }
+
   try {
     await handleEvent(event);
     res.status(200).json({ received: true });
   } catch (err) {
+    // Roll back the dedup row so Stripe's retry can re-attempt the handler.
+    // Without this, a transient handler failure would silently swallow the
+    // event on the next delivery.
+    try {
+      await db.delete(processedStripeEventsTable)
+        .where(eq(processedStripeEventsTable.eventId, event.id));
+    } catch (rollbackErr) {
+      logger.error({ rollbackErr, id: event.id }, "Failed to roll back dedup row after handler error");
+    }
     // Return 500 so Stripe will retry per its backoff policy.
     logger.error({ err, type: event.type, id: event.id }, "Stripe webhook handler error — returning 500 to trigger retry");
     res.status(500).json({ error: "Handler failed" });

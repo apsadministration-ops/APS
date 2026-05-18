@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { db, paymentsTable, jobsTable, usersTable, shopsTable } from "@workspace/db";
 import { tryConvertReferral } from "../lib/referralEngine";
 import { authenticate, requireRole, requireActiveMechanic, type AuthRequest } from "../middlewares/authenticate";
+import { checkoutCreationLimiter, paymentReadLimiter } from "../middlewares/paymentRateLimit";
 import { awardCustomerPoints } from "../lib/loyaltyEngine";
 import { runProgression } from "../lib/tierProgressionEngine";
 import { getStripePublishableKey, getUncachableStripeClient } from "../lib/stripeClient";
@@ -14,7 +15,7 @@ const router: IRouter = Router();
 /* CONFIG                                                                     */
 /* -------------------------------------------------------------------------- */
 
-router.get("/payments/config", async (_req, res): Promise<void> => {
+router.get("/payments/config", paymentReadLimiter, async (_req, res): Promise<void> => {
   try {
     const publishableKey = await getStripePublishableKey();
     res.json({ publishableKey });
@@ -44,7 +45,7 @@ router.get("/payments", authenticate, async (req: AuthRequest, res): Promise<voi
 /* CHECKOUT — customer authorizes payment for a job                           */
 /* -------------------------------------------------------------------------- */
 
-router.post("/payments/jobs/:jobId/checkout", authenticate, async (req: AuthRequest, res): Promise<void> => {
+router.post("/payments/jobs/:jobId/checkout", authenticate, checkoutCreationLimiter, async (req: AuthRequest, res): Promise<void> => {
   if (req.userRole !== "customer") {
     res.status(403).json({ error: "Only customers can authorize payment" });
     return;
@@ -168,6 +169,11 @@ router.post("/payments/jobs/:jobId/checkout", authenticate, async (req: AuthRequ
   }
 
   const baseUrl = `https://${(process.env["REPLIT_DOMAINS"] ?? "").split(",")[0] ?? ""}`;
+  // Idempotency key — if the customer double-taps "Pay" or the network
+  // retries the request, Stripe returns the SAME session instead of
+  // creating two PaymentIntents. Scope is (job, payment-row id) so a
+  // legitimate re-checkout after a canceled row gets a fresh key.
+  const idempotencyKey = `checkout:job:${jobId}:row:${existing?.id ?? "new"}:${Date.now() >> 14}`;
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
     customer: stripeCustomerId,
@@ -203,7 +209,7 @@ router.post("/payments/jobs/:jobId/checkout", authenticate, async (req: AuthRequ
     success_url: `${baseUrl}/api/payments/checkout/return?session_id={CHECKOUT_SESSION_ID}&status=success`,
     cancel_url: `${baseUrl}/api/payments/checkout/return?session_id={CHECKOUT_SESSION_ID}&status=cancel`,
     metadata: { jobId: String(jobId) },
-  });
+  }, { idempotencyKey });
 
   // Upsert payment row — pre-record so webhook can find it by session id.
   const totalCost = amountCents / 100;

@@ -35,3 +35,4 @@ export * from "./partsItems";
 export * from "./partsCatalog";
 export * from "./partsOrders";
 export * from "./integrationCredentials";
+export * from "./processedStripeEvents";

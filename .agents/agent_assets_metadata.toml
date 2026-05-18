@@ -1,5 +1,4 @@
 uploads = []
-outputs = []
 
 [[generated]]
 id = "BZM7m10NeUHRdvcxOZ-fE"
@@ -42,3 +41,9 @@ id = "G-dmng0MuFyvqfFs9R9-U"
 uri = "file://artifacts/demo-video/public/images/dark-metal-bg.png"
 type = "image"
 title = "dark industrial metal texture"
+
+[[outputs]]
+id = "Uo1RnCk3FV0lo0oWJ38fG"
+uri = "file://STRIPE_SECURITY_AUDIT.md"
+type = "text"
+title = "Stripe Security Audit & Hardening"

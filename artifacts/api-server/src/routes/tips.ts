@@ -12,6 +12,7 @@ import { eq, desc, or } from "drizzle-orm";
 import { z } from "zod";
 import { db, tipsTable, jobsTable } from "@workspace/db";
 import { authenticate, type AuthRequest } from "../middlewares/authenticate";
+import { tipCreationLimiter } from "../middlewares/paymentRateLimit";
 import { createTipCheckout } from "../lib/tipEngine";
 
 const router: IRouter = Router();
@@ -20,7 +21,7 @@ const tipSchema = z.object({
   amountCents: z.number().int().min(100).max(50000),
 });
 
-router.post("/tips/jobs/:jobId", authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
+router.post("/tips/jobs/:jobId", authenticate, tipCreationLimiter, async (req: AuthRequest, res: Response): Promise<void> => {
   if (req.userRole !== "customer") { res.status(403).json({ error: "Customers only" }); return; }
   const jobId = Number(req.params.jobId);
   if (!Number.isInteger(jobId)) { res.status(400).json({ error: "Bad jobId" }); return; }

@@ -75,6 +75,9 @@ export async function createTipCheckout(input: CreateTipInput): Promise<{ url: s
   const tipId = tip!.id;
 
   const baseUrl = `https://${(process.env["REPLIT_DOMAINS"] ?? "").split(",")[0] ?? ""}`;
+  // Idempotency key on the pre-inserted tip id — double-taps from the tip
+  // screen can't create two Stripe Checkout sessions / charge twice.
+  const idempotencyKey = `tip:${tipId}`;
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
     customer: stripeCustomerId,
@@ -98,7 +101,7 @@ export async function createTipCheckout(input: CreateTipInput): Promise<{ url: s
     success_url: `${baseUrl}/api/payments/checkout/return?status=success`,
     cancel_url: `${baseUrl}/api/payments/checkout/return?status=cancel`,
     metadata: { tipId: String(tipId), tipJobId: String(jobId), kind: "tip" },
-  });
+  }, { idempotencyKey });
 
   await db.update(tipsTable).set({ providerSessionId: session.id }).where(eq(tipsTable.id, tipId));
 
