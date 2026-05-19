@@ -20,7 +20,7 @@ import colors from "@/constants/colors";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import AIAssistantWidget from "@/components/AIAssistantWidget";
-import { MileagePromptHost } from "@/app/transport/[jobId]";
+import { MileagePromptHost } from "@/components/MileagePromptHost";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { setBaseUrl } from "@workspace/api-client-react";
