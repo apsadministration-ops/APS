@@ -5,7 +5,6 @@ import { useColors } from "@/hooks/useColors";
 import { Feather } from "@expo/vector-icons";
 import { Link } from "expo-router";
 import { StatusBadge } from "./StatusBadge";
-import { SourceBadge } from "./SourceBadge";
 
 interface JobCardProps {
   job: Job;
@@ -25,15 +24,9 @@ export function JobCard({ job, showCustomer = false }: JobCardProps) {
             </Text>
             <StatusBadge status={job.status} />
           </View>
-          <View style={styles.subRow}>
-            <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
-              {job.jobType.toUpperCase()}
-            </Text>
-            <SourceBadge
-              sourceType={(job as unknown as { sourceType?: "consumer" | "fleet" | "commercial" }).sourceType}
-              priority={(job as unknown as { fleetPriority?: "standard" | "priority" | "urgent" }).fleetPriority}
-            />
-          </View>
+          <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
+            {job.jobType.toUpperCase()}
+          </Text>
         </View>
 
         <View style={styles.details}>
@@ -93,12 +86,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
     letterSpacing: 0.5,
-  },
-  subRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: 2,
   },
   details: {
     gap: 12,

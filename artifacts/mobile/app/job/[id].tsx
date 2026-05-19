@@ -10,7 +10,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams, useRouter, Stack } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { StatusBadge } from "@/components/StatusBadge";
-import { SourceBadge } from "@/components/SourceBadge";
 import { useAuth } from "@/context/AuthContext";
 import { useState, useEffect } from "react";
 import * as Haptics from "expo-haptics";
@@ -242,13 +241,7 @@ export default function JobDetailScreen() {
                 </Text>
                 <Text style={[styles.vin, { color: colors.mutedForeground }]}>VIN: {job.vin}</Text>
               </View>
-              <View style={{ alignItems: "flex-end", gap: 6 }}>
-                <StatusBadge status={job.status} />
-                <SourceBadge
-                  sourceType={(job as unknown as { sourceType?: "consumer" | "fleet" | "commercial" }).sourceType}
-                  priority={(job as unknown as { fleetPriority?: "standard" | "priority" | "urgent" }).fleetPriority}
-                />
-              </View>
+              <StatusBadge status={job.status} />
             </View>
 
             <Text style={[styles.desc, { color: colors.foreground }]}>{job.description}</Text>

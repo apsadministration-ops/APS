@@ -36,4 +36,3 @@ export * from "./partsCatalog";
 export * from "./partsOrders";
 export * from "./integrationCredentials";
 export * from "./processedStripeEvents";
-export * from "./fleet";

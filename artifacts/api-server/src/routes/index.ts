@@ -37,7 +37,6 @@ import adminFinanceRouter from "./adminFinance";
 import partsRouter from "./parts";
 import mediaRouter from "./media";
 import integrationsRouter from "./integrations";
-import fleetRouter from "./fleet";
 
 const router: IRouter = Router();
 
@@ -79,6 +78,5 @@ router.use(adminFinanceRouter);
 router.use(partsRouter);
 router.use(mediaRouter);
 router.use(integrationsRouter);
-router.use(fleetRouter);
 
 export default router;

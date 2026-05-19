@@ -12,7 +12,7 @@ import * as SplashScreen from "expo-splash-screen";
 import * as SystemUI from "expo-system-ui";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect } from "react";
-import { useColorScheme, ActivityIndicator, Text, Platform } from "react-native";
+import { useColorScheme } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -20,7 +20,7 @@ import colors from "@/constants/colors";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import AIAssistantWidget from "@/components/AIAssistantWidget";
-import { MileagePromptHost } from "@/components/MileagePromptHost";
+import { MileagePromptHost } from "@/app/transport/[jobId]";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { setBaseUrl } from "@workspace/api-client-react";
@@ -62,12 +62,7 @@ function RootLayoutNav() {
   }, [user, isLoading, segments]);
 
   if (isLoading) {
-    return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.light.background }}>
-        <ActivityIndicator size="large" color={colors.light.primary} />
-        <Text style={{ marginTop: 12, color: colors.light.mutedForeground, fontSize: 13 }}>Loading session…</Text>
-      </View>
-    );
+    return <View style={{ flex: 1 }} />;
   }
 
   return (
@@ -127,33 +122,11 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (fontsLoaded || fontError) {
-      SplashScreen.hideAsync().catch(() => undefined);
+      SplashScreen.hideAsync();
     }
   }, [fontsLoaded, fontError]);
 
-  // On web, NEVER block the first paint on fonts. The Replit preview pane
-  // and any browser will show system fallbacks instantly and the custom
-  // fonts pop in when ready. Blocking the entire tree on a multi-MB icon
-  // font bundle is what made the preview look like a white screen.
-  //
-  // On native (iOS/Android) we still gate briefly so Android doesn't fall
-  // back to a CJK glyph for vector icons, but cap it at 1.5s with a hard
-  // timeout so we never deadlock on a stalled font fetch.
-  const [fontTimeout, setFontTimeout] = React.useState(Platform.OS === "web");
-  useEffect(() => {
-    if (Platform.OS === "web") return;
-    const t = setTimeout(() => setFontTimeout(true), 1500);
-    return () => clearTimeout(t);
-  }, []);
-
-  if (!fontsLoaded && !fontError && !fontTimeout) {
-    return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.light.background }}>
-        <ActivityIndicator size="large" color={colors.light.primary} />
-        <Text style={{ marginTop: 12, color: colors.light.mutedForeground, fontSize: 13 }}>Loading fonts…</Text>
-      </View>
-    );
-  }
+  if (!fontsLoaded && !fontError) return null;
 
   return (
     <SafeAreaProvider>

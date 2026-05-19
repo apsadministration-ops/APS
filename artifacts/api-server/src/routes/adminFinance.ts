@@ -17,11 +17,7 @@ const router: IRouter = Router();
  *   GET /admin/finance/flagged            — fraud queue (worklogs)
  */
 
-// IMPORTANT: scope this middleware to /admin/finance only. Without the path
-// prefix Express runs it on EVERY request that falls through to this router
-// (e.g. /fleet/accounts) and 403s non-admin users before later routers can
-// match — which is exactly how the shop-owner Fleet flow silently broke.
-router.use("/admin/finance", authenticate, requireRole("admin"));
+router.use(authenticate, requireRole("admin"));
 
 router.get("/admin/finance/global", async (req: AuthRequest, res): Promise<void> => {
   const windowDays = Math.min(365, Math.max(1, parseInt(String(req.query["days"] ?? "30"), 10) || 30));

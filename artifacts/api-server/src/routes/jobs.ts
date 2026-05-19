@@ -107,12 +107,6 @@ async function formatJob(job: typeof jobsTable.$inferSelect) {
     createdAt: job.createdAt,
     acceptedAt: job.acceptedAt ?? null,
     completedAt: job.completedAt ?? null,
-    // Fleet / commercial injection metadata. Defaults preserve consumer
-    // behavior — these fields are nullable/"consumer" for every existing job.
-    sourceType: job.sourceType,
-    fleetAccountId: job.fleetAccountId ?? null,
-    fleetContractId: job.fleetContractId ?? null,
-    fleetPriority: job.fleetPriority ?? null,
   };
 }
 
