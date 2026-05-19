@@ -95,11 +95,21 @@ export default function FleetScreen() {
   const [draftJobType, setDraftJobType] = useState<"repair" | "diagnostic" | "maintenance" | "detailing">("repair");
   const [draftPriority, setDraftPriority] = useState<Priority>("standard");
 
-  const headers = { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
+  // Build headers fresh per request from the latest token. Computing this
+  // once at render time and then capturing it inside a useCallback meant the
+  // very first mount (when token was still null because AuthContext hadn't
+  // hydrated from AsyncStorage yet) sent `Authorization: Bearer null`, which
+  // the API rightly rejected — so the screen would silently sit on the empty
+  // state and the Create button would silently fail.
+  const authHeaders = useCallback(
+    () => ({ "Content-Type": "application/json", Authorization: `Bearer ${token ?? ""}` }),
+    [token],
+  );
 
   const loadAccounts = useCallback(async () => {
+    if (!token) return; // wait for auth to hydrate
     try {
-      const r = await fetch("/api/fleet/accounts", { headers });
+      const r = await fetch("/api/fleet/accounts", { headers: authHeaders() });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const data: FleetAccount[] = await r.json();
       setAccounts(data);
@@ -110,20 +120,22 @@ export default function FleetScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [token]);
+  }, [token, authHeaders]);
 
   const loadDetail = useCallback(async (id: number) => {
+    if (!token) return;
     try {
-      const r = await fetch(`/api/fleet/accounts/${id}`, { headers });
+      const r = await fetch(`/api/fleet/accounts/${id}`, { headers: authHeaders() });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const data = await r.json();
       setDetail({ contracts: data.contracts ?? [], vehicles: data.vehicles ?? [] });
     } catch (e) {
       console.warn("fleet detail load failed", e);
     }
-  }, [token]);
+  }, [token, authHeaders]);
 
-  useEffect(() => { loadAccounts(); }, []);
+  // Re-run as soon as the token becomes available (auth hydration finishes).
+  useEffect(() => { loadAccounts(); }, [loadAccounts]);
   useEffect(() => { if (selectedId != null) loadDetail(selectedId); }, [selectedId, loadDetail]);
 
   const openAccountModal = () => {
@@ -138,7 +150,7 @@ export default function FleetScreen() {
     setBusy(true);
     try {
       const r = await fetch("/api/fleet/accounts", {
-        method: "POST", headers,
+        method: "POST", headers: authHeaders(),
         body: JSON.stringify({
           companyName: acctName.trim(),
           accountKind: acctKind,
@@ -174,7 +186,7 @@ export default function FleetScreen() {
     setBusy(true);
     try {
       const r = await fetch(`/api/fleet/accounts/${selectedId}/vehicles`, {
-        method: "POST", headers,
+        method: "POST", headers: authHeaders(),
         body: JSON.stringify({
           vin: vVin.trim().toUpperCase(), make: vMake.trim(), model: vModel.trim(),
           year: yr, mileage: 0, label: vLabel.trim() || null,
@@ -197,7 +209,7 @@ export default function FleetScreen() {
     setBusy(true);
     try {
       const r = await fetch(`/api/fleet/jobs`, {
-        method: "POST", headers,
+        method: "POST", headers: authHeaders(),
         body: JSON.stringify({
           accountId: selectedId,
           requests: [{
