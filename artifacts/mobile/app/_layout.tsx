@@ -11,8 +11,8 @@ import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import * as SystemUI from "expo-system-ui";
 import { StatusBar } from "expo-status-bar";
-import React, { useEffect, useState } from "react";
-import { Platform, useColorScheme } from "react-native";
+import React, { useEffect } from "react";
+import { useColorScheme } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -112,20 +112,6 @@ export default function RootLayout() {
     ...MaterialCommunityIcons.font,
   });
 
-  // Safety timeout: on web the Google Fonts CDN can hang silently
-  // (no resolve, no error), leaving the app stuck on a white screen.
-  // On web, render IMMEDIATELY with system fonts; web fonts swap in
-  // when they finish loading (FOUT). On native, give fonts up to 800ms
-  // (they normally resolve in <100ms), then render anyway.
-  const isWeb = Platform.OS === "web";
-  const [fontTimeout, setFontTimeout] = useState(isWeb);
-  useEffect(() => {
-    if (isWeb) return;
-    const t = setTimeout(() => setFontTimeout(true), 800);
-    return () => clearTimeout(t);
-  }, [isWeb]);
-  const fontsReady = fontsLoaded || !!fontError || fontTimeout;
-
   // Set the native window background color BEFORE first paint so Android
   // doesn't flash white between the splash teardown and the first JS frame
   // (most visible on dark mode). Safe to call on every theme change.
@@ -135,12 +121,12 @@ export default function RootLayout() {
   }, [isDark]);
 
   useEffect(() => {
-    if (fontsReady) {
-      SplashScreen.hideAsync().catch(() => undefined);
+    if (fontsLoaded || fontError) {
+      SplashScreen.hideAsync();
     }
-  }, [fontsReady]);
+  }, [fontsLoaded, fontError]);
 
-  if (!fontsReady) return null;
+  if (!fontsLoaded && !fontError) return null;
 
   return (
     <SafeAreaProvider>
