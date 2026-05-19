@@ -56,6 +56,13 @@ export const jobsTable = pgTable("jobs", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   acceptedAt: timestamp("accepted_at", { withTimezone: true }),
   completedAt: timestamp("completed_at", { withTimezone: true }),
+  // Fleet / Commercial injection tagging. Defaults preserve "normal customer"
+  // behavior — pure metadata for analytics + a mechanic-side badge. Does NOT
+  // influence dispatch, acceptance, completion flow, or earnings.
+  sourceType: text("source_type", { enum: ["consumer", "fleet", "commercial"] }).notNull().default("consumer"),
+  fleetAccountId: integer("fleet_account_id"),
+  fleetContractId: integer("fleet_contract_id"),
+  fleetPriority: text("fleet_priority", { enum: ["standard", "priority", "urgent"] }),
 }, (t) => [
   index("jobs_vin_idx").on(t.vin),
   index("jobs_customer_id_idx").on(t.customerId),

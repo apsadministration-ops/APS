@@ -157,6 +157,20 @@ End-to-end parts sourcing system that runs from the moment a job is accepted.
   - `artifacts/mobile/app/job/[id]/invoice.tsx` — customer invoice now renders `installedParts` rows under Parts
   - `scripts/src/{migrate_parts_system.mjs,seed_parts_catalog.mjs}` — idempotent migration + 32-entry seed (Ford / Toyota / Honda / Chevy / Subaru — filters, brake pads/rotors, batteries, alternators, plugs, wipers, belts) with aps-curated offers at 95% MSRP
 
+## Fleet & Commercial Job Injection Layer
+
+Pure additive layer for fleet/commercial accounts. Customer + mechanic workflows are untouched — fleet/commercial requests are converted into NORMAL `jobs` rows that flow through the existing dispatch → accept → complete pipeline. Mechanics only see a small `FLEET` / `COMMERCIAL` badge + optional priority pill.
+
+- **Schema additions:** `fleet_accounts` (company, kind=fleet|commercial, service tier, default priority, response SLA), `fleet_contracts` (per-account contracts w/ optional priority override), `fleet_vehicles` (per-account vehicle list, find-or-create linked to global `vehicles` by VIN). `jobs` gains 4 optional cols: `sourceType` (DEFAULT 'consumer'), `fleetAccountId`, `fleetContractId`, `fleetPriority` — defaults preserve every existing row as consumer.
+- **Intake (`POST /fleet/jobs`):** Shop-owner/admin only. Bulk array of `{fleetVehicleId|vehicleId, description, serviceSlug?, jobType?, priority?}`. Reuses the SAME catalog resolution as `POST /jobs` (`findServiceBySlug` → category + tier), so visibility, tier-gating, and commission math are byte-identical to consumer jobs. `customerId` on the inserted job = `fleetAccount.ownerId` so the fleet owner is the customer-of-record (same IDOR rules apply on the invoice/work-confirmation flow).
+- **Auth:** `/fleet/*` gated to `shop_owner` + `admin`. `assertAccountAccess()` enforces ownership IDOR for shop_owners (admins see all).
+- **Mechanic UI:** `SourceBadge` returns null for `sourceType='consumer'`, so consumer job cards/detail screens render identically to before. For fleet/commercial it adds a 1-line pill next to the StatusBadge with an optional priority chip.
+- **Where things live:**
+  - `lib/db/src/schema/fleet.ts` — 3 tables + Zod insert schemas
+  - `artifacts/api-server/src/routes/fleet.ts` — all `/fleet/*` endpoints (accounts CRUD, contracts, vehicles, bulk intake, list-jobs)
+  - `artifacts/mobile/components/SourceBadge.tsx` — pill component, null for consumer
+  - `artifacts/mobile/app/(shop-owner)/fleet.tsx` — shop-owner Fleet management tab (accounts, vehicles, submit job)
+
 ## Content Asset Library + Integrations groundwork
 
 - **Content Asset Library:** `/admin/growth/library` (mobile) + `/admin/growth/library` & `/library/stats` (API). Grid of every generated post with its primary media-asset thumbnail, status pill, engagement score badge, lineage (reuse count / parent / reused-from), and engagement breakdown (likes/shares/comments). Filters validated server-side via zod allowlist (platform / status / topicKind / minScore), three sort modes (recent | engagement | published), and pagination. Status-count cards on the screen act as one-tap status filters.

@@ -64,6 +64,13 @@ export default function ShopOwnerTabLayout() {
         }}
       />
       <Tabs.Screen
+        name="fleet"
+        options={{
+          title: "Fleet",
+          tabBarIcon: ({ color }) => <Feather name="truck" size={22} color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="profile"
         options={{
           title: "Profile",
