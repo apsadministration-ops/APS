@@ -12,7 +12,7 @@ import * as SplashScreen from "expo-splash-screen";
 import * as SystemUI from "expo-system-ui";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect, useState } from "react";
-import { useColorScheme } from "react-native";
+import { Platform, useColorScheme } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -113,14 +113,17 @@ export default function RootLayout() {
   });
 
   // Safety timeout: on web the Google Fonts CDN can hang silently
-  // (no resolve, no error), leaving the app stuck on a white screen
-  // forever. After 3s we render anyway and let system fonts fill in
-  // until the web fonts swap on arrival.
-  const [fontTimeout, setFontTimeout] = useState(false);
+  // (no resolve, no error), leaving the app stuck on a white screen.
+  // On web, render IMMEDIATELY with system fonts; web fonts swap in
+  // when they finish loading (FOUT). On native, give fonts up to 800ms
+  // (they normally resolve in <100ms), then render anyway.
+  const isWeb = Platform.OS === "web";
+  const [fontTimeout, setFontTimeout] = useState(isWeb);
   useEffect(() => {
-    const t = setTimeout(() => setFontTimeout(true), 3000);
+    if (isWeb) return;
+    const t = setTimeout(() => setFontTimeout(true), 800);
     return () => clearTimeout(t);
-  }, []);
+  }, [isWeb]);
   const fontsReady = fontsLoaded || !!fontError || fontTimeout;
 
   // Set the native window background color BEFORE first paint so Android
