@@ -11,7 +11,7 @@ import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import * as SystemUI from "expo-system-ui";
 import { StatusBar } from "expo-status-bar";
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useColorScheme } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
@@ -112,6 +112,17 @@ export default function RootLayout() {
     ...MaterialCommunityIcons.font,
   });
 
+  // Safety timeout: on web the Google Fonts CDN can hang silently
+  // (no resolve, no error), leaving the app stuck on a white screen
+  // forever. After 3s we render anyway and let system fonts fill in
+  // until the web fonts swap on arrival.
+  const [fontTimeout, setFontTimeout] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setFontTimeout(true), 3000);
+    return () => clearTimeout(t);
+  }, []);
+  const fontsReady = fontsLoaded || !!fontError || fontTimeout;
+
   // Set the native window background color BEFORE first paint so Android
   // doesn't flash white between the splash teardown and the first JS frame
   // (most visible on dark mode). Safe to call on every theme change.
@@ -121,12 +132,12 @@ export default function RootLayout() {
   }, [isDark]);
 
   useEffect(() => {
-    if (fontsLoaded || fontError) {
-      SplashScreen.hideAsync();
+    if (fontsReady) {
+      SplashScreen.hideAsync().catch(() => undefined);
     }
-  }, [fontsLoaded, fontError]);
+  }, [fontsReady]);
 
-  if (!fontsLoaded && !fontError) return null;
+  if (!fontsReady) return null;
 
   return (
     <SafeAreaProvider>
