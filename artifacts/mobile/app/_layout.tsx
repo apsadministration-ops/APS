@@ -12,7 +12,7 @@ import * as SplashScreen from "expo-splash-screen";
 import * as SystemUI from "expo-system-ui";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect } from "react";
-import { useColorScheme } from "react-native";
+import { useColorScheme, ActivityIndicator, Text } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -62,7 +62,12 @@ function RootLayoutNav() {
   }, [user, isLoading, segments]);
 
   if (isLoading) {
-    return <View style={{ flex: 1 }} />;
+    return (
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.light.background }}>
+        <ActivityIndicator size="large" color={colors.light.primary} />
+        <Text style={{ marginTop: 12, color: colors.light.mutedForeground, fontSize: 13 }}>Loading session…</Text>
+      </View>
+    );
   }
 
   return (
@@ -122,11 +127,27 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (fontsLoaded || fontError) {
-      SplashScreen.hideAsync();
+      SplashScreen.hideAsync().catch(() => undefined);
     }
   }, [fontsLoaded, fontError]);
 
-  if (!fontsLoaded && !fontError) return null;
+  // Safety: hard timeout that forces the app past the font gate after 4s,
+  // even if the font loader silently stalls. Better to show fallback fonts
+  // than a blank screen forever.
+  const [fontTimeout, setFontTimeout] = React.useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setFontTimeout(true), 4000);
+    return () => clearTimeout(t);
+  }, []);
+
+  if (!fontsLoaded && !fontError && !fontTimeout) {
+    return (
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.light.background }}>
+        <ActivityIndicator size="large" color={colors.light.primary} />
+        <Text style={{ marginTop: 12, color: colors.light.mutedForeground, fontSize: 13 }}>Loading fonts…</Text>
+      </View>
+    );
+  }
 
   return (
     <SafeAreaProvider>
