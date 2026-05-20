@@ -127,11 +127,25 @@ router.post("/payments/jobs/:jobId/checkout", authenticate, checkoutCreationLimi
   // working down a level (or more) → 25/75. Single source of truth in
   // `@workspace/tier-catalog`. Legacy jobs without a `requiredTier` fall back
   // to detailer (the lowest tier) which gives mechanics the normal split.
-  const commission = commissionForJob({
-    category: job.jobType as ServiceCategory,
-    jobTier: ((job.requiredTier ?? "detailer") as TierKey),
-    mechanicTier: (mechanic.mechanicTier ?? "detailer") as TierKey,
-  });
+  // OVERRIDE: Fleet/Dealership partner-posted jobs stamp a flat platform-fee
+  // at post-time (default 15%, 10% for GSA/Government accounts). When set,
+  // this replaces the tier-catalog rate end-to-end (authorization +
+  // capture). Same shape so downstream Stripe + ledger code is unchanged.
+  const commission = (job.commissionPctOverride != null && Number.isFinite(job.commissionPctOverride))
+    ? (() => {
+        const platformPct = Math.max(0, Math.min(100, Math.round(job.commissionPctOverride!)));
+        return {
+          platformPct, mechanicPct: 100 - platformPct,
+          platformRate: platformPct / 100, mechanicRate: (100 - platformPct) / 100,
+          reason: "normal" as const,
+          reasonLabel: `Partner-posted job — flat ${platformPct}% platform fee.`,
+        };
+      })()
+    : commissionForJob({
+        category: job.jobType as ServiceCategory,
+        jobTier: ((job.requiredTier ?? "detailer") as TierKey),
+        mechanicTier: (mechanic.mechanicTier ?? "detailer") as TierKey,
+      });
   // True Net Profit: APS commission applies ONLY to (revenue − parts cost).
   // Mechanic gets the parts-cost passthrough at 100% plus their share of net
   // profit. Catalog entry preferred; if missing, fall back to category default.

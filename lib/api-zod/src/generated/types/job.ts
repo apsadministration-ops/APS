@@ -6,8 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { JobJobType } from "./jobJobType";
+import type { JobPartnerKindSnapshot } from "./jobPartnerKindSnapshot";
 import type { JobRequiredTier } from "./jobRequiredTier";
 import type { JobStatus } from "./jobStatus";
+import type { JobUrgency } from "./jobUrgency";
 import type { Vehicle } from "./vehicle";
 
 export interface Job {
@@ -47,4 +49,14 @@ export interface Job {
   serviceSlug?: string | null;
   /** Minimum mechanic tier required to accept. Derived server-side from serviceSlug. Null = legacy job (treated as `detailer`). */
   requiredTier?: JobRequiredTier;
+  /** Set when this job was posted by a Fleet or Dealership partner via POST /partner/jobs. */
+  postedByShopId?: number | null;
+  /** Denormalized snapshot of the posting shop's partnerKind at post-time. */
+  partnerKindSnapshot?: JobPartnerKindSnapshot;
+  /** Priority window class. Drives `juniorVisibleAt`. */
+  urgency: JobUrgency;
+  /** Timestamp at which sub-senior mechanics (technician/detailer) can see this partner-posted job. Null for customer-posted jobs. */
+  juniorVisibleAt?: Date | null;
+  /** Bulk/recurring service group id for consolidated invoicing. */
+  recurringGroupId?: string | null;
 }

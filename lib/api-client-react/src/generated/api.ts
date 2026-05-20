@@ -36,6 +36,8 @@ import type {
   CreateFlagBody,
   CreateInspectionBody,
   CreateJobBody,
+  CreatePartnerJob201,
+  CreatePartnerJobBody,
   CreatePartsCatalogEntry201,
   CreatePartsOrder201,
   CreatePartsOrderBody,
@@ -2010,6 +2012,101 @@ export function useListAvailableJobs<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * Fleet & Commercial Partner job posting. Only owners of shops with
+`partnerKind ∈ {dealership, fleet}` may post here — independent
+shops rent bays via `/bays` instead. The server stamps a flat
+commission override (default 15%, or 10% for GSA accounts when
+`shop.commissionOverridePct` is configured) and a tier-priority
+window: `urgent`=visible to all qualified mechanics immediately,
+`high`=junior tiers wait 15m, `normal`=1h, `low`=4h. Senior+
+mechanics always see partner-posted jobs immediately.
+
+ * @summary Post a job from a Fleet or Dealership partner
+ */
+export const getCreatePartnerJobUrl = () => {
+  return `/api/partner/jobs`;
+};
+
+export const createPartnerJob = async (
+  createPartnerJobBody: CreatePartnerJobBody,
+  options?: RequestInit,
+): Promise<CreatePartnerJob201> => {
+  return customFetch<CreatePartnerJob201>(getCreatePartnerJobUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createPartnerJobBody),
+  });
+};
+
+export const getCreatePartnerJobMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createPartnerJob>>,
+    TError,
+    { data: BodyType<CreatePartnerJobBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createPartnerJob>>,
+  TError,
+  { data: BodyType<CreatePartnerJobBody> },
+  TContext
+> => {
+  const mutationKey = ["createPartnerJob"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createPartnerJob>>,
+    { data: BodyType<CreatePartnerJobBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createPartnerJob(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreatePartnerJobMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createPartnerJob>>
+>;
+export type CreatePartnerJobMutationBody = BodyType<CreatePartnerJobBody>;
+export type CreatePartnerJobMutationError = ErrorType<void>;
+
+/**
+ * @summary Post a job from a Fleet or Dealership partner
+ */
+export const useCreatePartnerJob = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createPartnerJob>>,
+    TError,
+    { data: BodyType<CreatePartnerJobBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createPartnerJob>>,
+  TError,
+  { data: BodyType<CreatePartnerJobBody> },
+  TContext
+> => {
+  return useMutation(getCreatePartnerJobMutationOptions(options));
+};
 
 /**
  * Public, cacheable. Single source of truth for tiers, services, and commission percentages.

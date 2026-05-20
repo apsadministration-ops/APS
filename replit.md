@@ -138,6 +138,13 @@ artifacts/mobile/app/mechanic/earnings.tsx     — "How Much Can You Earn?" page
 - **Mechanic:** Register (pending approval), browse/accept jobs (tier-filtered), update status, share GPS, submit work logs, add certifications, rate/review/report customers, view profile, access OBD2/parts catalog.
 - **Admin:** Manage users, promote mechanic tiers, release payments, resolve user reports, view platform dashboard.
 
+## Fleet & Commercial Partners (formerly Shop Owners)
+
+- **Role model:** DB `role="shop_owner"` (preserved for zero-downtime). UI is rebranded to "Partner". Each shop row has `partnerKind ∈ {independent_shop, dealership, fleet}` + optional `commissionOverridePct` (0..100, DB-checked). One owner can manage multiple locations of any kind.
+- **Partner-posted jobs (`POST /partner/jobs`):** Only `dealership` and `fleet` partners can post jobs (independent shops rent bays via `/bays`). Server stamps `postedByShopId`, `partnerKindSnapshot`, `urgency`, `commissionPctOverride` (clamped 0..100 at write + DB CHECK), and `juniorVisibleAt` on `jobs`. **Customer-of-record = `shop.ownerId`** — they receive 24h-confirmation pushes, pay through Stripe, and review the mechanic via the normal customer flows. The (shop-owner) UI exposes posted jobs through the standard customer surfaces.
+- **Flat commission for partner jobs:** When `jobs.commissionPctOverride` is set, `financialEngine.computeBreakdown` constructs a synthetic `CommissionResult` from that pct and skips `commissionForJob()`. The override flows through BOTH authorization (`payments.ts`) and capture (`payoutHoldEngine.captureNow → computeBreakdown`), so Stripe `application_fee_amount` matches at both points. Default 15%; configure `shops.commissionOverridePct=10` for GSA/Government accounts. Customer invoice (`customerInvoiceView`) airgap is preserved — override never leaves the server.
+- **Tier-priority window:** `jobs.juniorVisibleAt` gates sub-senior mechanics (technician/detailer). Urgency → window: `urgent=0s`, `high=15m`, `normal=1h`, `low=4h`. Senior/advanced/master see partner jobs immediately. Customer-posted jobs leave `juniorVisibleAt=null` and follow the standard tier-equality filter. Push notifications mirror the same gate (urgent → all; otherwise senior+ only) — junior tiers discover late jobs by polling `/jobs/available` after the window opens.
+
 ## VIN-Integrated Parts Matching
 
 End-to-end parts sourcing system that runs from the moment a job is accepted.

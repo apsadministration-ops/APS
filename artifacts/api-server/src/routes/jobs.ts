@@ -100,6 +100,11 @@ async function formatJob(job: typeof jobsTable.$inferSelect) {
     customerTransportApproved: job.customerTransportApproved,
     serviceSlug: job.serviceSlug ?? null,
     requiredTier: (job.requiredTier ?? null) as TierKey | null,
+    postedByShopId: job.postedByShopId ?? null,
+    partnerKindSnapshot: job.partnerKindSnapshot ?? null,
+    urgency: job.urgency,
+    juniorVisibleAt: job.juniorVisibleAt ?? null,
+    recurringGroupId: job.recurringGroupId ?? null,
     vehicle: vehicle ? {
       id: vehicle.id, vin: vehicle.vin, make: vehicle.make, model: vehicle.model,
       year: vehicle.year, trim: vehicle.trim ?? null, color: vehicle.color ?? null, createdAt: vehicle.createdAt,
@@ -149,15 +154,24 @@ router.get("/jobs/available", authenticate, async (req: AuthRequest, res): Promi
     const myLevel = tierLevel(myTier);
     const mode = String((req.query as { mode?: string }).mode ?? "my_tier");
 
+    // Fleet & Commercial Partner priority window: partner-posted jobs (with
+    // a non-null juniorVisibleAt) are visible to senior+ tiers immediately
+    // and to junior tiers (technician/detailer) only after the window
+    // elapses. Window is urgency-driven (urgent=0s, high=15m, normal=1h,
+    // low=4h) and stamped at post-time by partnerJobs.ts.
+    const nowMs = Date.now();
+    const seniorLevel = tierLevel("senior");
     jobs = jobs.filter((j) => {
-      // Legacy fallback: jobs without `requiredTier` (created before the
-      // catalog rollout) are treated as detailer-tier so existing behaviour
-      // is preserved (visible to anyone who could see them before).
       const reqTier = (j.requiredTier as TierKey | null) ?? "detailer";
       const reqLevel = tierLevel(reqTier);
       // Mechanics may NEVER see jobs above their tier — they couldn't
       // accept them anyway and the address/customer info is sensitive.
       if (reqLevel > myLevel) return false;
+      // Partner-priority gate: if the job has a juniorVisibleAt and the
+      // mechanic is sub-senior, hide until the window elapses.
+      if (j.juniorVisibleAt != null && myLevel < seniorLevel) {
+        if (new Date(j.juniorVisibleAt).getTime() > nowMs) return false;
+      }
       if (mode === "work_down") return true;
       // Default "my_tier": exact-tier-match only (or legacy detailer rows
       // for everyone who's at-or-above detailer, which is everyone).

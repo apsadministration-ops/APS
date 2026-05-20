@@ -24,7 +24,15 @@ export default function ShopsListScreen() {
   });
   const createMutation = useCreateShop();
 
+  type PartnerKind = "independent_shop" | "dealership" | "fleet";
+  const PARTNER_KINDS: { value: PartnerKind; label: string; icon: keyof typeof Feather.glyphMap; desc: string }[] = [
+    { value: "independent_shop", label: "Independent Shop", icon: "tool", desc: "Rent out bays and lifts to mechanics by the hour or day." },
+    { value: "dealership",       label: "Dealership",       icon: "award", desc: "Service department posting overflow jobs to qualified mechanics." },
+    { value: "fleet",            label: "Fleet",            icon: "truck", desc: "Corporate, gov, rental, or trucking — VIN-based service history across your fleet." },
+  ];
+
   const [showForm, setShowForm] = useState(false);
+  const [partnerKind, setPartnerKind] = useState<PartnerKind>("independent_shop");
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
   const [city, setCity] = useState("");
@@ -44,6 +52,7 @@ export default function ShopsListScreen() {
     createMutation.mutate(
       {
         data: {
+          partnerKind,
           name: name.trim(),
           address: address.trim(),
           city: city.trim(),
@@ -57,15 +66,23 @@ export default function ShopsListScreen() {
       {
         onSuccess: () => {
           setShowForm(false);
+          setPartnerKind("independent_shop");
           setName(""); setAddress(""); setCity(""); setRegion(""); setZipCode("");
           setPhone(""); setInsuranceCarrier(""); setInsurancePolicy("");
           queryClient.invalidateQueries({ queryKey: getListMyShopsQueryKey() });
-          void alertMessage("Shop created", "You can now add bays inside this shop.");
+          void alertMessage("Partner location created", "You can now configure bays, jobs, or fleet vehicles inside this location.");
         },
-        onError: (e: any) => setError(e?.message ?? "Failed to create shop."),
+        onError: (e: any) => setError(e?.message ?? "Failed to create partner location."),
       },
     );
   };
+
+  const kindLabel = (k: string | null | undefined) =>
+    k === "dealership" ? "Dealership" :
+    k === "fleet" ? "Fleet" : "Independent Shop";
+  const kindIcon = (k: string | null | undefined): keyof typeof Feather.glyphMap =>
+    k === "dealership" ? "award" :
+    k === "fleet" ? "truck" : "tool";
 
   if (isLoading) {
     return (
@@ -82,40 +99,47 @@ export default function ShopsListScreen() {
         bottomOffset={20}
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.primary} />}
       >
-        <Text style={[styles.heading, { color: colors.foreground }]}>Your Shops</Text>
+        <Text style={[styles.heading, { color: colors.foreground }]}>Fleet & Commercial Partners</Text>
         <Text style={[styles.sub, { color: colors.mutedForeground }]}>
-          Each shop hosts one or more service bays that mechanics can rent for ghost-garage jobs.
+          Manage your independent shops, dealership service departments, and fleets. One owner, multiple locations.
         </Text>
 
         {(shops ?? []).length === 0 ? (
           <View style={[styles.empty, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Feather name="home" size={42} color={colors.mutedForeground} />
-            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No shops yet</Text>
+            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No locations yet</Text>
             <Text style={[styles.emptyDesc, { color: colors.mutedForeground }]}>
-              Add your first shop to start renting out bays.
+              Add your first location — shop, dealership, or fleet — to get started.
             </Text>
           </View>
         ) : (
           <View style={{ gap: 10, marginTop: 8 }}>
-            {(shops ?? []).map((s) => (
-              <Pressable
-                key={s.id}
-                style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
-                onPress={() => router.push(`/shop/${s.id}`)}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.cardTitle, { color: colors.foreground }]}>{s.name}</Text>
-                  <Text style={[styles.cardSub, { color: colors.mutedForeground }]} numberOfLines={2}>
-                    {s.address}, {s.city}, {s.region} {s.zipCode}
-                  </Text>
-                  <View style={styles.statusRow}>
-                    <View style={[styles.statusDot, { backgroundColor: s.status === "active" ? "#22C55E" : "#F59E0B" }]} />
-                    <Text style={[styles.statusText, { color: colors.mutedForeground }]}>{s.status}</Text>
+            {(shops ?? []).map((s) => {
+              const k = (s as any).partnerKind as string | undefined;
+              return (
+                <Pressable
+                  key={s.id}
+                  style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
+                  onPress={() => router.push(`/shop/${s.id}`)}
+                >
+                  <View style={[styles.kindBadge, { backgroundColor: colors.primary + "18" }]}>
+                    <Feather name={kindIcon(k)} size={18} color={colors.primary} />
                   </View>
-                </View>
-                <Feather name="chevron-right" size={22} color={colors.mutedForeground} />
-              </Pressable>
-            ))}
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.cardTitle, { color: colors.foreground }]}>{s.name}</Text>
+                    <Text style={[styles.kindPill, { color: colors.primary }]}>{kindLabel(k)}</Text>
+                    <Text style={[styles.cardSub, { color: colors.mutedForeground }]} numberOfLines={2}>
+                      {s.address}, {s.city}, {s.region} {s.zipCode}
+                    </Text>
+                    <View style={styles.statusRow}>
+                      <View style={[styles.statusDot, { backgroundColor: s.status === "active" ? "#22C55E" : "#F59E0B" }]} />
+                      <Text style={[styles.statusText, { color: colors.mutedForeground }]}>{s.status}</Text>
+                    </View>
+                  </View>
+                  <Feather name="chevron-right" size={22} color={colors.mutedForeground} />
+                </Pressable>
+              );
+            })}
           </View>
         )}
 
@@ -125,13 +149,40 @@ export default function ShopsListScreen() {
         >
           <Feather name={showForm ? "x" : "plus"} size={18} color={colors.primary} />
           <Text style={[styles.toggleBtnText, { color: colors.primary }]}>
-            {showForm ? "Cancel" : "Add a Shop"}
+            {showForm ? "Cancel" : "Add a Location"}
           </Text>
         </Pressable>
 
         {showForm && (
           <View style={[styles.formCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.formTitle, { color: colors.foreground }]}>New Shop</Text>
+            <Text style={[styles.formTitle, { color: colors.foreground }]}>New Partner Location</Text>
+
+            <Text style={[styles.label, { color: colors.mutedForeground }]}>PARTNER TYPE *</Text>
+            <View style={{ gap: 8 }}>
+              {PARTNER_KINDS.map((k) => {
+                const selected = partnerKind === k.value;
+                return (
+                  <Pressable
+                    key={k.value}
+                    onPress={() => setPartnerKind(k.value)}
+                    style={[
+                      styles.kindRow,
+                      {
+                        backgroundColor: selected ? colors.primary + "14" : colors.background,
+                        borderColor: selected ? colors.primary : colors.border,
+                      },
+                    ]}
+                  >
+                    <Feather name={k.icon} size={20} color={selected ? colors.primary : colors.mutedForeground} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.kindRowLabel, { color: selected ? colors.primary : colors.foreground }]}>{k.label}</Text>
+                      <Text style={[styles.kindRowDesc, { color: colors.mutedForeground }]}>{k.desc}</Text>
+                    </View>
+                    {selected && <Feather name="check-circle" size={18} color={colors.primary} />}
+                  </Pressable>
+                );
+              })}
+            </View>
 
             <Text style={[styles.label, { color: colors.mutedForeground }]}>NAME *</Text>
             <TextInput
@@ -248,6 +299,14 @@ const styles = StyleSheet.create({
   statusRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6 },
   statusDot: { width: 8, height: 8, borderRadius: 4 },
   statusText: { fontSize: 12, fontWeight: "600", textTransform: "capitalize" },
+  kindBadge: { width: 38, height: 38, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  kindPill: { fontSize: 11, fontWeight: "800", letterSpacing: 0.6, marginTop: 2, textTransform: "uppercase" },
+  kindRow: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    padding: 12, borderRadius: 12, borderWidth: 1,
+  },
+  kindRowLabel: { fontSize: 14, fontWeight: "700" },
+  kindRowDesc: { fontSize: 12, marginTop: 2, lineHeight: 16 },
   toggleBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center",
     gap: 8, height: 48, borderRadius: 12, borderWidth: 1, marginTop: 16,

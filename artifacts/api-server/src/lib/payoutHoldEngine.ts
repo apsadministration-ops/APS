@@ -274,6 +274,9 @@ export async function captureNow(
       category: job.jobType as ServiceCategory,
       jobTier: (job.requiredTier ?? "detailer") as import("@workspace/tier-catalog").TierKey,
       mechanicTier: (mechRow?.mechanicTier ?? "detailer") as import("@workspace/tier-catalog").TierKey,
+      // Partner override flows through here too so capture math matches
+      // authorization math. Tier-catalog rate applies when this is null.
+      commissionPctOverride: job.commissionPctOverride ?? null,
     });
 
     await stripe.paymentIntents.capture(pmt.providerPaymentIntentId, {

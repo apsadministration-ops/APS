@@ -777,6 +777,31 @@ export const ListJobsResponseItem = zod.object({
     .describe(
       "Minimum mechanic tier required to accept. Derived server-side from serviceSlug. Null = legacy job (treated as `detailer`).",
     ),
+  postedByShopId: zod
+    .number()
+    .nullish()
+    .describe(
+      "Set when this job was posted by a Fleet or Dealership partner via POST \/partner\/jobs.",
+    ),
+  partnerKindSnapshot: zod
+    .enum(["independent_shop", "dealership", "fleet"])
+    .nullish()
+    .describe(
+      "Denormalized snapshot of the posting shop's partnerKind at post-time.",
+    ),
+  urgency: zod
+    .enum(["low", "normal", "high", "urgent"])
+    .describe("Priority window class. Drives `juniorVisibleAt`."),
+  juniorVisibleAt: zod.coerce
+    .date()
+    .nullish()
+    .describe(
+      "Timestamp at which sub-senior mechanics (technician\/detailer) can see this partner-posted job. Null for customer-posted jobs.",
+    ),
+  recurringGroupId: zod
+    .string()
+    .nullish()
+    .describe("Bulk\/recurring service group id for consolidated invoicing."),
 });
 export const ListJobsResponse = zod.array(ListJobsResponseItem);
 
@@ -895,10 +920,86 @@ export const ListAvailableJobsResponseItem = zod.object({
     .describe(
       "Minimum mechanic tier required to accept. Derived server-side from serviceSlug. Null = legacy job (treated as `detailer`).",
     ),
+  postedByShopId: zod
+    .number()
+    .nullish()
+    .describe(
+      "Set when this job was posted by a Fleet or Dealership partner via POST \/partner\/jobs.",
+    ),
+  partnerKindSnapshot: zod
+    .enum(["independent_shop", "dealership", "fleet"])
+    .nullish()
+    .describe(
+      "Denormalized snapshot of the posting shop's partnerKind at post-time.",
+    ),
+  urgency: zod
+    .enum(["low", "normal", "high", "urgent"])
+    .describe("Priority window class. Drives `juniorVisibleAt`."),
+  juniorVisibleAt: zod.coerce
+    .date()
+    .nullish()
+    .describe(
+      "Timestamp at which sub-senior mechanics (technician\/detailer) can see this partner-posted job. Null for customer-posted jobs.",
+    ),
+  recurringGroupId: zod
+    .string()
+    .nullish()
+    .describe("Bulk\/recurring service group id for consolidated invoicing."),
 });
 export const ListAvailableJobsResponse = zod.array(
   ListAvailableJobsResponseItem,
 );
+
+/**
+ * Fleet & Commercial Partner job posting. Only owners of shops with
+`partnerKind ∈ {dealership, fleet}` may post here — independent
+shops rent bays via `/bays` instead. The server stamps a flat
+commission override (default 15%, or 10% for GSA accounts when
+`shop.commissionOverridePct` is configured) and a tier-priority
+window: `urgent`=visible to all qualified mechanics immediately,
+`high`=junior tiers wait 15m, `normal`=1h, `low`=4h. Senior+
+mechanics always see partner-posted jobs immediately.
+
+ * @summary Post a job from a Fleet or Dealership partner
+ */
+export const CreatePartnerJobBody = zod.object({
+  shopId: zod
+    .number()
+    .describe(
+      "Partner shop posting the job. Must have partnerKind=dealership or fleet.",
+    ),
+  vehicleId: zod
+    .number()
+    .describe(
+      "Vehicle from the partner's fleet (must be pre-registered via POST \/vehicles).",
+    ),
+  serviceSlug: zod
+    .string()
+    .optional()
+    .describe(
+      "Preferred. Slug from \/tier-catalog. Server derives jobType + requiredTier.",
+    ),
+  jobType: zod
+    .enum(["repair", "diagnostic", "maintenance", "detailing"])
+    .optional()
+    .describe("Optional fallback when serviceSlug is not supplied."),
+  description: zod.string(),
+  locationLat: zod.number().optional(),
+  locationLng: zod.number().optional(),
+  locationAddress: zod.string().optional(),
+  urgency: zod
+    .enum(["low", "normal", "high", "urgent"])
+    .optional()
+    .describe(
+      "Defaults to `normal`. Drives the tier-priority window for who sees the job when.",
+    ),
+  recurringGroupId: zod
+    .string()
+    .optional()
+    .describe(
+      "Optional. Stamps a group id for bulk\/recurring fleet ops (e.g. monthly oil changes across 12 vehicles).",
+    ),
+});
 
 /**
  * Public, cacheable. Single source of truth for tiers, services, and commission percentages.
@@ -1027,6 +1128,31 @@ export const GetJobResponse = zod.object({
     .describe(
       "Minimum mechanic tier required to accept. Derived server-side from serviceSlug. Null = legacy job (treated as `detailer`).",
     ),
+  postedByShopId: zod
+    .number()
+    .nullish()
+    .describe(
+      "Set when this job was posted by a Fleet or Dealership partner via POST \/partner\/jobs.",
+    ),
+  partnerKindSnapshot: zod
+    .enum(["independent_shop", "dealership", "fleet"])
+    .nullish()
+    .describe(
+      "Denormalized snapshot of the posting shop's partnerKind at post-time.",
+    ),
+  urgency: zod
+    .enum(["low", "normal", "high", "urgent"])
+    .describe("Priority window class. Drives `juniorVisibleAt`."),
+  juniorVisibleAt: zod.coerce
+    .date()
+    .nullish()
+    .describe(
+      "Timestamp at which sub-senior mechanics (technician\/detailer) can see this partner-posted job. Null for customer-posted jobs.",
+    ),
+  recurringGroupId: zod
+    .string()
+    .nullish()
+    .describe("Bulk\/recurring service group id for consolidated invoicing."),
 });
 
 /**
@@ -1125,6 +1251,31 @@ export const UpdateJobStatusResponse = zod.object({
     .describe(
       "Minimum mechanic tier required to accept. Derived server-side from serviceSlug. Null = legacy job (treated as `detailer`).",
     ),
+  postedByShopId: zod
+    .number()
+    .nullish()
+    .describe(
+      "Set when this job was posted by a Fleet or Dealership partner via POST \/partner\/jobs.",
+    ),
+  partnerKindSnapshot: zod
+    .enum(["independent_shop", "dealership", "fleet"])
+    .nullish()
+    .describe(
+      "Denormalized snapshot of the posting shop's partnerKind at post-time.",
+    ),
+  urgency: zod
+    .enum(["low", "normal", "high", "urgent"])
+    .describe("Priority window class. Drives `juniorVisibleAt`."),
+  juniorVisibleAt: zod.coerce
+    .date()
+    .nullish()
+    .describe(
+      "Timestamp at which sub-senior mechanics (technician\/detailer) can see this partner-posted job. Null for customer-posted jobs.",
+    ),
+  recurringGroupId: zod
+    .string()
+    .nullish()
+    .describe("Bulk\/recurring service group id for consolidated invoicing."),
 });
 
 /**
@@ -1209,6 +1360,31 @@ export const AcceptJobResponse = zod.object({
     .describe(
       "Minimum mechanic tier required to accept. Derived server-side from serviceSlug. Null = legacy job (treated as `detailer`).",
     ),
+  postedByShopId: zod
+    .number()
+    .nullish()
+    .describe(
+      "Set when this job was posted by a Fleet or Dealership partner via POST \/partner\/jobs.",
+    ),
+  partnerKindSnapshot: zod
+    .enum(["independent_shop", "dealership", "fleet"])
+    .nullish()
+    .describe(
+      "Denormalized snapshot of the posting shop's partnerKind at post-time.",
+    ),
+  urgency: zod
+    .enum(["low", "normal", "high", "urgent"])
+    .describe("Priority window class. Drives `juniorVisibleAt`."),
+  juniorVisibleAt: zod.coerce
+    .date()
+    .nullish()
+    .describe(
+      "Timestamp at which sub-senior mechanics (technician\/detailer) can see this partner-posted job. Null for customer-posted jobs.",
+    ),
+  recurringGroupId: zod
+    .string()
+    .nullish()
+    .describe("Bulk\/recurring service group id for consolidated invoicing."),
 });
 
 /**
@@ -1293,6 +1469,31 @@ export const CancelJobResponse = zod.object({
     .describe(
       "Minimum mechanic tier required to accept. Derived server-side from serviceSlug. Null = legacy job (treated as `detailer`).",
     ),
+  postedByShopId: zod
+    .number()
+    .nullish()
+    .describe(
+      "Set when this job was posted by a Fleet or Dealership partner via POST \/partner\/jobs.",
+    ),
+  partnerKindSnapshot: zod
+    .enum(["independent_shop", "dealership", "fleet"])
+    .nullish()
+    .describe(
+      "Denormalized snapshot of the posting shop's partnerKind at post-time.",
+    ),
+  urgency: zod
+    .enum(["low", "normal", "high", "urgent"])
+    .describe("Priority window class. Drives `juniorVisibleAt`."),
+  juniorVisibleAt: zod.coerce
+    .date()
+    .nullish()
+    .describe(
+      "Timestamp at which sub-senior mechanics (technician\/detailer) can see this partner-posted job. Null for customer-posted jobs.",
+    ),
+  recurringGroupId: zod
+    .string()
+    .nullish()
+    .describe("Bulk\/recurring service group id for consolidated invoicing."),
 });
 
 /**
@@ -1384,6 +1585,31 @@ export const RateCustomerResponse = zod.object({
     .describe(
       "Minimum mechanic tier required to accept. Derived server-side from serviceSlug. Null = legacy job (treated as `detailer`).",
     ),
+  postedByShopId: zod
+    .number()
+    .nullish()
+    .describe(
+      "Set when this job was posted by a Fleet or Dealership partner via POST \/partner\/jobs.",
+    ),
+  partnerKindSnapshot: zod
+    .enum(["independent_shop", "dealership", "fleet"])
+    .nullish()
+    .describe(
+      "Denormalized snapshot of the posting shop's partnerKind at post-time.",
+    ),
+  urgency: zod
+    .enum(["low", "normal", "high", "urgent"])
+    .describe("Priority window class. Drives `juniorVisibleAt`."),
+  juniorVisibleAt: zod.coerce
+    .date()
+    .nullish()
+    .describe(
+      "Timestamp at which sub-senior mechanics (technician\/detailer) can see this partner-posted job. Null for customer-posted jobs.",
+    ),
+  recurringGroupId: zod
+    .string()
+    .nullish()
+    .describe("Bulk\/recurring service group id for consolidated invoicing."),
 });
 
 /**
@@ -1476,6 +1702,31 @@ export const RateJobResponse = zod.object({
     .describe(
       "Minimum mechanic tier required to accept. Derived server-side from serviceSlug. Null = legacy job (treated as `detailer`).",
     ),
+  postedByShopId: zod
+    .number()
+    .nullish()
+    .describe(
+      "Set when this job was posted by a Fleet or Dealership partner via POST \/partner\/jobs.",
+    ),
+  partnerKindSnapshot: zod
+    .enum(["independent_shop", "dealership", "fleet"])
+    .nullish()
+    .describe(
+      "Denormalized snapshot of the posting shop's partnerKind at post-time.",
+    ),
+  urgency: zod
+    .enum(["low", "normal", "high", "urgent"])
+    .describe("Priority window class. Drives `juniorVisibleAt`."),
+  juniorVisibleAt: zod.coerce
+    .date()
+    .nullish()
+    .describe(
+      "Timestamp at which sub-senior mechanics (technician\/detailer) can see this partner-posted job. Null for customer-posted jobs.",
+    ),
+  recurringGroupId: zod
+    .string()
+    .nullish()
+    .describe("Bulk\/recurring service group id for consolidated invoicing."),
 });
 
 /**
@@ -1760,6 +2011,33 @@ export const GetCustomerDashboardResponse = zod.object({
         .describe(
           "Minimum mechanic tier required to accept. Derived server-side from serviceSlug. Null = legacy job (treated as `detailer`).",
         ),
+      postedByShopId: zod
+        .number()
+        .nullish()
+        .describe(
+          "Set when this job was posted by a Fleet or Dealership partner via POST \/partner\/jobs.",
+        ),
+      partnerKindSnapshot: zod
+        .enum(["independent_shop", "dealership", "fleet"])
+        .nullish()
+        .describe(
+          "Denormalized snapshot of the posting shop's partnerKind at post-time.",
+        ),
+      urgency: zod
+        .enum(["low", "normal", "high", "urgent"])
+        .describe("Priority window class. Drives `juniorVisibleAt`."),
+      juniorVisibleAt: zod.coerce
+        .date()
+        .nullish()
+        .describe(
+          "Timestamp at which sub-senior mechanics (technician\/detailer) can see this partner-posted job. Null for customer-posted jobs.",
+        ),
+      recurringGroupId: zod
+        .string()
+        .nullish()
+        .describe(
+          "Bulk\/recurring service group id for consolidated invoicing.",
+        ),
     }),
   ),
   totalSpent: zod.number(),
@@ -1851,6 +2129,33 @@ export const GetMechanicDashboardResponse = zod.object({
         .describe(
           "Minimum mechanic tier required to accept. Derived server-side from serviceSlug. Null = legacy job (treated as `detailer`).",
         ),
+      postedByShopId: zod
+        .number()
+        .nullish()
+        .describe(
+          "Set when this job was posted by a Fleet or Dealership partner via POST \/partner\/jobs.",
+        ),
+      partnerKindSnapshot: zod
+        .enum(["independent_shop", "dealership", "fleet"])
+        .nullish()
+        .describe(
+          "Denormalized snapshot of the posting shop's partnerKind at post-time.",
+        ),
+      urgency: zod
+        .enum(["low", "normal", "high", "urgent"])
+        .describe("Priority window class. Drives `juniorVisibleAt`."),
+      juniorVisibleAt: zod.coerce
+        .date()
+        .nullish()
+        .describe(
+          "Timestamp at which sub-senior mechanics (technician\/detailer) can see this partner-posted job. Null for customer-posted jobs.",
+        ),
+      recurringGroupId: zod
+        .string()
+        .nullish()
+        .describe(
+          "Bulk\/recurring service group id for consolidated invoicing.",
+        ),
     }),
   ),
 });
@@ -1941,6 +2246,33 @@ export const GetAdminDashboardResponse = zod.object({
         .nullish()
         .describe(
           "Minimum mechanic tier required to accept. Derived server-side from serviceSlug. Null = legacy job (treated as `detailer`).",
+        ),
+      postedByShopId: zod
+        .number()
+        .nullish()
+        .describe(
+          "Set when this job was posted by a Fleet or Dealership partner via POST \/partner\/jobs.",
+        ),
+      partnerKindSnapshot: zod
+        .enum(["independent_shop", "dealership", "fleet"])
+        .nullish()
+        .describe(
+          "Denormalized snapshot of the posting shop's partnerKind at post-time.",
+        ),
+      urgency: zod
+        .enum(["low", "normal", "high", "urgent"])
+        .describe("Priority window class. Drives `juniorVisibleAt`."),
+      juniorVisibleAt: zod.coerce
+        .date()
+        .nullish()
+        .describe(
+          "Timestamp at which sub-senior mechanics (technician\/detailer) can see this partner-posted job. Null for customer-posted jobs.",
+        ),
+      recurringGroupId: zod
+        .string()
+        .nullish()
+        .describe(
+          "Bulk\/recurring service group id for consolidated invoicing.",
         ),
     }),
   ),
@@ -2122,7 +2454,12 @@ export const AssistantChatResponse = zod.object({
 /**
  * @summary Create a new shop (shop_owner only)
  */
+export const createShopBodyPartnerKindDefault = `independent_shop`;
+
 export const CreateShopBody = zod.object({
+  partnerKind: zod
+    .enum(["independent_shop", "dealership", "fleet"])
+    .default(createShopBodyPartnerKindDefault),
   name: zod.string(),
   address: zod.string(),
   city: zod.string(),
@@ -2141,6 +2478,11 @@ export const CreateShopBody = zod.object({
 export const ListMyShopsResponseItem = zod.object({
   id: zod.number(),
   ownerId: zod.number(),
+  partnerKind: zod
+    .enum(["independent_shop", "dealership", "fleet"])
+    .describe(
+      "Discriminates the partner type. `independent_shop` uses the classic\nbay-rental marketplace. `dealership` and `fleet` can additionally\npost overflow jobs at a reduced commission.\n",
+    ),
   name: zod.string(),
   address: zod.string(),
   city: zod.string(),
@@ -2167,6 +2509,11 @@ export const GetShopResponse = zod
   .object({
     id: zod.number(),
     ownerId: zod.number(),
+    partnerKind: zod
+      .enum(["independent_shop", "dealership", "fleet"])
+      .describe(
+        "Discriminates the partner type. `independent_shop` uses the classic\nbay-rental marketplace. `dealership` and `fleet` can additionally\npost overflow jobs at a reduced commission.\n",
+      ),
     name: zod.string(),
     address: zod.string(),
     city: zod.string(),
@@ -2231,6 +2578,11 @@ export const UpdateShopBody = zod.object({
 export const UpdateShopResponse = zod.object({
   id: zod.number(),
   ownerId: zod.number(),
+  partnerKind: zod
+    .enum(["independent_shop", "dealership", "fleet"])
+    .describe(
+      "Discriminates the partner type. `independent_shop` uses the classic\nbay-rental marketplace. `dealership` and `fleet` can additionally\npost overflow jobs at a reduced commission.\n",
+    ),
   name: zod.string(),
   address: zod.string(),
   city: zod.string(),
@@ -2338,6 +2690,11 @@ export const ListAvailableBaysResponseItem = zod
       shop: zod.object({
         id: zod.number(),
         ownerId: zod.number(),
+        partnerKind: zod
+          .enum(["independent_shop", "dealership", "fleet"])
+          .describe(
+            "Discriminates the partner type. `independent_shop` uses the classic\nbay-rental marketplace. `dealership` and `fleet` can additionally\npost overflow jobs at a reduced commission.\n",
+          ),
         name: zod.string(),
         address: zod.string(),
         city: zod.string(),
@@ -2390,6 +2747,11 @@ export const GetBayResponse = zod
       shop: zod.object({
         id: zod.number(),
         ownerId: zod.number(),
+        partnerKind: zod
+          .enum(["independent_shop", "dealership", "fleet"])
+          .describe(
+            "Discriminates the partner type. `independent_shop` uses the classic\nbay-rental marketplace. `dealership` and `fleet` can additionally\npost overflow jobs at a reduced commission.\n",
+          ),
         name: zod.string(),
         address: zod.string(),
         city: zod.string(),
@@ -2767,6 +3129,31 @@ export const ApproveJobTransportResponse = zod.object({
     .describe(
       "Minimum mechanic tier required to accept. Derived server-side from serviceSlug. Null = legacy job (treated as `detailer`).",
     ),
+  postedByShopId: zod
+    .number()
+    .nullish()
+    .describe(
+      "Set when this job was posted by a Fleet or Dealership partner via POST \/partner\/jobs.",
+    ),
+  partnerKindSnapshot: zod
+    .enum(["independent_shop", "dealership", "fleet"])
+    .nullish()
+    .describe(
+      "Denormalized snapshot of the posting shop's partnerKind at post-time.",
+    ),
+  urgency: zod
+    .enum(["low", "normal", "high", "urgent"])
+    .describe("Priority window class. Drives `juniorVisibleAt`."),
+  juniorVisibleAt: zod.coerce
+    .date()
+    .nullish()
+    .describe(
+      "Timestamp at which sub-senior mechanics (technician\/detailer) can see this partner-posted job. Null for customer-posted jobs.",
+    ),
+  recurringGroupId: zod
+    .string()
+    .nullish()
+    .describe("Bulk\/recurring service group id for consolidated invoicing."),
 });
 
 /**

@@ -226,6 +226,31 @@ export const JobRequiredTier = {
   master: "master",
 } as const;
 
+/**
+ * Denormalized snapshot of the posting shop's partnerKind at post-time.
+ */
+export type JobPartnerKindSnapshot =
+  | (typeof JobPartnerKindSnapshot)[keyof typeof JobPartnerKindSnapshot]
+  | null;
+
+export const JobPartnerKindSnapshot = {
+  independent_shop: "independent_shop",
+  dealership: "dealership",
+  fleet: "fleet",
+} as const;
+
+/**
+ * Priority window class. Drives `juniorVisibleAt`.
+ */
+export type JobUrgency = (typeof JobUrgency)[keyof typeof JobUrgency];
+
+export const JobUrgency = {
+  low: "low",
+  normal: "normal",
+  high: "high",
+  urgent: "urgent",
+} as const;
+
 export interface Job {
   id: number;
   vehicleId: number;
@@ -263,6 +288,61 @@ export interface Job {
   serviceSlug?: string | null;
   /** Minimum mechanic tier required to accept. Derived server-side from serviceSlug. Null = legacy job (treated as `detailer`). */
   requiredTier?: JobRequiredTier;
+  /** Set when this job was posted by a Fleet or Dealership partner via POST /partner/jobs. */
+  postedByShopId?: number | null;
+  /** Denormalized snapshot of the posting shop's partnerKind at post-time. */
+  partnerKindSnapshot?: JobPartnerKindSnapshot;
+  /** Priority window class. Drives `juniorVisibleAt`. */
+  urgency: JobUrgency;
+  /** Timestamp at which sub-senior mechanics (technician/detailer) can see this partner-posted job. Null for customer-posted jobs. */
+  juniorVisibleAt?: string | null;
+  /** Bulk/recurring service group id for consolidated invoicing. */
+  recurringGroupId?: string | null;
+}
+
+/**
+ * Optional fallback when serviceSlug is not supplied.
+ */
+export type CreatePartnerJobBodyJobType =
+  (typeof CreatePartnerJobBodyJobType)[keyof typeof CreatePartnerJobBodyJobType];
+
+export const CreatePartnerJobBodyJobType = {
+  repair: "repair",
+  diagnostic: "diagnostic",
+  maintenance: "maintenance",
+  detailing: "detailing",
+} as const;
+
+/**
+ * Defaults to `normal`. Drives the tier-priority window for who sees the job when.
+ */
+export type CreatePartnerJobBodyUrgency =
+  (typeof CreatePartnerJobBodyUrgency)[keyof typeof CreatePartnerJobBodyUrgency];
+
+export const CreatePartnerJobBodyUrgency = {
+  low: "low",
+  normal: "normal",
+  high: "high",
+  urgent: "urgent",
+} as const;
+
+export interface CreatePartnerJobBody {
+  /** Partner shop posting the job. Must have partnerKind=dealership or fleet. */
+  shopId: number;
+  /** Vehicle from the partner's fleet (must be pre-registered via POST /vehicles). */
+  vehicleId: number;
+  /** Preferred. Slug from /tier-catalog. Server derives jobType + requiredTier. */
+  serviceSlug?: string;
+  /** Optional fallback when serviceSlug is not supplied. */
+  jobType?: CreatePartnerJobBodyJobType;
+  description: string;
+  locationLat?: number;
+  locationLng?: number;
+  locationAddress?: string;
+  /** Defaults to `normal`. Drives the tier-priority window for who sees the job when. */
+  urgency?: CreatePartnerJobBodyUrgency;
+  /** Optional. Stamps a group id for bulk/recurring fleet ops (e.g. monthly oil changes across 12 vehicles). */
+  recurringGroupId?: string;
 }
 
 /**
@@ -750,6 +830,21 @@ export interface AssistantChatResponse {
   urgency?: AssistantChatResponseUrgency;
 }
 
+/**
+ * Discriminates the partner type. `independent_shop` uses the classic
+bay-rental marketplace. `dealership` and `fleet` can additionally
+post overflow jobs at a reduced commission.
+
+ */
+export type ShopPartnerKind =
+  (typeof ShopPartnerKind)[keyof typeof ShopPartnerKind];
+
+export const ShopPartnerKind = {
+  independent_shop: "independent_shop",
+  dealership: "dealership",
+  fleet: "fleet",
+} as const;
+
 export type ShopStatus = (typeof ShopStatus)[keyof typeof ShopStatus];
 
 export const ShopStatus = {
@@ -760,6 +855,11 @@ export const ShopStatus = {
 export interface Shop {
   id: number;
   ownerId: number;
+  /** Discriminates the partner type. `independent_shop` uses the classic
+bay-rental marketplace. `dealership` and `fleet` can additionally
+post overflow jobs at a reduced commission.
+ */
+  partnerKind: ShopPartnerKind;
   name: string;
   address: string;
   city: string;
@@ -774,7 +874,17 @@ export interface Shop {
   createdAt: string;
 }
 
+export type CreateShopBodyPartnerKind =
+  (typeof CreateShopBodyPartnerKind)[keyof typeof CreateShopBodyPartnerKind];
+
+export const CreateShopBodyPartnerKind = {
+  independent_shop: "independent_shop",
+  dealership: "dealership",
+  fleet: "fleet",
+} as const;
+
 export interface CreateShopBody {
+  partnerKind?: CreateShopBodyPartnerKind;
   name: string;
   address: string;
   city: string;
@@ -1677,6 +1787,24 @@ export const ListAvailableJobsMode = {
   my_tier: "my_tier",
   work_down: "work_down",
 } as const;
+
+export type CreatePartnerJob201Urgency =
+  (typeof CreatePartnerJob201Urgency)[keyof typeof CreatePartnerJob201Urgency];
+
+export const CreatePartnerJob201Urgency = {
+  low: "low",
+  normal: "normal",
+  high: "high",
+  urgent: "urgent",
+} as const;
+
+export type CreatePartnerJob201 = {
+  id: number;
+  jobId: number;
+  urgency: CreatePartnerJob201Urgency;
+  juniorVisibleAt: string;
+  commissionPctOverride: number;
+};
 
 export type ListMechanicsParams = {
   jobType?: ListMechanicsJobType;

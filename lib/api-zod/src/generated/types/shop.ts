@@ -5,11 +5,17 @@
  * APS - Automotive Platform System API
  * OpenAPI spec version: 0.1.0
  */
+import type { ShopPartnerKind } from "./shopPartnerKind";
 import type { ShopStatus } from "./shopStatus";
 
 export interface Shop {
   id: number;
   ownerId: number;
+  /** Discriminates the partner type. `independent_shop` uses the classic
+bay-rental marketplace. `dealership` and `fleet` can additionally
+post overflow jobs at a reduced commission.
+ */
+  partnerKind: ShopPartnerKind;
   name: string;
   address: string;
   city: string;

@@ -5,8 +5,10 @@
  * APS - Automotive Platform System API
  * OpenAPI spec version: 0.1.0
  */
+import type { CreateShopBodyPartnerKind } from "./createShopBodyPartnerKind";
 
 export interface CreateShopBody {
+  partnerKind?: CreateShopBodyPartnerKind;
   name: string;
   address: string;
   city: string;

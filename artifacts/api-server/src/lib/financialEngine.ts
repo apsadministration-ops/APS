@@ -35,6 +35,12 @@ export interface ComputeBreakdownInput {
   mechanicTier: TierKey | null;
   stripeFeeCents?: number; // 0 if not yet known
   deductStripeFee?: boolean; // default false
+  // Optional flat platform-fee percentage (0..100) that REPLACES the
+  // tier-catalog rate. Used for Fleet & Commercial Partner jobs: 15% by
+  // default, 10% for GSA/Government accounts (per shop.commissionOverridePct).
+  // When set, `reason="partner"` is returned in the breakdown so admin
+  // dashboards can distinguish partner revenue from tier revenue.
+  commissionPctOverride?: number | null;
 }
 
 export function computeBreakdown(input: ComputeBreakdownInput): FinancialBreakdown {
@@ -55,11 +61,29 @@ export function computeBreakdown(input: ComputeBreakdownInput): FinancialBreakdo
     ? Math.max(0, laborCents - stripeFeeCents)
     : laborCents;
 
-  const commission = commissionForJob({
-    category: input.category,
-    jobTier: input.jobTier ?? "detailer",
-    mechanicTier: input.mechanicTier ?? "detailer",
-  });
+  // Partner override takes precedence: a fleet/dealership post stamps a
+  // flat platform-fee % at post-time (typically 15%, or 10% for GSA). The
+  // override is a fully-formed CommissionResult so downstream math (which
+  // reads platformRate) is unchanged.
+  const override = input.commissionPctOverride;
+  const commission = (override != null && Number.isFinite(override))
+    ? (() => {
+        const platformPct = Math.max(0, Math.min(100, Math.round(override)));
+        const mechanicPct = 100 - platformPct;
+        return {
+          platformPct,
+          mechanicPct,
+          platformRate: platformPct / 100,
+          mechanicRate: mechanicPct / 100,
+          reason: "normal" as const,
+          reasonLabel: `Partner-posted job — flat ${platformPct}% platform fee.`,
+        };
+      })()
+    : commissionForJob({
+        category: input.category,
+        jobTier: input.jobTier ?? "detailer",
+        mechanicTier: input.mechanicTier ?? "detailer",
+      });
 
   // splitOnNetProfit handles the "parts pass through 100%" math when given
   // (amount=labor+parts, partsCost=parts). We feed it (amount=commissionBase

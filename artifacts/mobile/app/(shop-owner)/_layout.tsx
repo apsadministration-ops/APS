@@ -52,8 +52,15 @@ export default function ShopOwnerTabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: "My Shops",
+          title: "Locations",
           tabBarIcon: ({ color }) => <Feather name="home" size={22} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="post-job"
+        options={{
+          title: "Post Job",
+          tabBarIcon: ({ color }) => <Feather name="plus-square" size={22} color={color} />,
         }}
       />
       <Tabs.Screen

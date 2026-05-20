@@ -3,11 +3,24 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
 
-// Ghost Garage shops. Owned by users with role="shop_owner". A single owner
-// may operate multiple shops.
+// Fleet & Commercial Partners (formerly "Ghost Garage shops"). Owned by users
+// with role="shop_owner" (DB role name kept for zero-downtime; UI labels this
+// layer as "Partner"). One owner may operate multiple shops/locations/fleets.
+//
+// `partnerKind` discriminates which UX + business rules apply:
+//   - independent_shop  — classic bay/lift rental marketplace
+//   - dealership        — dealership service department posting overflow
+//   - fleet             — corporate/government/rental/trucking fleet
 export const shopsTable = pgTable("shops", {
   id: serial("id").primaryKey(),
   ownerId: integer("owner_id").notNull().references(() => usersTable.id),
+  partnerKind: text("partner_kind", { enum: ["independent_shop", "dealership", "fleet"] })
+    .notNull()
+    .default("independent_shop"),
+  // Optional flat commission override for this partner's posted jobs.
+  // Used for Government / GSA accounts (10%) etc. NULL → use system default
+  // (15% for partner-posted jobs, standard tier-catalog rates otherwise).
+  commissionOverridePct: integer("commission_override_pct"),
   name: text("name").notNull(),
   address: text("address").notNull(),
   city: text("city").notNull(),

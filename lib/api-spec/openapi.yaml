@@ -576,6 +576,43 @@ paths:
                 items:
                   $ref: "#/components/schemas/Job"
 
+  /partner/jobs:
+    post:
+      operationId: createPartnerJob
+      tags: [jobs]
+      summary: Post a job from a Fleet or Dealership partner
+      description: |
+        Fleet & Commercial Partner job posting. Only owners of shops with
+        `partnerKind ∈ {dealership, fleet}` may post here — independent
+        shops rent bays via `/bays` instead. The server stamps a flat
+        commission override (default 15%, or 10% for GSA accounts when
+        `shop.commissionOverridePct` is configured) and a tier-priority
+        window: `urgent`=visible to all qualified mechanics immediately,
+        `high`=junior tiers wait 15m, `normal`=1h, `low`=4h. Senior+
+        mechanics always see partner-posted jobs immediately.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePartnerJobBody"
+      responses:
+        "201":
+          description: Job created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, jobId, urgency, juniorVisibleAt, commissionPctOverride]
+                properties:
+                  id: { type: integer }
+                  jobId: { type: integer }
+                  urgency: { type: string, enum: [low, normal, high, urgent] }
+                  juniorVisibleAt: { type: string, format: date-time }
+                  commissionPctOverride: { type: integer }
+        "403":
+          description: Not a fleet/dealership partner, or not the shop owner
+
   /tier-catalog:
     get:
       operationId: getTierCatalog
@@ -2280,7 +2317,59 @@ components:
           enum: [detailer, technician, senior, advanced, master]
           nullable: true
           description: Minimum mechanic tier required to accept. Derived server-side from serviceSlug. Null = legacy job (treated as `detailer`).
-      required: [id, vehicleId, vin, customerId, customerName, jobType, description, status, createdAt]
+        postedByShopId:
+          type: integer
+          nullable: true
+          description: Set when this job was posted by a Fleet or Dealership partner via POST /partner/jobs.
+        partnerKindSnapshot:
+          type: string
+          enum: [independent_shop, dealership, fleet]
+          nullable: true
+          description: Denormalized snapshot of the posting shop's partnerKind at post-time.
+        urgency:
+          type: string
+          enum: [low, normal, high, urgent]
+          description: Priority window class. Drives `juniorVisibleAt`.
+        juniorVisibleAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Timestamp at which sub-senior mechanics (technician/detailer) can see this partner-posted job. Null for customer-posted jobs.
+        recurringGroupId:
+          type: string
+          nullable: true
+          description: Bulk/recurring service group id for consolidated invoicing.
+      required: [id, vehicleId, vin, customerId, customerName, jobType, description, status, createdAt, urgency]
+
+    CreatePartnerJobBody:
+      type: object
+      required: [shopId, vehicleId, description]
+      properties:
+        shopId:
+          type: integer
+          description: Partner shop posting the job. Must have partnerKind=dealership or fleet.
+        vehicleId:
+          type: integer
+          description: Vehicle from the partner's fleet (must be pre-registered via POST /vehicles).
+        serviceSlug:
+          type: string
+          description: Preferred. Slug from /tier-catalog. Server derives jobType + requiredTier.
+        jobType:
+          type: string
+          enum: [repair, diagnostic, maintenance, detailing]
+          description: Optional fallback when serviceSlug is not supplied.
+        description:
+          type: string
+        locationLat: { type: number }
+        locationLng: { type: number }
+        locationAddress: { type: string }
+        urgency:
+          type: string
+          enum: [low, normal, high, urgent]
+          description: Defaults to `normal`. Drives the tier-priority window for who sees the job when.
+        recurringGroupId:
+          type: string
+          description: Optional. Stamps a group id for bulk/recurring fleet ops (e.g. monthly oil changes across 12 vehicles).
 
     CreateJobBody:
       type: object
@@ -2866,6 +2955,13 @@ components:
           type: integer
         ownerId:
           type: integer
+        partnerKind:
+          type: string
+          enum: [independent_shop, dealership, fleet]
+          description: |
+            Discriminates the partner type. `independent_shop` uses the classic
+            bay-rental marketplace. `dealership` and `fleet` can additionally
+            post overflow jobs at a reduced commission.
         name:
           type: string
         address:
@@ -2897,11 +2993,15 @@ components:
         createdAt:
           type: string
           format: date-time
-      required: [id, ownerId, name, address, city, region, zipCode, status, createdAt]
+      required: [id, ownerId, partnerKind, name, address, city, region, zipCode, status, createdAt]
 
     CreateShopBody:
       type: object
       properties:
+        partnerKind:
+          type: string
+          enum: [independent_shop, dealership, fleet]
+          default: independent_shop
         name:
           type: string
         address:

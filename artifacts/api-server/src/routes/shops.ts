@@ -8,7 +8,9 @@ const router: IRouter = Router();
 
 function formatShop(s: typeof shopsTable.$inferSelect) {
   return {
-    id: s.id, ownerId: s.ownerId, name: s.name,
+    id: s.id, ownerId: s.ownerId,
+    partnerKind: s.partnerKind,
+    name: s.name,
     address: s.address, city: s.city, region: s.region, zipCode: s.zipCode,
     lat: s.lat ?? null, lng: s.lng ?? null, phone: s.phone ?? null,
     insuranceCarrier: s.insuranceCarrier ?? null,
@@ -33,6 +35,7 @@ router.post("/shops", authenticate, requireShopOwner, async (req: AuthRequest, r
   const v = parsed.data;
   const [shop] = await db.insert(shopsTable).values({
     ownerId: req.userId!,
+    partnerKind: v.partnerKind ?? "independent_shop",
     name: v.name, address: v.address, city: v.city, region: v.region, zipCode: v.zipCode,
     lat: v.lat ?? null, lng: v.lng ?? null, phone: v.phone ?? null,
     insuranceCarrier: v.insuranceCarrier ?? null,

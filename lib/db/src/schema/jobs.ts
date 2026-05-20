@@ -1,4 +1,5 @@
 import { pgTable, serial, integer, text, timestamp, real, boolean, index } from "drizzle-orm/pg-core";
+import { shopsTable } from "./shops";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
@@ -42,6 +43,23 @@ export const jobsTable = pgTable("jobs", {
   customerRating: integer("customer_rating"),
   customerReviewText: text("customer_review_text"),
   requestedMechanicId: integer("requested_mechanic_id").references(() => usersTable.id),
+  // Fleet & Commercial Partner posting. Set when a partner (dealership or
+  // fleet) posts overflow work via POST /partner/jobs. `partnerKindSnapshot`
+  // is a denormalized copy of shops.partnerKind at post-time so a /jobs/
+  // available query doesn't need to join. `commissionPctOverride` is the
+  // platform-fee percentage (0..100, integer) stamped at post-time and
+  // honoured by financialEngine; replaces tier-catalog rates when set.
+  postedByShopId: integer("posted_by_shop_id").references(() => shopsTable.id),
+  partnerKindSnapshot: text("partner_kind_snapshot", { enum: ["independent_shop", "dealership", "fleet"] }),
+  urgency: text("urgency", { enum: ["low", "normal", "high", "urgent"] }).notNull().default("normal"),
+  commissionPctOverride: integer("commission_pct_override"),
+  // Junior tiers (technician/detailer) are gated until this timestamp.
+  // Senior+ see partner jobs immediately ("priority for higher-tier
+  // mechanics"). NULL = no priority window (legacy customer-posted jobs).
+  juniorVisibleAt: timestamp("junior_visible_at", { withTimezone: true }),
+  // Bulk/recurring service requests share a group id (e.g. monthly oil
+  // changes across a 12-vehicle fleet); used for consolidated invoicing.
+  recurringGroupId: text("recurring_group_id"),
   // Ghost Garage: set true when the job needs an indoor bay (lift, etc.).
   // When true, POST /worklogs is gated on pre+post inspections existing.
   requiresGhostGarage: boolean("requires_ghost_garage").notNull().default(false),
@@ -61,6 +79,8 @@ export const jobsTable = pgTable("jobs", {
   index("jobs_customer_id_idx").on(t.customerId),
   index("jobs_mechanic_id_idx").on(t.mechanicId),
   index("jobs_status_idx").on(t.status),
+  index("jobs_posted_by_shop_id_idx").on(t.postedByShopId),
+  index("jobs_recurring_group_id_idx").on(t.recurringGroupId),
 ]);
 
 export const insertJobSchema = createInsertSchema(jobsTable).omit({ id: true, createdAt: true });
