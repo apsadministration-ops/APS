@@ -17,7 +17,13 @@ const router: IRouter = Router();
  *   GET /admin/finance/flagged            — fraud queue (worklogs)
  */
 
-router.use(authenticate, requireRole("admin"));
+// IMPORTANT: scope this auth gate to ONLY the /admin/finance/* paths.
+// An unscoped `router.use(authenticate, requireRole("admin"))` would run for
+// every request that flows through this mounted child router (Express doesn't
+// stop a child router when no route matches — middleware still fires), which
+// would 403-Forbidden every route mounted AFTER this one in routes/index.ts
+// (partnerJobs, etc.) for any non-admin user.
+router.use("/admin/finance", authenticate, requireRole("admin"));
 
 router.get("/admin/finance/global", async (req: AuthRequest, res): Promise<void> => {
   const windowDays = Math.min(365, Math.max(1, parseInt(String(req.query["days"] ?? "30"), 10) || 30));

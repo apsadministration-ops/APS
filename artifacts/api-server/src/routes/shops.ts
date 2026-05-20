@@ -19,6 +19,7 @@ function formatShop(s: typeof shopsTable.$inferSelect) {
     // still reads them. New UI no longer surfaces these.
     insuranceCarrier: s.insuranceCarrier ?? null,
     insurancePolicyNumber: s.insurancePolicyNumber ?? null,
+    commissionOverridePct: s.commissionOverridePct ?? null,
     status: s.status, createdAt: s.createdAt,
   };
 }
@@ -37,6 +38,15 @@ router.post("/shops", authenticate, requireShopOwner, async (req: AuthRequest, r
   const parsed = CreateShopBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const v = parsed.data;
+  // Reject malformed override pct loudly so partner UI surfaces a 400 instead
+  // of silently clamping/rounding (which would hide misconfigured GSA contracts).
+  // Integer-only: a fractional commission would be a contract misconfiguration.
+  if (v.commissionOverridePct != null && (
+    !Number.isInteger(v.commissionOverridePct) ||
+    v.commissionOverridePct < 0 || v.commissionOverridePct > 100
+  )) {
+    res.status(400).json({ error: "commissionOverridePct must be an integer 0..100" }); return;
+  }
   const [shop] = await db.insert(shopsTable).values({
     ownerId: req.userId!,
     partnerKind: v.partnerKind ?? "independent_shop",
@@ -46,6 +56,7 @@ router.post("/shops", authenticate, requireShopOwner, async (req: AuthRequest, r
     businessLicense: v.businessLicense ?? null,
     insuranceCarrier: v.insuranceCarrier ?? null,
     insurancePolicyNumber: v.insurancePolicyNumber ?? null,
+    commissionOverridePct: v.commissionOverridePct ?? null,
   }).returning();
   res.status(201).json(formatShop(shop));
 });
@@ -97,6 +108,16 @@ router.patch("/shops/:shopId", authenticate, requireShopOwner, async (req: AuthR
   if (v.businessLicense !== undefined) updates.businessLicense = v.businessLicense;
   if (v.insuranceCarrier !== undefined) updates.insuranceCarrier = v.insuranceCarrier;
   if (v.insurancePolicyNumber !== undefined) updates.insurancePolicyNumber = v.insurancePolicyNumber;
+  if (v.commissionOverridePct !== undefined) {
+    // null clears the override → revert to system default. Otherwise integer 0..100.
+    if (v.commissionOverridePct !== null && (
+      !Number.isInteger(v.commissionOverridePct) ||
+      v.commissionOverridePct < 0 || v.commissionOverridePct > 100
+    )) {
+      res.status(400).json({ error: "commissionOverridePct must be an integer 0..100 or null" }); return;
+    }
+    updates.commissionOverridePct = v.commissionOverridePct;
+  }
   if (v.status !== undefined) updates.status = v.status;
   const [updated] = await db.update(shopsTable).set(updates).where(eq(shopsTable.id, shopId)).returning();
   res.json(formatShop(updated));

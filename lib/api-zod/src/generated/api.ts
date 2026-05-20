@@ -2693,6 +2693,8 @@ export const AssistantChatResponse = zod.object({
  * @summary Create a new shop (shop_owner only)
  */
 export const createShopBodyPartnerKindDefault = `independent_shop`;
+export const createShopBodyCommissionOverridePctMin = 0;
+export const createShopBodyCommissionOverridePctMax = 100;
 
 export const CreateShopBody = zod.object({
   partnerKind: zod
@@ -2713,11 +2715,22 @@ export const CreateShopBody = zod.object({
     .describe("State or local business license number."),
   insuranceCarrier: zod.string().optional(),
   insurancePolicyNumber: zod.string().optional(),
+  commissionOverridePct: zod
+    .number()
+    .min(createShopBodyCommissionOverridePctMin)
+    .max(createShopBodyCommissionOverridePctMax)
+    .optional()
+    .describe(
+      "Optional flat commission override for jobs posted by this partner.\nTypically 10 for GSA \/ Government accounts. Omit → system default.\nInteger only — fractional values are rejected.\n",
+    ),
 });
 
 /**
  * @summary List shops owned by the current shop_owner
  */
+export const listMyShopsResponseCommissionOverridePctMin = 0;
+export const listMyShopsResponseCommissionOverridePctMax = 100;
+
 export const ListMyShopsResponseItem = zod.object({
   id: zod.number(),
   ownerId: zod.number(),
@@ -2756,6 +2769,14 @@ export const ListMyShopsResponseItem = zod.object({
     .describe(
       "DEPRECATED. Per-vehicle insurance now lives on `Vehicle.insurancePolicyNumber`.",
     ),
+  commissionOverridePct: zod
+    .number()
+    .min(listMyShopsResponseCommissionOverridePctMin)
+    .max(listMyShopsResponseCommissionOverridePctMax)
+    .nullish()
+    .describe(
+      "Optional flat commission override for jobs posted by this partner.\nUsed for Government \/ GSA accounts (typically 10%). NULL → use the\nsystem default (15% for partner-posted jobs).\n",
+    ),
   status: zod.enum(["active", "inactive"]),
   createdAt: zod.coerce.date(),
 });
@@ -2767,6 +2788,9 @@ export const ListMyShopsResponse = zod.array(ListMyShopsResponseItem);
 export const GetShopParams = zod.object({
   shopId: zod.coerce.number(),
 });
+
+export const getShopResponseOneCommissionOverridePctMin = 0;
+export const getShopResponseOneCommissionOverridePctMax = 100;
 
 export const GetShopResponse = zod
   .object({
@@ -2807,6 +2831,14 @@ export const GetShopResponse = zod
       .describe(
         "DEPRECATED. Per-vehicle insurance now lives on `Vehicle.insurancePolicyNumber`.",
       ),
+    commissionOverridePct: zod
+      .number()
+      .min(getShopResponseOneCommissionOverridePctMin)
+      .max(getShopResponseOneCommissionOverridePctMax)
+      .nullish()
+      .describe(
+        "Optional flat commission override for jobs posted by this partner.\nUsed for Government \/ GSA accounts (typically 10%). NULL → use the\nsystem default (15% for partner-posted jobs).\n",
+      ),
     status: zod.enum(["active", "inactive"]),
     createdAt: zod.coerce.date(),
   })
@@ -2844,6 +2876,9 @@ export const UpdateShopParams = zod.object({
   shopId: zod.coerce.number(),
 });
 
+export const updateShopBodyCommissionOverridePctMin = 0;
+export const updateShopBodyCommissionOverridePctMax = 100;
+
 export const UpdateShopBody = zod.object({
   name: zod.string().optional(),
   address: zod.string().optional(),
@@ -2857,8 +2892,19 @@ export const UpdateShopBody = zod.object({
   businessLicense: zod.string().optional(),
   insuranceCarrier: zod.string().optional(),
   insurancePolicyNumber: zod.string().optional(),
+  commissionOverridePct: zod
+    .number()
+    .min(updateShopBodyCommissionOverridePctMin)
+    .max(updateShopBodyCommissionOverridePctMax)
+    .nullish()
+    .describe(
+      "Update the partner commission override. Pass `null` to clear it and\nrevert to the system default. Integer only.\n",
+    ),
   status: zod.enum(["active", "inactive"]).optional(),
 });
+
+export const updateShopResponseCommissionOverridePctMin = 0;
+export const updateShopResponseCommissionOverridePctMax = 100;
 
 export const UpdateShopResponse = zod.object({
   id: zod.number(),
@@ -2897,6 +2943,14 @@ export const UpdateShopResponse = zod.object({
     .nullish()
     .describe(
       "DEPRECATED. Per-vehicle insurance now lives on `Vehicle.insurancePolicyNumber`.",
+    ),
+  commissionOverridePct: zod
+    .number()
+    .min(updateShopResponseCommissionOverridePctMin)
+    .max(updateShopResponseCommissionOverridePctMax)
+    .nullish()
+    .describe(
+      "Optional flat commission override for jobs posted by this partner.\nUsed for Government \/ GSA accounts (typically 10%). NULL → use the\nsystem default (15% for partner-posted jobs).\n",
     ),
   status: zod.enum(["active", "inactive"]),
   createdAt: zod.coerce.date(),
@@ -3017,6 +3071,9 @@ export const ListAvailableBaysQueryParams = zod.object({
     .optional(),
 });
 
+export const listAvailableBaysResponseTwoShopCommissionOverridePctMin = 0;
+export const listAvailableBaysResponseTwoShopCommissionOverridePctMax = 100;
+
 export const ListAvailableBaysResponseItem = zod
   .object({
     id: zod.number(),
@@ -3078,6 +3135,14 @@ export const ListAvailableBaysResponseItem = zod
           .describe(
             "DEPRECATED. Per-vehicle insurance now lives on `Vehicle.insurancePolicyNumber`.",
           ),
+        commissionOverridePct: zod
+          .number()
+          .min(listAvailableBaysResponseTwoShopCommissionOverridePctMin)
+          .max(listAvailableBaysResponseTwoShopCommissionOverridePctMax)
+          .nullish()
+          .describe(
+            "Optional flat commission override for jobs posted by this partner.\nUsed for Government \/ GSA accounts (typically 10%). NULL → use the\nsystem default (15% for partner-posted jobs).\n",
+          ),
         status: zod.enum(["active", "inactive"]),
         createdAt: zod.coerce.date(),
       }),
@@ -3093,6 +3158,9 @@ export const ListAvailableBaysResponse = zod.array(
 export const GetBayParams = zod.object({
   bayId: zod.coerce.number(),
 });
+
+export const getBayResponseTwoShopCommissionOverridePctMin = 0;
+export const getBayResponseTwoShopCommissionOverridePctMax = 100;
 
 export const GetBayResponse = zod
   .object({
@@ -3154,6 +3222,14 @@ export const GetBayResponse = zod
           .nullish()
           .describe(
             "DEPRECATED. Per-vehicle insurance now lives on `Vehicle.insurancePolicyNumber`.",
+          ),
+        commissionOverridePct: zod
+          .number()
+          .min(getBayResponseTwoShopCommissionOverridePctMin)
+          .max(getBayResponseTwoShopCommissionOverridePctMax)
+          .nullish()
+          .describe(
+            "Optional flat commission override for jobs posted by this partner.\nUsed for Government \/ GSA accounts (typically 10%). NULL → use the\nsystem default (15% for partner-posted jobs).\n",
           ),
         status: zod.enum(["active", "inactive"]),
         createdAt: zod.coerce.date(),

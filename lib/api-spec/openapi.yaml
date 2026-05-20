@@ -3059,6 +3059,15 @@ components:
           nullable: true
           deprecated: true
           description: DEPRECATED. Per-vehicle insurance now lives on `Vehicle.insurancePolicyNumber`.
+        commissionOverridePct:
+          type: integer
+          nullable: true
+          minimum: 0
+          maximum: 100
+          description: |
+            Optional flat commission override for jobs posted by this partner.
+            Used for Government / GSA accounts (typically 10%). NULL → use the
+            system default (15% for partner-posted jobs).
         status:
           type: string
           enum: [active, inactive]
@@ -3102,6 +3111,14 @@ components:
         insurancePolicyNumber:
           type: string
           deprecated: true
+        commissionOverridePct:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: |
+            Optional flat commission override for jobs posted by this partner.
+            Typically 10 for GSA / Government accounts. Omit → system default.
+            Integer only — fractional values are rejected.
       required: [name, address, city, region, zipCode]
 
     UpdateShopBody:
@@ -3133,6 +3150,14 @@ components:
         insurancePolicyNumber:
           type: string
           deprecated: true
+        commissionOverridePct:
+          type: integer
+          nullable: true
+          minimum: 0
+          maximum: 100
+          description: |
+            Update the partner commission override. Pass `null` to clear it and
+            revert to the system default. Integer only.
         status:
           type: string
           enum: [active, inactive]

@@ -25,4 +25,13 @@ export interface CreateShopBody {
   insuranceCarrier?: string;
   /** @deprecated */
   insurancePolicyNumber?: string;
+  /**
+   * Optional flat commission override for jobs posted by this partner.
+Typically 10 for GSA / Government accounts. Omit → system default.
+Integer only — fractional values are rejected.
+
+   * @minimum 0
+   * @maximum 100
+   */
+  commissionOverridePct?: number;
 }
