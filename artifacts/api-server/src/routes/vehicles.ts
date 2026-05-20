@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, and, isNull, count, inArray } from "drizzle-orm";
-import { db, vehiclesTable, ownershipTable, usersTable, workLogsTable, jobsTable } from "@workspace/db";
+import { db, vehiclesTable, ownershipTable, usersTable, workLogsTable, jobsTable, shopsTable } from "@workspace/db";
 import { authenticate, type AuthRequest } from "../middlewares/authenticate";
 import { lookupComponentSpecs } from "../lib/componentSpecs";
 import { lookupParts, type PartCategory } from "../lib/partsCatalog";
@@ -53,6 +53,9 @@ function formatVehicle(
     trim: vehicle.trim ?? null,
     color: vehicle.color ?? null,
     mileage: vehicle.mileage ?? 0,
+    insuranceCarrier: vehicle.insuranceCarrier ?? null,
+    insurancePolicyNumber: vehicle.insurancePolicyNumber ?? null,
+    ownerShopId: vehicle.ownerShopId ?? null,
     createdAt: vehicle.createdAt,
     currentOwner: owner
       ? {
@@ -91,9 +94,10 @@ router.get("/vehicles", authenticate, async (req: AuthRequest, res): Promise<voi
 });
 
 router.post("/vehicles", authenticate, async (req: AuthRequest, res): Promise<void> => {
-  const { vin, plateNumber, make, model, year, trim, color, mileage } = req.body as {
+  const { vin, plateNumber, make, model, year, trim, color, mileage, insuranceCarrier, insurancePolicyNumber, ownerShopId } = req.body as {
     vin: string; plateNumber?: string; make: string; model: string;
     year: number; trim?: string; color?: string; mileage: number;
+    insuranceCarrier?: string; insurancePolicyNumber?: string; ownerShopId?: number;
   };
 
   if (!vin || !make || !model || !year) {
@@ -150,6 +154,27 @@ router.post("/vehicles", authenticate, async (req: AuthRequest, res): Promise<vo
     return;
   }
 
+  // Validate fleet linkage: ownerShopId must belong to the caller and be a
+  // partner type that owns vehicles (dealership / fleet / gsa). Independent
+  // shops are bay-rental marketplaces and don't own vehicles.
+  let resolvedOwnerShopId: number | null = null;
+  if (ownerShopId != null) {
+    const sid = Number(ownerShopId);
+    if (!Number.isFinite(sid) || sid <= 0) {
+      res.status(400).json({ error: "Invalid ownerShopId" });
+      return;
+    }
+    const [shop] = await db.select().from(shopsTable).where(eq(shopsTable.id, sid));
+    if (!shop) { res.status(404).json({ error: "Partner shop not found" }); return; }
+    if (shop.ownerId !== req.userId && req.userRole !== "admin") {
+      res.status(403).json({ error: "You do not own that partner shop" }); return;
+    }
+    if (shop.partnerKind !== "dealership" && shop.partnerKind !== "fleet" && shop.partnerKind !== "gsa") {
+      res.status(400).json({ error: "Only Dealership, Fleet, or GSA partners can own fleet vehicles" }); return;
+    }
+    resolvedOwnerShopId = sid;
+  }
+
   const [vehicle] = await db.insert(vehiclesTable).values({
     vin: vin.toUpperCase(),
     plateNumber: plateNumber ? plateNumber.toUpperCase() : null,
@@ -157,6 +182,9 @@ router.post("/vehicles", authenticate, async (req: AuthRequest, res): Promise<vo
     trim: trim ?? null,
     color: color ?? null,
     mileage: Math.floor(mileage),
+    insuranceCarrier: insuranceCarrier?.trim() || null,
+    insurancePolicyNumber: insurancePolicyNumber?.trim() || null,
+    ownerShopId: resolvedOwnerShopId,
   }).returning();
 
   const [ownership] = await db.insert(ownershipTable).values({
@@ -340,6 +368,36 @@ router.post("/vehicles/:vehicleId/transfer", authenticate, async (req: AuthReque
   const [newOwnership] = await db.insert(ownershipTable).values({ vehicleId, userId: newOwner.id, vin: vehicle.vin, startDate: new Date(), transferVerified: true }).returning();
 
   res.json({ id: newOwnership.id, vehicleId: newOwnership.vehicleId, vin: newOwnership.vin, userId: newOwnership.userId, userName: newOwner.name, startDate: newOwnership.startDate, endDate: newOwnership.endDate ?? null, transferVerified: newOwnership.transferVerified });
+});
+
+// List the fleet vehicles owned by a single partner shop. Restricted to the
+// shop's owner + admin — leaks would expose plate numbers and insurance.
+router.get("/shops/:shopId/vehicles", authenticate, async (req: AuthRequest, res): Promise<void> => {
+  const shopId = parseInt(String(req.params.shopId), 10);
+  if (!Number.isFinite(shopId) || shopId <= 0) {
+    res.status(400).json({ error: "Invalid shop ID" }); return;
+  }
+  const [shop] = await db.select().from(shopsTable).where(eq(shopsTable.id, shopId));
+  if (!shop) { res.status(404).json({ error: "Shop not found" }); return; }
+  if (shop.ownerId !== req.userId && req.userRole !== "admin") {
+    res.status(403).json({ error: "Forbidden" }); return;
+  }
+  const vehicles = await db.select().from(vehiclesTable).where(eq(vehiclesTable.ownerShopId, shopId));
+  const rows = await Promise.all(vehicles.map(async (v) => {
+    const [sc] = await db.select({ c: count() }).from(workLogsTable).where(eq(workLogsTable.vehicleId, v.id));
+    return {
+      id: v.id, vin: v.vin, plateNumber: v.plateNumber ?? null,
+      make: v.make, model: v.model, year: v.year,
+      trim: v.trim ?? null, color: v.color ?? null,
+      mileage: v.mileage ?? 0,
+      insuranceCarrier: v.insuranceCarrier ?? null,
+      insurancePolicyNumber: v.insurancePolicyNumber ?? null,
+      ownerShopId: v.ownerShopId ?? null,
+      serviceCount: Number(sc?.c ?? 0),
+      createdAt: v.createdAt,
+    };
+  }));
+  res.json(rows);
 });
 
 export default router;

@@ -65,6 +65,7 @@ import type {
   ListMechanicsParams,
   ListPartsCatalog200,
   ListRecommendedPartsParams,
+  ListShopVehicles200Item,
   ListUsersParams,
   LoginBody,
   MasterCandidate,
@@ -2015,7 +2016,7 @@ export function useListAvailableJobs<
 
 /**
  * Fleet & Commercial Partner job posting. Only owners of shops with
-`partnerKind ∈ {dealership, fleet}` may post here — independent
+`partnerKind ∈ {dealership, fleet, gsa}` may post here — independent
 shops rent bays via `/bays` instead. The server stamps a flat
 commission override (default 15%, or 10% for GSA accounts when
 `shop.commissionOverridePct` is configured) and a tier-priority
@@ -4478,6 +4479,102 @@ export const useUpdateShop = <
 > => {
   return useMutation(getUpdateShopMutationOptions(options));
 };
+
+/**
+ * Returns the vehicles where `ownerShopId = :shopId`. Restricted to the
+shop's owner and admins — exposes plate numbers and insurance info.
+Only meaningful for `dealership` / `fleet` / `gsa` partners; independent
+shops never own vehicles.
+
+ * @summary List fleet vehicles registered to a partner shop
+ */
+export const getListShopVehiclesUrl = (shopId: number) => {
+  return `/api/shops/${shopId}/vehicles`;
+};
+
+export const listShopVehicles = async (
+  shopId: number,
+  options?: RequestInit,
+): Promise<ListShopVehicles200Item[]> => {
+  return customFetch<ListShopVehicles200Item[]>(
+    getListShopVehiclesUrl(shopId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getListShopVehiclesQueryKey = (shopId: number) => {
+  return [`/api/shops/${shopId}/vehicles`] as const;
+};
+
+export const getListShopVehiclesQueryOptions = <
+  TData = Awaited<ReturnType<typeof listShopVehicles>>,
+  TError = ErrorType<void>,
+>(
+  shopId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listShopVehicles>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListShopVehiclesQueryKey(shopId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listShopVehicles>>
+  > = ({ signal }) => listShopVehicles(shopId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!shopId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listShopVehicles>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListShopVehiclesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listShopVehicles>>
+>;
+export type ListShopVehiclesQueryError = ErrorType<void>;
+
+/**
+ * @summary List fleet vehicles registered to a partner shop
+ */
+
+export function useListShopVehicles<
+  TData = Awaited<ReturnType<typeof listShopVehicles>>,
+  TError = ErrorType<void>,
+>(
+  shopId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listShopVehicles>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListShopVehiclesQueryOptions(shopId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Add a bay to a shop (owner only)

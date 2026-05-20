@@ -17,6 +17,12 @@ export interface CreateShopBody {
   lat?: number;
   lng?: number;
   phone?: string;
+  /** Federal EIN / Tax ID. */
+  federalEin?: string;
+  /** State or local business license number. */
+  businessLicense?: string;
+  /** @deprecated */
   insuranceCarrier?: string;
+  /** @deprecated */
   insurancePolicyNumber?: string;
 }

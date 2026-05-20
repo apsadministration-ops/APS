@@ -57,6 +57,13 @@ export default function ShopOwnerTabLayout() {
         }}
       />
       <Tabs.Screen
+        name="vehicles"
+        options={{
+          title: "Vehicles",
+          tabBarIcon: ({ color }) => <Feather name="truck" size={22} color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="post-job"
         options={{
           title: "Post Job",
@@ -64,9 +71,17 @@ export default function ShopOwnerTabLayout() {
         }}
       />
       <Tabs.Screen
+        name="invoices"
+        options={{
+          title: "Invoices",
+          tabBarIcon: ({ color }) => <Feather name="file-text" size={22} color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="bookings"
         options={{
           title: "Bookings",
+          href: null,
           tabBarIcon: ({ color }) => <Feather name="calendar" size={22} color={color} />,
         }}
       />

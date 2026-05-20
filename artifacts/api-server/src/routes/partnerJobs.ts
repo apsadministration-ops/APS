@@ -60,7 +60,7 @@ router.post("/partner/jobs", authenticate, requireShopOwner, async (req: AuthReq
     res.status(403).json({ error: "Not your shop." });
     return;
   }
-  if (shop.partnerKind !== "dealership" && shop.partnerKind !== "fleet") {
+  if (shop.partnerKind !== "dealership" && shop.partnerKind !== "fleet" && shop.partnerKind !== "gsa") {
     res.status(403).json({ error: "Only Dealership and Fleet partners can post jobs. Independent Shops rent bays instead." });
     return;
   }
@@ -69,10 +69,15 @@ router.post("/partner/jobs", authenticate, requireShopOwner, async (req: AuthReq
     return;
   }
 
-  // Vehicle must exist. For v1 the partner is expected to register the
-  // vehicle via the existing /vehicles endpoint first (fleet onboarding).
+  // Vehicle must exist AND must be a fleet vehicle owned by THIS partner shop.
+  // Otherwise a shop owner could post jobs against any VIN in the platform
+  // (IDOR). Admins bypass for support workflows.
   const [vehicle] = await db.select().from(vehiclesTable).where(eq(vehiclesTable.id, body.vehicleId));
   if (!vehicle) { res.status(404).json({ error: "Vehicle not found." }); return; }
+  if (req.userRole !== "admin" && vehicle.ownerShopId !== shop.id) {
+    res.status(403).json({ error: "Vehicle is not registered to this partner location. Add it under Vehicles first." });
+    return;
+  }
 
   // Catalog: prefer serviceSlug for tier derivation. If missing, treat as a
   // free-text technician-tier repair job (sensible default for fleet ops).

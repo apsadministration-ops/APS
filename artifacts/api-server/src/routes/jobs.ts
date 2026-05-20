@@ -119,6 +119,11 @@ router.get("/jobs", authenticate, async (req: AuthRequest, res): Promise<void> =
   const { status, vehicleId, mechanicId } = req.query as { status?: string; vehicleId?: string; mechanicId?: string };
   let allJobs = await db.select().from(jobsTable).orderBy(jobsTable.createdAt);
   if (req.userRole === "customer") allJobs = allJobs.filter((j) => j.customerId === req.userId);
+  else if (req.userRole === "shop_owner") {
+    // Partner job posting puts the shop owner on the job as customer-of-record.
+    // They should only see their own jobs (NOT every job in the system).
+    allJobs = allJobs.filter((j) => j.customerId === req.userId);
+  }
   else if (req.userRole === "mechanic") {
     allJobs = allJobs.filter((j) =>
       j.mechanicId === req.userId ||

@@ -16,5 +16,11 @@ export interface Vehicle {
   trim?: string | null;
   color?: string | null;
   mileage: number;
+  /** Optional per-vehicle insurance carrier (mainly used by fleet/dealership/GSA partners). */
+  insuranceCarrier?: string | null;
+  /** Optional per-vehicle insurance policy number. */
+  insurancePolicyNumber?: string | null;
+  /** When set, this vehicle belongs to the given partner shop's fleet (rather than a personal customer owner). */
+  ownerShopId?: number | null;
   createdAt: Date;
 }

@@ -17,4 +17,5 @@ export const JobPartnerKindSnapshot = {
   independent_shop: "independent_shop",
   dealership: "dealership",
   fleet: "fleet",
+  gsa: "gsa",
 } as const;

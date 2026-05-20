@@ -257,6 +257,22 @@ export const ListVehiclesResponseItem = zod
     trim: zod.string().nullish(),
     color: zod.string().nullish(),
     mileage: zod.number(),
+    insuranceCarrier: zod
+      .string()
+      .nullish()
+      .describe(
+        "Optional per-vehicle insurance carrier (mainly used by fleet\/dealership\/GSA partners).",
+      ),
+    insurancePolicyNumber: zod
+      .string()
+      .nullish()
+      .describe("Optional per-vehicle insurance policy number."),
+    ownerShopId: zod
+      .number()
+      .nullish()
+      .describe(
+        "When set, this vehicle belongs to the given partner shop's fleet (rather than a personal customer owner).",
+      ),
     createdAt: zod.coerce.date(),
   })
   .and(
@@ -313,6 +329,20 @@ export const CreateVehicleBody = zod.object({
     .number()
     .min(createVehicleBodyMileageMin)
     .describe("Current odometer reading in miles. Required."),
+  insuranceCarrier: zod
+    .string()
+    .optional()
+    .describe("Optional. Per-vehicle insurance carrier name."),
+  insurancePolicyNumber: zod
+    .string()
+    .optional()
+    .describe("Optional. Per-vehicle insurance policy number."),
+  ownerShopId: zod
+    .number()
+    .optional()
+    .describe(
+      "Optional. When supplied, the vehicle is registered to a partner\nshop's fleet (the caller must own that shop and the shop must be\na dealership \/ fleet \/ GSA partner). Personal vehicles leave this\nnull and use the ownership history table instead.\n",
+    ),
 });
 
 /**
@@ -333,6 +363,22 @@ export const GetVehicleByVinResponse = zod
     trim: zod.string().nullish(),
     color: zod.string().nullish(),
     mileage: zod.number(),
+    insuranceCarrier: zod
+      .string()
+      .nullish()
+      .describe(
+        "Optional per-vehicle insurance carrier (mainly used by fleet\/dealership\/GSA partners).",
+      ),
+    insurancePolicyNumber: zod
+      .string()
+      .nullish()
+      .describe("Optional per-vehicle insurance policy number."),
+    ownerShopId: zod
+      .number()
+      .nullish()
+      .describe(
+        "When set, this vehicle belongs to the given partner shop's fleet (rather than a personal customer owner).",
+      ),
     createdAt: zod.coerce.date(),
   })
   .and(
@@ -386,6 +432,22 @@ export const GetVehicleResponse = zod
     trim: zod.string().nullish(),
     color: zod.string().nullish(),
     mileage: zod.number(),
+    insuranceCarrier: zod
+      .string()
+      .nullish()
+      .describe(
+        "Optional per-vehicle insurance carrier (mainly used by fleet\/dealership\/GSA partners).",
+      ),
+    insurancePolicyNumber: zod
+      .string()
+      .nullish()
+      .describe("Optional per-vehicle insurance policy number."),
+    ownerShopId: zod
+      .number()
+      .nullish()
+      .describe(
+        "When set, this vehicle belongs to the given partner shop's fleet (rather than a personal customer owner).",
+      ),
     createdAt: zod.coerce.date(),
   })
   .and(
@@ -743,6 +805,22 @@ export const ListJobsResponseItem = zod.object({
       trim: zod.string().nullish(),
       color: zod.string().nullish(),
       mileage: zod.number(),
+      insuranceCarrier: zod
+        .string()
+        .nullish()
+        .describe(
+          "Optional per-vehicle insurance carrier (mainly used by fleet\/dealership\/GSA partners).",
+        ),
+      insurancePolicyNumber: zod
+        .string()
+        .nullish()
+        .describe("Optional per-vehicle insurance policy number."),
+      ownerShopId: zod
+        .number()
+        .nullish()
+        .describe(
+          "When set, this vehicle belongs to the given partner shop's fleet (rather than a personal customer owner).",
+        ),
       createdAt: zod.coerce.date(),
     })
     .nullish(),
@@ -784,7 +862,7 @@ export const ListJobsResponseItem = zod.object({
       "Set when this job was posted by a Fleet or Dealership partner via POST \/partner\/jobs.",
     ),
   partnerKindSnapshot: zod
-    .enum(["independent_shop", "dealership", "fleet"])
+    .enum(["independent_shop", "dealership", "fleet", "gsa"])
     .nullish()
     .describe(
       "Denormalized snapshot of the posting shop's partnerKind at post-time.",
@@ -886,6 +964,22 @@ export const ListAvailableJobsResponseItem = zod.object({
       trim: zod.string().nullish(),
       color: zod.string().nullish(),
       mileage: zod.number(),
+      insuranceCarrier: zod
+        .string()
+        .nullish()
+        .describe(
+          "Optional per-vehicle insurance carrier (mainly used by fleet\/dealership\/GSA partners).",
+        ),
+      insurancePolicyNumber: zod
+        .string()
+        .nullish()
+        .describe("Optional per-vehicle insurance policy number."),
+      ownerShopId: zod
+        .number()
+        .nullish()
+        .describe(
+          "When set, this vehicle belongs to the given partner shop's fleet (rather than a personal customer owner).",
+        ),
       createdAt: zod.coerce.date(),
     })
     .nullish(),
@@ -927,7 +1021,7 @@ export const ListAvailableJobsResponseItem = zod.object({
       "Set when this job was posted by a Fleet or Dealership partner via POST \/partner\/jobs.",
     ),
   partnerKindSnapshot: zod
-    .enum(["independent_shop", "dealership", "fleet"])
+    .enum(["independent_shop", "dealership", "fleet", "gsa"])
     .nullish()
     .describe(
       "Denormalized snapshot of the posting shop's partnerKind at post-time.",
@@ -952,7 +1046,7 @@ export const ListAvailableJobsResponse = zod.array(
 
 /**
  * Fleet & Commercial Partner job posting. Only owners of shops with
-`partnerKind ∈ {dealership, fleet}` may post here — independent
+`partnerKind ∈ {dealership, fleet, gsa}` may post here — independent
 shops rent bays via `/bays` instead. The server stamps a flat
 commission override (default 15%, or 10% for GSA accounts when
 `shop.commissionOverridePct` is configured) and a tier-priority
@@ -1094,6 +1188,22 @@ export const GetJobResponse = zod.object({
       trim: zod.string().nullish(),
       color: zod.string().nullish(),
       mileage: zod.number(),
+      insuranceCarrier: zod
+        .string()
+        .nullish()
+        .describe(
+          "Optional per-vehicle insurance carrier (mainly used by fleet\/dealership\/GSA partners).",
+        ),
+      insurancePolicyNumber: zod
+        .string()
+        .nullish()
+        .describe("Optional per-vehicle insurance policy number."),
+      ownerShopId: zod
+        .number()
+        .nullish()
+        .describe(
+          "When set, this vehicle belongs to the given partner shop's fleet (rather than a personal customer owner).",
+        ),
       createdAt: zod.coerce.date(),
     })
     .nullish(),
@@ -1135,7 +1245,7 @@ export const GetJobResponse = zod.object({
       "Set when this job was posted by a Fleet or Dealership partner via POST \/partner\/jobs.",
     ),
   partnerKindSnapshot: zod
-    .enum(["independent_shop", "dealership", "fleet"])
+    .enum(["independent_shop", "dealership", "fleet", "gsa"])
     .nullish()
     .describe(
       "Denormalized snapshot of the posting shop's partnerKind at post-time.",
@@ -1217,6 +1327,22 @@ export const UpdateJobStatusResponse = zod.object({
       trim: zod.string().nullish(),
       color: zod.string().nullish(),
       mileage: zod.number(),
+      insuranceCarrier: zod
+        .string()
+        .nullish()
+        .describe(
+          "Optional per-vehicle insurance carrier (mainly used by fleet\/dealership\/GSA partners).",
+        ),
+      insurancePolicyNumber: zod
+        .string()
+        .nullish()
+        .describe("Optional per-vehicle insurance policy number."),
+      ownerShopId: zod
+        .number()
+        .nullish()
+        .describe(
+          "When set, this vehicle belongs to the given partner shop's fleet (rather than a personal customer owner).",
+        ),
       createdAt: zod.coerce.date(),
     })
     .nullish(),
@@ -1258,7 +1384,7 @@ export const UpdateJobStatusResponse = zod.object({
       "Set when this job was posted by a Fleet or Dealership partner via POST \/partner\/jobs.",
     ),
   partnerKindSnapshot: zod
-    .enum(["independent_shop", "dealership", "fleet"])
+    .enum(["independent_shop", "dealership", "fleet", "gsa"])
     .nullish()
     .describe(
       "Denormalized snapshot of the posting shop's partnerKind at post-time.",
@@ -1326,6 +1452,22 @@ export const AcceptJobResponse = zod.object({
       trim: zod.string().nullish(),
       color: zod.string().nullish(),
       mileage: zod.number(),
+      insuranceCarrier: zod
+        .string()
+        .nullish()
+        .describe(
+          "Optional per-vehicle insurance carrier (mainly used by fleet\/dealership\/GSA partners).",
+        ),
+      insurancePolicyNumber: zod
+        .string()
+        .nullish()
+        .describe("Optional per-vehicle insurance policy number."),
+      ownerShopId: zod
+        .number()
+        .nullish()
+        .describe(
+          "When set, this vehicle belongs to the given partner shop's fleet (rather than a personal customer owner).",
+        ),
       createdAt: zod.coerce.date(),
     })
     .nullish(),
@@ -1367,7 +1509,7 @@ export const AcceptJobResponse = zod.object({
       "Set when this job was posted by a Fleet or Dealership partner via POST \/partner\/jobs.",
     ),
   partnerKindSnapshot: zod
-    .enum(["independent_shop", "dealership", "fleet"])
+    .enum(["independent_shop", "dealership", "fleet", "gsa"])
     .nullish()
     .describe(
       "Denormalized snapshot of the posting shop's partnerKind at post-time.",
@@ -1435,6 +1577,22 @@ export const CancelJobResponse = zod.object({
       trim: zod.string().nullish(),
       color: zod.string().nullish(),
       mileage: zod.number(),
+      insuranceCarrier: zod
+        .string()
+        .nullish()
+        .describe(
+          "Optional per-vehicle insurance carrier (mainly used by fleet\/dealership\/GSA partners).",
+        ),
+      insurancePolicyNumber: zod
+        .string()
+        .nullish()
+        .describe("Optional per-vehicle insurance policy number."),
+      ownerShopId: zod
+        .number()
+        .nullish()
+        .describe(
+          "When set, this vehicle belongs to the given partner shop's fleet (rather than a personal customer owner).",
+        ),
       createdAt: zod.coerce.date(),
     })
     .nullish(),
@@ -1476,7 +1634,7 @@ export const CancelJobResponse = zod.object({
       "Set when this job was posted by a Fleet or Dealership partner via POST \/partner\/jobs.",
     ),
   partnerKindSnapshot: zod
-    .enum(["independent_shop", "dealership", "fleet"])
+    .enum(["independent_shop", "dealership", "fleet", "gsa"])
     .nullish()
     .describe(
       "Denormalized snapshot of the posting shop's partnerKind at post-time.",
@@ -1551,6 +1709,22 @@ export const RateCustomerResponse = zod.object({
       trim: zod.string().nullish(),
       color: zod.string().nullish(),
       mileage: zod.number(),
+      insuranceCarrier: zod
+        .string()
+        .nullish()
+        .describe(
+          "Optional per-vehicle insurance carrier (mainly used by fleet\/dealership\/GSA partners).",
+        ),
+      insurancePolicyNumber: zod
+        .string()
+        .nullish()
+        .describe("Optional per-vehicle insurance policy number."),
+      ownerShopId: zod
+        .number()
+        .nullish()
+        .describe(
+          "When set, this vehicle belongs to the given partner shop's fleet (rather than a personal customer owner).",
+        ),
       createdAt: zod.coerce.date(),
     })
     .nullish(),
@@ -1592,7 +1766,7 @@ export const RateCustomerResponse = zod.object({
       "Set when this job was posted by a Fleet or Dealership partner via POST \/partner\/jobs.",
     ),
   partnerKindSnapshot: zod
-    .enum(["independent_shop", "dealership", "fleet"])
+    .enum(["independent_shop", "dealership", "fleet", "gsa"])
     .nullish()
     .describe(
       "Denormalized snapshot of the posting shop's partnerKind at post-time.",
@@ -1668,6 +1842,22 @@ export const RateJobResponse = zod.object({
       trim: zod.string().nullish(),
       color: zod.string().nullish(),
       mileage: zod.number(),
+      insuranceCarrier: zod
+        .string()
+        .nullish()
+        .describe(
+          "Optional per-vehicle insurance carrier (mainly used by fleet\/dealership\/GSA partners).",
+        ),
+      insurancePolicyNumber: zod
+        .string()
+        .nullish()
+        .describe("Optional per-vehicle insurance policy number."),
+      ownerShopId: zod
+        .number()
+        .nullish()
+        .describe(
+          "When set, this vehicle belongs to the given partner shop's fleet (rather than a personal customer owner).",
+        ),
       createdAt: zod.coerce.date(),
     })
     .nullish(),
@@ -1709,7 +1899,7 @@ export const RateJobResponse = zod.object({
       "Set when this job was posted by a Fleet or Dealership partner via POST \/partner\/jobs.",
     ),
   partnerKindSnapshot: zod
-    .enum(["independent_shop", "dealership", "fleet"])
+    .enum(["independent_shop", "dealership", "fleet", "gsa"])
     .nullish()
     .describe(
       "Denormalized snapshot of the posting shop's partnerKind at post-time.",
@@ -1977,6 +2167,22 @@ export const GetCustomerDashboardResponse = zod.object({
           trim: zod.string().nullish(),
           color: zod.string().nullish(),
           mileage: zod.number(),
+          insuranceCarrier: zod
+            .string()
+            .nullish()
+            .describe(
+              "Optional per-vehicle insurance carrier (mainly used by fleet\/dealership\/GSA partners).",
+            ),
+          insurancePolicyNumber: zod
+            .string()
+            .nullish()
+            .describe("Optional per-vehicle insurance policy number."),
+          ownerShopId: zod
+            .number()
+            .nullish()
+            .describe(
+              "When set, this vehicle belongs to the given partner shop's fleet (rather than a personal customer owner).",
+            ),
           createdAt: zod.coerce.date(),
         })
         .nullish(),
@@ -2018,7 +2224,7 @@ export const GetCustomerDashboardResponse = zod.object({
           "Set when this job was posted by a Fleet or Dealership partner via POST \/partner\/jobs.",
         ),
       partnerKindSnapshot: zod
-        .enum(["independent_shop", "dealership", "fleet"])
+        .enum(["independent_shop", "dealership", "fleet", "gsa"])
         .nullish()
         .describe(
           "Denormalized snapshot of the posting shop's partnerKind at post-time.",
@@ -2095,6 +2301,22 @@ export const GetMechanicDashboardResponse = zod.object({
           trim: zod.string().nullish(),
           color: zod.string().nullish(),
           mileage: zod.number(),
+          insuranceCarrier: zod
+            .string()
+            .nullish()
+            .describe(
+              "Optional per-vehicle insurance carrier (mainly used by fleet\/dealership\/GSA partners).",
+            ),
+          insurancePolicyNumber: zod
+            .string()
+            .nullish()
+            .describe("Optional per-vehicle insurance policy number."),
+          ownerShopId: zod
+            .number()
+            .nullish()
+            .describe(
+              "When set, this vehicle belongs to the given partner shop's fleet (rather than a personal customer owner).",
+            ),
           createdAt: zod.coerce.date(),
         })
         .nullish(),
@@ -2136,7 +2358,7 @@ export const GetMechanicDashboardResponse = zod.object({
           "Set when this job was posted by a Fleet or Dealership partner via POST \/partner\/jobs.",
         ),
       partnerKindSnapshot: zod
-        .enum(["independent_shop", "dealership", "fleet"])
+        .enum(["independent_shop", "dealership", "fleet", "gsa"])
         .nullish()
         .describe(
           "Denormalized snapshot of the posting shop's partnerKind at post-time.",
@@ -2213,6 +2435,22 @@ export const GetAdminDashboardResponse = zod.object({
           trim: zod.string().nullish(),
           color: zod.string().nullish(),
           mileage: zod.number(),
+          insuranceCarrier: zod
+            .string()
+            .nullish()
+            .describe(
+              "Optional per-vehicle insurance carrier (mainly used by fleet\/dealership\/GSA partners).",
+            ),
+          insurancePolicyNumber: zod
+            .string()
+            .nullish()
+            .describe("Optional per-vehicle insurance policy number."),
+          ownerShopId: zod
+            .number()
+            .nullish()
+            .describe(
+              "When set, this vehicle belongs to the given partner shop's fleet (rather than a personal customer owner).",
+            ),
           createdAt: zod.coerce.date(),
         })
         .nullish(),
@@ -2254,7 +2492,7 @@ export const GetAdminDashboardResponse = zod.object({
           "Set when this job was posted by a Fleet or Dealership partner via POST \/partner\/jobs.",
         ),
       partnerKindSnapshot: zod
-        .enum(["independent_shop", "dealership", "fleet"])
+        .enum(["independent_shop", "dealership", "fleet", "gsa"])
         .nullish()
         .describe(
           "Denormalized snapshot of the posting shop's partnerKind at post-time.",
@@ -2458,7 +2696,7 @@ export const createShopBodyPartnerKindDefault = `independent_shop`;
 
 export const CreateShopBody = zod.object({
   partnerKind: zod
-    .enum(["independent_shop", "dealership", "fleet"])
+    .enum(["independent_shop", "dealership", "fleet", "gsa"])
     .default(createShopBodyPartnerKindDefault),
   name: zod.string(),
   address: zod.string(),
@@ -2468,6 +2706,11 @@ export const CreateShopBody = zod.object({
   lat: zod.number().optional(),
   lng: zod.number().optional(),
   phone: zod.string().optional(),
+  federalEin: zod.string().optional().describe("Federal EIN \/ Tax ID."),
+  businessLicense: zod
+    .string()
+    .optional()
+    .describe("State or local business license number."),
   insuranceCarrier: zod.string().optional(),
   insurancePolicyNumber: zod.string().optional(),
 });
@@ -2479,9 +2722,9 @@ export const ListMyShopsResponseItem = zod.object({
   id: zod.number(),
   ownerId: zod.number(),
   partnerKind: zod
-    .enum(["independent_shop", "dealership", "fleet"])
+    .enum(["independent_shop", "dealership", "fleet", "gsa"])
     .describe(
-      "Discriminates the partner type. `independent_shop` uses the classic\nbay-rental marketplace. `dealership` and `fleet` can additionally\npost overflow jobs at a reduced commission.\n",
+      "Discriminates the partner type. `independent_shop` uses the classic\nbay-rental marketplace. `dealership`, `fleet`, and `gsa` (Government \/\nGSA accounts) can additionally post overflow jobs at a reduced\ncommission.\n",
     ),
   name: zod.string(),
   address: zod.string(),
@@ -2491,8 +2734,28 @@ export const ListMyShopsResponseItem = zod.object({
   lat: zod.number().nullish(),
   lng: zod.number().nullish(),
   phone: zod.string().nullish(),
-  insuranceCarrier: zod.string().nullish(),
-  insurancePolicyNumber: zod.string().nullish(),
+  federalEin: zod
+    .string()
+    .nullish()
+    .describe(
+      "Federal EIN \/ Tax ID — used to uniquely identify the partner business with the IRS.",
+    ),
+  businessLicense: zod
+    .string()
+    .nullish()
+    .describe("State or local business license number."),
+  insuranceCarrier: zod
+    .string()
+    .nullish()
+    .describe(
+      "DEPRECATED. Per-vehicle insurance now lives on `Vehicle.insuranceCarrier`.",
+    ),
+  insurancePolicyNumber: zod
+    .string()
+    .nullish()
+    .describe(
+      "DEPRECATED. Per-vehicle insurance now lives on `Vehicle.insurancePolicyNumber`.",
+    ),
   status: zod.enum(["active", "inactive"]),
   createdAt: zod.coerce.date(),
 });
@@ -2510,9 +2773,9 @@ export const GetShopResponse = zod
     id: zod.number(),
     ownerId: zod.number(),
     partnerKind: zod
-      .enum(["independent_shop", "dealership", "fleet"])
+      .enum(["independent_shop", "dealership", "fleet", "gsa"])
       .describe(
-        "Discriminates the partner type. `independent_shop` uses the classic\nbay-rental marketplace. `dealership` and `fleet` can additionally\npost overflow jobs at a reduced commission.\n",
+        "Discriminates the partner type. `independent_shop` uses the classic\nbay-rental marketplace. `dealership`, `fleet`, and `gsa` (Government \/\nGSA accounts) can additionally post overflow jobs at a reduced\ncommission.\n",
       ),
     name: zod.string(),
     address: zod.string(),
@@ -2522,8 +2785,28 @@ export const GetShopResponse = zod
     lat: zod.number().nullish(),
     lng: zod.number().nullish(),
     phone: zod.string().nullish(),
-    insuranceCarrier: zod.string().nullish(),
-    insurancePolicyNumber: zod.string().nullish(),
+    federalEin: zod
+      .string()
+      .nullish()
+      .describe(
+        "Federal EIN \/ Tax ID — used to uniquely identify the partner business with the IRS.",
+      ),
+    businessLicense: zod
+      .string()
+      .nullish()
+      .describe("State or local business license number."),
+    insuranceCarrier: zod
+      .string()
+      .nullish()
+      .describe(
+        "DEPRECATED. Per-vehicle insurance now lives on `Vehicle.insuranceCarrier`.",
+      ),
+    insurancePolicyNumber: zod
+      .string()
+      .nullish()
+      .describe(
+        "DEPRECATED. Per-vehicle insurance now lives on `Vehicle.insurancePolicyNumber`.",
+      ),
     status: zod.enum(["active", "inactive"]),
     createdAt: zod.coerce.date(),
   })
@@ -2570,6 +2853,8 @@ export const UpdateShopBody = zod.object({
   lat: zod.number().optional(),
   lng: zod.number().optional(),
   phone: zod.string().optional(),
+  federalEin: zod.string().optional(),
+  businessLicense: zod.string().optional(),
   insuranceCarrier: zod.string().optional(),
   insurancePolicyNumber: zod.string().optional(),
   status: zod.enum(["active", "inactive"]).optional(),
@@ -2579,9 +2864,9 @@ export const UpdateShopResponse = zod.object({
   id: zod.number(),
   ownerId: zod.number(),
   partnerKind: zod
-    .enum(["independent_shop", "dealership", "fleet"])
+    .enum(["independent_shop", "dealership", "fleet", "gsa"])
     .describe(
-      "Discriminates the partner type. `independent_shop` uses the classic\nbay-rental marketplace. `dealership` and `fleet` can additionally\npost overflow jobs at a reduced commission.\n",
+      "Discriminates the partner type. `independent_shop` uses the classic\nbay-rental marketplace. `dealership`, `fleet`, and `gsa` (Government \/\nGSA accounts) can additionally post overflow jobs at a reduced\ncommission.\n",
     ),
   name: zod.string(),
   address: zod.string(),
@@ -2591,11 +2876,79 @@ export const UpdateShopResponse = zod.object({
   lat: zod.number().nullish(),
   lng: zod.number().nullish(),
   phone: zod.string().nullish(),
-  insuranceCarrier: zod.string().nullish(),
-  insurancePolicyNumber: zod.string().nullish(),
+  federalEin: zod
+    .string()
+    .nullish()
+    .describe(
+      "Federal EIN \/ Tax ID — used to uniquely identify the partner business with the IRS.",
+    ),
+  businessLicense: zod
+    .string()
+    .nullish()
+    .describe("State or local business license number."),
+  insuranceCarrier: zod
+    .string()
+    .nullish()
+    .describe(
+      "DEPRECATED. Per-vehicle insurance now lives on `Vehicle.insuranceCarrier`.",
+    ),
+  insurancePolicyNumber: zod
+    .string()
+    .nullish()
+    .describe(
+      "DEPRECATED. Per-vehicle insurance now lives on `Vehicle.insurancePolicyNumber`.",
+    ),
   status: zod.enum(["active", "inactive"]),
   createdAt: zod.coerce.date(),
 });
+
+/**
+ * Returns the vehicles where `ownerShopId = :shopId`. Restricted to the
+shop's owner and admins — exposes plate numbers and insurance info.
+Only meaningful for `dealership` / `fleet` / `gsa` partners; independent
+shops never own vehicles.
+
+ * @summary List fleet vehicles registered to a partner shop
+ */
+export const ListShopVehiclesParams = zod.object({
+  shopId: zod.coerce.number(),
+});
+
+export const ListShopVehiclesResponseItem = zod
+  .object({
+    id: zod.number(),
+    vin: zod.string(),
+    plateNumber: zod.string().nullish(),
+    make: zod.string(),
+    model: zod.string(),
+    year: zod.number(),
+    trim: zod.string().nullish(),
+    color: zod.string().nullish(),
+    mileage: zod.number(),
+    insuranceCarrier: zod
+      .string()
+      .nullish()
+      .describe(
+        "Optional per-vehicle insurance carrier (mainly used by fleet\/dealership\/GSA partners).",
+      ),
+    insurancePolicyNumber: zod
+      .string()
+      .nullish()
+      .describe("Optional per-vehicle insurance policy number."),
+    ownerShopId: zod
+      .number()
+      .nullish()
+      .describe(
+        "When set, this vehicle belongs to the given partner shop's fleet (rather than a personal customer owner).",
+      ),
+    createdAt: zod.coerce.date(),
+  })
+  .and(
+    zod.object({
+      serviceCount: zod.number(),
+    }),
+  );
+export const ListShopVehiclesResponse = zod.array(ListShopVehiclesResponseItem);
 
 /**
  * @summary Add a bay to a shop (owner only)
@@ -2691,9 +3044,9 @@ export const ListAvailableBaysResponseItem = zod
         id: zod.number(),
         ownerId: zod.number(),
         partnerKind: zod
-          .enum(["independent_shop", "dealership", "fleet"])
+          .enum(["independent_shop", "dealership", "fleet", "gsa"])
           .describe(
-            "Discriminates the partner type. `independent_shop` uses the classic\nbay-rental marketplace. `dealership` and `fleet` can additionally\npost overflow jobs at a reduced commission.\n",
+            "Discriminates the partner type. `independent_shop` uses the classic\nbay-rental marketplace. `dealership`, `fleet`, and `gsa` (Government \/\nGSA accounts) can additionally post overflow jobs at a reduced\ncommission.\n",
           ),
         name: zod.string(),
         address: zod.string(),
@@ -2703,8 +3056,28 @@ export const ListAvailableBaysResponseItem = zod
         lat: zod.number().nullish(),
         lng: zod.number().nullish(),
         phone: zod.string().nullish(),
-        insuranceCarrier: zod.string().nullish(),
-        insurancePolicyNumber: zod.string().nullish(),
+        federalEin: zod
+          .string()
+          .nullish()
+          .describe(
+            "Federal EIN \/ Tax ID — used to uniquely identify the partner business with the IRS.",
+          ),
+        businessLicense: zod
+          .string()
+          .nullish()
+          .describe("State or local business license number."),
+        insuranceCarrier: zod
+          .string()
+          .nullish()
+          .describe(
+            "DEPRECATED. Per-vehicle insurance now lives on `Vehicle.insuranceCarrier`.",
+          ),
+        insurancePolicyNumber: zod
+          .string()
+          .nullish()
+          .describe(
+            "DEPRECATED. Per-vehicle insurance now lives on `Vehicle.insurancePolicyNumber`.",
+          ),
         status: zod.enum(["active", "inactive"]),
         createdAt: zod.coerce.date(),
       }),
@@ -2748,9 +3121,9 @@ export const GetBayResponse = zod
         id: zod.number(),
         ownerId: zod.number(),
         partnerKind: zod
-          .enum(["independent_shop", "dealership", "fleet"])
+          .enum(["independent_shop", "dealership", "fleet", "gsa"])
           .describe(
-            "Discriminates the partner type. `independent_shop` uses the classic\nbay-rental marketplace. `dealership` and `fleet` can additionally\npost overflow jobs at a reduced commission.\n",
+            "Discriminates the partner type. `independent_shop` uses the classic\nbay-rental marketplace. `dealership`, `fleet`, and `gsa` (Government \/\nGSA accounts) can additionally post overflow jobs at a reduced\ncommission.\n",
           ),
         name: zod.string(),
         address: zod.string(),
@@ -2760,8 +3133,28 @@ export const GetBayResponse = zod
         lat: zod.number().nullish(),
         lng: zod.number().nullish(),
         phone: zod.string().nullish(),
-        insuranceCarrier: zod.string().nullish(),
-        insurancePolicyNumber: zod.string().nullish(),
+        federalEin: zod
+          .string()
+          .nullish()
+          .describe(
+            "Federal EIN \/ Tax ID — used to uniquely identify the partner business with the IRS.",
+          ),
+        businessLicense: zod
+          .string()
+          .nullish()
+          .describe("State or local business license number."),
+        insuranceCarrier: zod
+          .string()
+          .nullish()
+          .describe(
+            "DEPRECATED. Per-vehicle insurance now lives on `Vehicle.insuranceCarrier`.",
+          ),
+        insurancePolicyNumber: zod
+          .string()
+          .nullish()
+          .describe(
+            "DEPRECATED. Per-vehicle insurance now lives on `Vehicle.insurancePolicyNumber`.",
+          ),
         status: zod.enum(["active", "inactive"]),
         createdAt: zod.coerce.date(),
       }),
@@ -3095,6 +3488,22 @@ export const ApproveJobTransportResponse = zod.object({
       trim: zod.string().nullish(),
       color: zod.string().nullish(),
       mileage: zod.number(),
+      insuranceCarrier: zod
+        .string()
+        .nullish()
+        .describe(
+          "Optional per-vehicle insurance carrier (mainly used by fleet\/dealership\/GSA partners).",
+        ),
+      insurancePolicyNumber: zod
+        .string()
+        .nullish()
+        .describe("Optional per-vehicle insurance policy number."),
+      ownerShopId: zod
+        .number()
+        .nullish()
+        .describe(
+          "When set, this vehicle belongs to the given partner shop's fleet (rather than a personal customer owner).",
+        ),
       createdAt: zod.coerce.date(),
     })
     .nullish(),
@@ -3136,7 +3545,7 @@ export const ApproveJobTransportResponse = zod.object({
       "Set when this job was posted by a Fleet or Dealership partner via POST \/partner\/jobs.",
     ),
   partnerKindSnapshot: zod
-    .enum(["independent_shop", "dealership", "fleet"])
+    .enum(["independent_shop", "dealership", "fleet", "gsa"])
     .nullish()
     .describe(
       "Denormalized snapshot of the posting shop's partnerKind at post-time.",

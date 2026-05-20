@@ -50,7 +50,7 @@ export const jobsTable = pgTable("jobs", {
   // platform-fee percentage (0..100, integer) stamped at post-time and
   // honoured by financialEngine; replaces tier-catalog rates when set.
   postedByShopId: integer("posted_by_shop_id").references(() => shopsTable.id),
-  partnerKindSnapshot: text("partner_kind_snapshot", { enum: ["independent_shop", "dealership", "fleet"] }),
+  partnerKindSnapshot: text("partner_kind_snapshot", { enum: ["independent_shop", "dealership", "fleet", "gsa"] }),
   urgency: text("urgency", { enum: ["low", "normal", "high", "urgent"] }).notNull().default("normal"),
   commissionPctOverride: integer("commission_pct_override"),
   // Junior tiers (technician/detailer) are gated until this timestamp.

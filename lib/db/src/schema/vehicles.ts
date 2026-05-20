@@ -12,6 +12,15 @@ export const vehiclesTable = pgTable("vehicles", {
   trim: text("trim"),
   color: text("color"),
   mileage: integer("mileage").notNull(),
+  // Optional per-vehicle insurance (used by fleet/dealership/GSA partners
+  // who track coverage on each unit). Stored opaquely — APS does not
+  // contact the carrier.
+  insuranceCarrier: text("insurance_carrier"),
+  insurancePolicyNumber: text("insurance_policy_number"),
+  // Fleet linkage: when a fleet/GSA/dealership partner adds a vehicle, we
+  // stamp the owning shop so the partner can list "their" fleet. NULL for
+  // ordinary customer-owned vehicles (which use ownership history).
+  ownerShopId: integer("owner_shop_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   uniqueIndex("vehicles_vin_unique").on(t.vin),

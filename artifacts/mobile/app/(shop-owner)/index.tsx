@@ -24,11 +24,12 @@ export default function ShopsListScreen() {
   });
   const createMutation = useCreateShop();
 
-  type PartnerKind = "independent_shop" | "dealership" | "fleet";
+  type PartnerKind = "independent_shop" | "dealership" | "fleet" | "gsa";
   const PARTNER_KINDS: { value: PartnerKind; label: string; icon: keyof typeof Feather.glyphMap; desc: string }[] = [
-    { value: "independent_shop", label: "Independent Shop", icon: "tool", desc: "Rent out bays and lifts to mechanics by the hour or day." },
+    { value: "independent_shop", label: "Independent Shop", icon: "tool",  desc: "Rent out bays and lifts to mechanics by the hour or day." },
     { value: "dealership",       label: "Dealership",       icon: "award", desc: "Service department posting overflow jobs to qualified mechanics." },
-    { value: "fleet",            label: "Fleet",            icon: "truck", desc: "Corporate, gov, rental, or trucking — VIN-based service history across your fleet." },
+    { value: "fleet",            label: "Fleet",            icon: "truck", desc: "Corporate, rental, or trucking — VIN-based service history across your fleet." },
+    { value: "gsa",              label: "Government / GSA", icon: "shield", desc: "U.S. Government, GSA, and public-sector fleets — flat 10% commission." },
   ];
 
   const [showForm, setShowForm] = useState(false);
@@ -39,8 +40,8 @@ export default function ShopsListScreen() {
   const [region, setRegion] = useState("");
   const [zipCode, setZipCode] = useState("");
   const [phone, setPhone] = useState("");
-  const [insuranceCarrier, setInsuranceCarrier] = useState("");
-  const [insurancePolicy, setInsurancePolicy] = useState("");
+  const [federalEin, setFederalEin] = useState("");
+  const [businessLicense, setBusinessLicense] = useState("");
   const [error, setError] = useState("");
 
   const submit = () => {
@@ -59,8 +60,8 @@ export default function ShopsListScreen() {
           region: region.trim(),
           zipCode: zipCode.trim(),
           phone: phone.trim() || undefined,
-          insuranceCarrier: insuranceCarrier.trim() || undefined,
-          insurancePolicyNumber: insurancePolicy.trim() || undefined,
+          federalEin: federalEin.trim() || undefined,
+          businessLicense: businessLicense.trim() || undefined,
         },
       },
       {
@@ -68,7 +69,7 @@ export default function ShopsListScreen() {
           setShowForm(false);
           setPartnerKind("independent_shop");
           setName(""); setAddress(""); setCity(""); setRegion(""); setZipCode("");
-          setPhone(""); setInsuranceCarrier(""); setInsurancePolicy("");
+          setPhone(""); setFederalEin(""); setBusinessLicense("");
           queryClient.invalidateQueries({ queryKey: getListMyShopsQueryKey() });
           void alertMessage("Partner location created", "You can now configure bays, jobs, or fleet vehicles inside this location.");
         },
@@ -79,10 +80,12 @@ export default function ShopsListScreen() {
 
   const kindLabel = (k: string | null | undefined) =>
     k === "dealership" ? "Dealership" :
-    k === "fleet" ? "Fleet" : "Independent Shop";
+    k === "fleet" ? "Fleet" :
+    k === "gsa" ? "Government / GSA" : "Independent Shop";
   const kindIcon = (k: string | null | undefined): keyof typeof Feather.glyphMap =>
     k === "dealership" ? "award" :
-    k === "fleet" ? "truck" : "tool";
+    k === "fleet" ? "truck" :
+    k === "gsa" ? "shield" : "tool";
 
   if (isLoading) {
     return (
@@ -246,22 +249,24 @@ export default function ShopsListScreen() {
               onChangeText={setPhone}
             />
 
-            <Text style={[styles.label, { color: colors.mutedForeground }]}>INSURANCE CARRIER</Text>
+            <Text style={[styles.label, { color: colors.mutedForeground }]}>FEDERAL EIN / TAX ID</Text>
             <TextInput
               style={[styles.input, { backgroundColor: colors.background, color: colors.foreground, borderColor: colors.border }]}
-              placeholder="State Farm Commercial"
+              placeholder="12-3456789"
               placeholderTextColor={colors.mutedForeground}
-              value={insuranceCarrier}
-              onChangeText={setInsuranceCarrier}
+              autoCapitalize="characters"
+              value={federalEin}
+              onChangeText={setFederalEin}
             />
 
-            <Text style={[styles.label, { color: colors.mutedForeground }]}>POLICY NUMBER</Text>
+            <Text style={[styles.label, { color: colors.mutedForeground }]}>BUSINESS LICENSE NUMBER</Text>
             <TextInput
               style={[styles.input, { backgroundColor: colors.background, color: colors.foreground, borderColor: colors.border }]}
-              placeholder="POL-12345"
+              placeholder="BL-2024-00123"
               placeholderTextColor={colors.mutedForeground}
-              value={insurancePolicy}
-              onChangeText={setInsurancePolicy}
+              autoCapitalize="characters"
+              value={businessLicense}
+              onChangeText={setBusinessLicense}
             />
 
             {error ? <Text style={[styles.error, { color: colors.destructive }]}>{error}</Text> : null}

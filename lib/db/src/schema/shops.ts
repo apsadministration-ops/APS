@@ -10,11 +10,12 @@ import { usersTable } from "./users";
 // `partnerKind` discriminates which UX + business rules apply:
 //   - independent_shop  — classic bay/lift rental marketplace
 //   - dealership        — dealership service department posting overflow
-//   - fleet             — corporate/government/rental/trucking fleet
+//   - fleet             — corporate, rental, or trucking fleet
+//   - gsa               — U.S. Government / GSA accounts (gov fleets, agencies)
 export const shopsTable = pgTable("shops", {
   id: serial("id").primaryKey(),
   ownerId: integer("owner_id").notNull().references(() => usersTable.id),
-  partnerKind: text("partner_kind", { enum: ["independent_shop", "dealership", "fleet"] })
+  partnerKind: text("partner_kind", { enum: ["independent_shop", "dealership", "fleet", "gsa"] })
     .notNull()
     .default("independent_shop"),
   // Optional flat commission override for this partner's posted jobs.
@@ -29,8 +30,16 @@ export const shopsTable = pgTable("shops", {
   lat: doublePrecision("lat"),
   lng: doublePrecision("lng"),
   phone: text("phone"),
-  // Insurance metadata is stored opaquely; APS does not contact the carrier.
-  // Exposed in dispute UI only — see liability model in spec section 8.
+  // Partner identification (replaces the legacy insurance fields on the
+  // shop form — vehicle-level insurance now lives on `vehicles`). Federal
+  // EIN / Tax ID is what the IRS uses to identify the business; business
+  // license is the state/local trade authorisation. Both optional but
+  // strongly recommended for dealership / fleet / GSA partners.
+  federalEin: text("federal_ein"),
+  businessLicense: text("business_license"),
+  // DEPRECATED — retained for back-compat with any pre-rebrand rows.
+  // Not exposed on the new shop form; new vehicle-level insurance lives
+  // on `vehicles.insurance_carrier` + `vehicles.insurance_policy_number`.
   insuranceCarrier: text("insurance_carrier"),
   insurancePolicyNumber: text("insurance_policy_number"),
   status: text("status", { enum: ["active", "inactive"] }).notNull().default("active"),

@@ -12,8 +12,9 @@ export interface Shop {
   id: number;
   ownerId: number;
   /** Discriminates the partner type. `independent_shop` uses the classic
-bay-rental marketplace. `dealership` and `fleet` can additionally
-post overflow jobs at a reduced commission.
+bay-rental marketplace. `dealership`, `fleet`, and `gsa` (Government /
+GSA accounts) can additionally post overflow jobs at a reduced
+commission.
  */
   partnerKind: ShopPartnerKind;
   name: string;
@@ -24,7 +25,19 @@ post overflow jobs at a reduced commission.
   lat?: number | null;
   lng?: number | null;
   phone?: string | null;
+  /** Federal EIN / Tax ID — used to uniquely identify the partner business with the IRS. */
+  federalEin?: string | null;
+  /** State or local business license number. */
+  businessLicense?: string | null;
+  /**
+   * DEPRECATED. Per-vehicle insurance now lives on `Vehicle.insuranceCarrier`.
+   * @deprecated
+   */
   insuranceCarrier?: string | null;
+  /**
+   * DEPRECATED. Per-vehicle insurance now lives on `Vehicle.insurancePolicyNumber`.
+   * @deprecated
+   */
   insurancePolicyNumber?: string | null;
   status: ShopStatus;
   createdAt: Date;

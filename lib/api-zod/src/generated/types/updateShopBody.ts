@@ -16,7 +16,11 @@ export interface UpdateShopBody {
   lat?: number;
   lng?: number;
   phone?: string;
+  federalEin?: string;
+  businessLicense?: string;
+  /** @deprecated */
   insuranceCarrier?: string;
+  /** @deprecated */
   insurancePolicyNumber?: string;
   status?: UpdateShopBodyStatus;
 }

@@ -146,6 +146,12 @@ export interface Vehicle {
   trim?: string | null;
   color?: string | null;
   mileage: number;
+  /** Optional per-vehicle insurance carrier (mainly used by fleet/dealership/GSA partners). */
+  insuranceCarrier?: string | null;
+  /** Optional per-vehicle insurance policy number. */
+  insurancePolicyNumber?: string | null;
+  /** When set, this vehicle belongs to the given partner shop's fleet (rather than a personal customer owner). */
+  ownerShopId?: number | null;
   createdAt: string;
 }
 
@@ -172,6 +178,16 @@ export interface CreateVehicleBody {
    * @minimum 0
    */
   mileage: number;
+  /** Optional. Per-vehicle insurance carrier name. */
+  insuranceCarrier?: string;
+  /** Optional. Per-vehicle insurance policy number. */
+  insurancePolicyNumber?: string;
+  /** Optional. When supplied, the vehicle is registered to a partner
+shop's fleet (the caller must own that shop and the shop must be
+a dealership / fleet / GSA partner). Personal vehicles leave this
+null and use the ownership history table instead.
+ */
+  ownerShopId?: number;
 }
 
 export interface TransferVehicleBody {
@@ -237,6 +253,7 @@ export const JobPartnerKindSnapshot = {
   independent_shop: "independent_shop",
   dealership: "dealership",
   fleet: "fleet",
+  gsa: "gsa",
 } as const;
 
 /**
@@ -832,8 +849,9 @@ export interface AssistantChatResponse {
 
 /**
  * Discriminates the partner type. `independent_shop` uses the classic
-bay-rental marketplace. `dealership` and `fleet` can additionally
-post overflow jobs at a reduced commission.
+bay-rental marketplace. `dealership`, `fleet`, and `gsa` (Government /
+GSA accounts) can additionally post overflow jobs at a reduced
+commission.
 
  */
 export type ShopPartnerKind =
@@ -843,6 +861,7 @@ export const ShopPartnerKind = {
   independent_shop: "independent_shop",
   dealership: "dealership",
   fleet: "fleet",
+  gsa: "gsa",
 } as const;
 
 export type ShopStatus = (typeof ShopStatus)[keyof typeof ShopStatus];
@@ -856,8 +875,9 @@ export interface Shop {
   id: number;
   ownerId: number;
   /** Discriminates the partner type. `independent_shop` uses the classic
-bay-rental marketplace. `dealership` and `fleet` can additionally
-post overflow jobs at a reduced commission.
+bay-rental marketplace. `dealership`, `fleet`, and `gsa` (Government /
+GSA accounts) can additionally post overflow jobs at a reduced
+commission.
  */
   partnerKind: ShopPartnerKind;
   name: string;
@@ -868,7 +888,19 @@ post overflow jobs at a reduced commission.
   lat?: number | null;
   lng?: number | null;
   phone?: string | null;
+  /** Federal EIN / Tax ID — used to uniquely identify the partner business with the IRS. */
+  federalEin?: string | null;
+  /** State or local business license number. */
+  businessLicense?: string | null;
+  /**
+   * DEPRECATED. Per-vehicle insurance now lives on `Vehicle.insuranceCarrier`.
+   * @deprecated
+   */
   insuranceCarrier?: string | null;
+  /**
+   * DEPRECATED. Per-vehicle insurance now lives on `Vehicle.insurancePolicyNumber`.
+   * @deprecated
+   */
   insurancePolicyNumber?: string | null;
   status: ShopStatus;
   createdAt: string;
@@ -881,6 +913,7 @@ export const CreateShopBodyPartnerKind = {
   independent_shop: "independent_shop",
   dealership: "dealership",
   fleet: "fleet",
+  gsa: "gsa",
 } as const;
 
 export interface CreateShopBody {
@@ -893,7 +926,13 @@ export interface CreateShopBody {
   lat?: number;
   lng?: number;
   phone?: string;
+  /** Federal EIN / Tax ID. */
+  federalEin?: string;
+  /** State or local business license number. */
+  businessLicense?: string;
+  /** @deprecated */
   insuranceCarrier?: string;
+  /** @deprecated */
   insurancePolicyNumber?: string;
 }
 
@@ -914,7 +953,11 @@ export interface UpdateShopBody {
   lat?: number;
   lng?: number;
   phone?: string;
+  federalEin?: string;
+  businessLicense?: string;
+  /** @deprecated */
   insuranceCarrier?: string;
+  /** @deprecated */
   insurancePolicyNumber?: string;
   status?: UpdateShopBodyStatus;
 }
@@ -1822,6 +1865,10 @@ export const ListMechanicsJobType = {
 
 export type RemoveFavorite200 = {
   ok: boolean;
+};
+
+export type ListShopVehicles200Item = Vehicle & {
+  serviceCount: number;
 };
 
 export type ListAvailableBaysParams = {

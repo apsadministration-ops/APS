@@ -23,4 +23,14 @@ export interface CreateVehicleBody {
    * @minimum 0
    */
   mileage: number;
+  /** Optional. Per-vehicle insurance carrier name. */
+  insuranceCarrier?: string;
+  /** Optional. Per-vehicle insurance policy number. */
+  insurancePolicyNumber?: string;
+  /** Optional. When supplied, the vehicle is registered to a partner
+shop's fleet (the caller must own that shop and the shop must be
+a dealership / fleet / GSA partner). Personal vehicles leave this
+null and use the ownership history table instead.
+ */
+  ownerShopId?: number;
 }

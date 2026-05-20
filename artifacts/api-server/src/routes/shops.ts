@@ -13,6 +13,10 @@ function formatShop(s: typeof shopsTable.$inferSelect) {
     name: s.name,
     address: s.address, city: s.city, region: s.region, zipCode: s.zipCode,
     lat: s.lat ?? null, lng: s.lng ?? null, phone: s.phone ?? null,
+    federalEin: s.federalEin ?? null,
+    businessLicense: s.businessLicense ?? null,
+    // DEPRECATED — kept in the response shape only for any client that
+    // still reads them. New UI no longer surfaces these.
     insuranceCarrier: s.insuranceCarrier ?? null,
     insurancePolicyNumber: s.insurancePolicyNumber ?? null,
     status: s.status, createdAt: s.createdAt,
@@ -38,6 +42,8 @@ router.post("/shops", authenticate, requireShopOwner, async (req: AuthRequest, r
     partnerKind: v.partnerKind ?? "independent_shop",
     name: v.name, address: v.address, city: v.city, region: v.region, zipCode: v.zipCode,
     lat: v.lat ?? null, lng: v.lng ?? null, phone: v.phone ?? null,
+    federalEin: v.federalEin ?? null,
+    businessLicense: v.businessLicense ?? null,
     insuranceCarrier: v.insuranceCarrier ?? null,
     insurancePolicyNumber: v.insurancePolicyNumber ?? null,
   }).returning();
@@ -87,6 +93,8 @@ router.patch("/shops/:shopId", authenticate, requireShopOwner, async (req: AuthR
   if (v.lat !== undefined) updates.lat = v.lat;
   if (v.lng !== undefined) updates.lng = v.lng;
   if (v.phone !== undefined) updates.phone = v.phone;
+  if (v.federalEin !== undefined) updates.federalEin = v.federalEin;
+  if (v.businessLicense !== undefined) updates.businessLicense = v.businessLicense;
   if (v.insuranceCarrier !== undefined) updates.insuranceCarrier = v.insuranceCarrier;
   if (v.insurancePolicyNumber !== undefined) updates.insurancePolicyNumber = v.insurancePolicyNumber;
   if (v.status !== undefined) updates.status = v.status;

@@ -24,7 +24,7 @@ export default function PostJobScreen() {
   const createMutation = useCreatePartnerJob();
 
   const eligibleShops = useMemo(
-    () => (shops ?? []).filter((s: any) => s.partnerKind === "dealership" || s.partnerKind === "fleet"),
+    () => (shops ?? []).filter((s: any) => s.partnerKind === "dealership" || s.partnerKind === "fleet" || s.partnerKind === "gsa"),
     [shops],
   );
 
@@ -119,14 +119,14 @@ export default function PostJobScreen() {
               ]}
             >
               <Feather
-                name={s.partnerKind === "fleet" ? "truck" : "award"}
+                name={s.partnerKind === "fleet" ? "truck" : s.partnerKind === "gsa" ? "shield" : "award"}
                 size={20}
                 color={selected ? colors.primary : colors.mutedForeground}
               />
               <View style={{ flex: 1 }}>
                 <Text style={[styles.shopName, { color: selected ? colors.primary : colors.foreground }]}>{s.name}</Text>
                 <Text style={[styles.shopKind, { color: colors.mutedForeground }]}>
-                  {s.partnerKind === "fleet" ? "Fleet" : "Dealership"} · {s.city}, {s.region}
+                  {s.partnerKind === "fleet" ? "Fleet" : s.partnerKind === "gsa" ? "Government / GSA" : "Dealership"} · {s.city}, {s.region}
                 </Text>
               </View>
               {selected && <Feather name="check-circle" size={18} color={colors.primary} />}

@@ -8,8 +8,9 @@
 
 /**
  * Discriminates the partner type. `independent_shop` uses the classic
-bay-rental marketplace. `dealership` and `fleet` can additionally
-post overflow jobs at a reduced commission.
+bay-rental marketplace. `dealership`, `fleet`, and `gsa` (Government /
+GSA accounts) can additionally post overflow jobs at a reduced
+commission.
 
  */
 export type ShopPartnerKind =
@@ -19,4 +20,5 @@ export const ShopPartnerKind = {
   independent_shop: "independent_shop",
   dealership: "dealership",
   fleet: "fleet",
+  gsa: "gsa",
 } as const;
