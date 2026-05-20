@@ -39,15 +39,6 @@ commission.
    * @deprecated
    */
   insurancePolicyNumber?: string | null;
-  /**
-   * Optional flat commission override for jobs posted by this partner.
-Used for Government / GSA accounts (typically 10%). NULL → use the
-system default (15% for partner-posted jobs).
-
-   * @minimum 0
-   * @maximum 100
-   */
-  commissionOverridePct?: number | null;
   status: ShopStatus;
   createdAt: Date;
 }

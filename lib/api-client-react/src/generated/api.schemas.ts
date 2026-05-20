@@ -902,15 +902,6 @@ commission.
    * @deprecated
    */
   insurancePolicyNumber?: string | null;
-  /**
-   * Optional flat commission override for jobs posted by this partner.
-Used for Government / GSA accounts (typically 10%). NULL → use the
-system default (15% for partner-posted jobs).
-
-   * @minimum 0
-   * @maximum 100
-   */
-  commissionOverridePct?: number | null;
   status: ShopStatus;
   createdAt: string;
 }
@@ -943,15 +934,6 @@ export interface CreateShopBody {
   insuranceCarrier?: string;
   /** @deprecated */
   insurancePolicyNumber?: string;
-  /**
-   * Optional flat commission override for jobs posted by this partner.
-Typically 10 for GSA / Government accounts. Omit → system default.
-Integer only — fractional values are rejected.
-
-   * @minimum 0
-   * @maximum 100
-   */
-  commissionOverridePct?: number;
 }
 
 export type UpdateShopBodyStatus =
@@ -977,14 +959,6 @@ export interface UpdateShopBody {
   insuranceCarrier?: string;
   /** @deprecated */
   insurancePolicyNumber?: string;
-  /**
-   * Update the partner commission override. Pass `null` to clear it and
-revert to the system default. Integer only.
-
-   * @minimum 0
-   * @maximum 100
-   */
-  commissionOverridePct?: number | null;
   status?: UpdateShopBodyStatus;
 }
 

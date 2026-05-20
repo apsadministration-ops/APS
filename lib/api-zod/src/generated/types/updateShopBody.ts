@@ -22,13 +22,5 @@ export interface UpdateShopBody {
   insuranceCarrier?: string;
   /** @deprecated */
   insurancePolicyNumber?: string;
-  /**
-   * Update the partner commission override. Pass `null` to clear it and
-revert to the system default. Integer only.
-
-   * @minimum 0
-   * @maximum 100
-   */
-  commissionOverridePct?: number | null;
   status?: UpdateShopBodyStatus;
 }
