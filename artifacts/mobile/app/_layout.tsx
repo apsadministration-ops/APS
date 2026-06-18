@@ -12,7 +12,7 @@ import * as SplashScreen from "expo-splash-screen";
 import * as SystemUI from "expo-system-ui";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect } from "react";
-import { useColorScheme } from "react-native";
+import { Platform, useColorScheme } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -122,11 +122,26 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (fontsLoaded || fontError) {
-      SplashScreen.hideAsync();
+      SplashScreen.hideAsync().catch(() => undefined);
     }
   }, [fontsLoaded, fontError]);
 
-  if (!fontsLoaded && !fontError) return null;
+  // On web, `useFonts` can hang indefinitely while loading the bundled icon
+  // fonts — neither `fontsLoaded` nor `fontError` ever flips true. Gating the
+  // render on it (`return null`) therefore leaves the entire app rendering
+  // nothing forever: a permanent white screen. So on web we never block on
+  // fonts (icon glyphs swap in once their @font-face resolves) and we hide the
+  // splash on mount. Native keeps the gate so the splash covers the brief font
+  // load and we avoid a fallback-glyph flash (e.g. Android CJK icons).
+  useEffect(() => {
+    if (Platform.OS === "web") {
+      SplashScreen.hideAsync().catch(() => undefined);
+    }
+  }, []);
+
+  if (Platform.OS !== "web" && !fontsLoaded && !fontError) {
+    return null;
+  }
 
   return (
     <SafeAreaProvider>
