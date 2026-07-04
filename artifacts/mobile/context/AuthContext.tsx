@@ -26,10 +26,51 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const storedToken = await AsyncStorage.getItem("auth_token");
         const storedUser = await AsyncStorage.getItem("auth_user");
-        
+
         if (storedToken && storedUser) {
-          setToken(storedToken);
-          setUser(JSON.parse(storedUser));
+          // Validate the cached token against the server before trusting it.
+          // A stale/expired/invalidated token (e.g. issued under an old
+          // SESSION_SECRET) would otherwise leave the user "logged in" locally
+          // while every API call fails with "Invalid or expired token". By
+          // verifying here we can clear a bad token and route to login instead.
+          const domain = process.env.EXPO_PUBLIC_DOMAIN;
+          if (!domain) {
+            // No API domain configured — can't validate remotely. Trust the
+            // cached session rather than blocking startup.
+            setToken(storedToken);
+            setUser(JSON.parse(storedUser));
+            return;
+          }
+          // Bound the validation so a slow/unreachable network can't leave the
+          // app on a blank startup screen indefinitely.
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 5000);
+          try {
+            const res = await fetch(`https://${domain}/api/auth/me`, {
+              headers: { Authorization: `Bearer ${storedToken}` },
+              signal: controller.signal,
+            });
+            if (res.ok) {
+              const freshUser = (await res.json()) as User;
+              setToken(storedToken);
+              setUser(freshUser);
+              await AsyncStorage.setItem("auth_user", JSON.stringify(freshUser));
+            } else if (res.status === 401 || res.status === 403) {
+              // Token rejected (invalid/expired/suspended) — drop the cached
+              // session so the app falls back to the login screen.
+              await AsyncStorage.multiRemove(["auth_token", "auth_user"]);
+            } else {
+              // Unexpected server error — keep the cached session for now.
+              setToken(storedToken);
+              setUser(JSON.parse(storedUser));
+            }
+          } catch {
+            // Network error / timeout (offline or unreachable) — keep cached session.
+            setToken(storedToken);
+            setUser(JSON.parse(storedUser));
+          } finally {
+            clearTimeout(timeout);
+          }
         }
       } catch (e) {
         console.error("Failed to load auth state", e);
@@ -37,7 +78,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setIsLoading(false);
       }
     };
-    
+
     loadAuth();
   }, []);
 
