@@ -14,7 +14,6 @@ import { StatusBar } from "expo-status-bar";
 import React, { useEffect } from "react";
 import { Platform, useColorScheme } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import colors from "@/constants/colors";
 
@@ -25,10 +24,23 @@ import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { setBaseUrl } from "@workspace/api-client-react";
 import { View } from "react-native";
+import { IS_EXPO_GO } from "@/lib/isExpoGo";
 
 SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
+
+// react-native-keyboard-controller ships its own native code, which Expo Go
+// does not bundle — importing/mounting it there crashes to a white screen. So
+// we only load it outside Expo Go. In Expo Go we render children directly and
+// rely on the KeyboardAvoidingView fallback in KeyboardAwareScrollViewCompat.
+// Web and real iOS/Android builds keep the full provider.
+function KeyboardProviderCompat({ children }: { children: React.ReactNode }) {
+  if (IS_EXPO_GO) return <>{children}</>;
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { KeyboardProvider } = require("react-native-keyboard-controller");
+  return <KeyboardProvider>{children}</KeyboardProvider>;
+}
 
 // Needed for Expo to reach the API server correctly
 setBaseUrl(`https://${process.env.EXPO_PUBLIC_DOMAIN}`);
@@ -148,7 +160,7 @@ export default function RootLayout() {
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
           <GestureHandlerRootView style={{ flex: 1 }}>
-            <KeyboardProvider>
+            <KeyboardProviderCompat>
               <AuthProvider>
                 {/* `style="auto"` follows system theme on iOS/Android.
                     `translucent` lets content draw under the status bar on
@@ -160,7 +172,7 @@ export default function RootLayout() {
                     the AndroidMileagePrompt singleton calls into this host. */}
                 <MileagePromptHost />
               </AuthProvider>
-            </KeyboardProvider>
+            </KeyboardProviderCompat>
           </GestureHandlerRootView>
         </QueryClientProvider>
       </ErrorBoundary>

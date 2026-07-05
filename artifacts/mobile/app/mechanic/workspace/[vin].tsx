@@ -669,9 +669,10 @@ function RecosTab({
     const ok = await confirm({ title: status === "addressed" ? "Mark addressed?" : "Dismiss?" });
     if (!ok) return;
     const headers = await authHeaders();
-    await fetch(`https://${domain}/api/mechanic/recommendations/${id}`, {
+    const res = await fetch(`https://${domain}/api/mechanic/recommendations/${id}`, {
       method: "PATCH", headers, body: JSON.stringify({ status }),
     });
+    if (!res.ok) { await alertMessage("Update failed"); return; }
     await reload();
   };
 
@@ -773,9 +774,10 @@ function NotesTab({
 
   const toggleResolved = async (n: Note) => {
     const headers = await authHeaders();
-    await fetch(`https://${domain}/api/mechanic/notes/${n.id}`, {
+    const res = await fetch(`https://${domain}/api/mechanic/notes/${n.id}`, {
       method: "PATCH", headers, body: JSON.stringify({ resolved: !n.resolvedAt }),
     });
+    if (!res.ok) { await alertMessage("Update failed"); return; }
     await reload();
   };
 

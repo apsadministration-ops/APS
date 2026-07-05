@@ -68,6 +68,11 @@ export async function openWorkConfirmation(jobId: number): Promise<void> {
       disputeReason: null,
       captureFired: "false",
     },
+    // Only re-arm a confirmation that is still pending. A re-submitted work log
+    // must NEVER reset one the customer has already disputed or confirmed (nor
+    // one that auto-confirmed/expired) — that would wipe a dispute or extend
+    // the escrow hold indefinitely.
+    setWhere: eq(workConfirmationsTable.status, "pending"),
   });
 
   // Move payment to capture_pending + stamp the hold release time.
