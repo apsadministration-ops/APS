@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { db, usersTable } from "@workspace/db";
 import { authenticate, type AuthRequest } from "../middlewares/authenticate";
 import { getReferralStatusForUser, REFERRAL_REWARD } from "../lib/referralEngine";
+import { getPublicBaseUrl } from "../lib/publicUrl";
 
 const router: IRouter = Router();
 
@@ -21,10 +22,9 @@ router.get("/referral", authenticate, async (req: AuthRequest, res): Promise<voi
   // Build a shareable signup deep-link. Prefers the published domain,
   // falls back to the dev preview domain. Adds ?ref=CODE so the mobile
   // signup form can pre-fill it.
-  const domains = (process.env.REPLIT_DOMAINS ?? process.env.REPLIT_DEV_DOMAIN ?? "").split(",");
-  const host = domains[0]?.trim();
-  const referralLink = host && user.referralCode
-    ? `https://${host}/?ref=${encodeURIComponent(user.referralCode)}`
+  const baseUrl = getPublicBaseUrl("referral");
+  const referralLink = baseUrl && user.referralCode
+    ? `${baseUrl}/?ref=${encodeURIComponent(user.referralCode)}`
     : null;
 
   res.json({

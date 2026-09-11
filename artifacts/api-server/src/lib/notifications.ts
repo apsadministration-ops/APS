@@ -1,3 +1,5 @@
+import { logger } from "./logger";
+
 interface ExpoPushMessage {
   to: string;
   title: string;
@@ -7,18 +9,23 @@ interface ExpoPushMessage {
   badge?: number;
 }
 
+export const PUSH_REQUEST_TIMEOUT_MS = 8_000;
+
 export async function sendPushNotifications(messages: ExpoPushMessage[]): Promise<void> {
-  if (messages.length === 0) return;
+  const validMessages = messages.filter((message) => message.to.startsWith("ExponentPushToken["));
+  if (validMessages.length === 0) return;
 
   // Chunk into batches of 100 (Expo limit)
   const chunks: ExpoPushMessage[][] = [];
-  for (let i = 0; i < messages.length; i += 100) {
-    chunks.push(messages.slice(i, i + 100));
+  for (let i = 0; i < validMessages.length; i += 100) {
+    chunks.push(validMessages.slice(i, i + 100));
   }
 
   for (const chunk of chunks) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), PUSH_REQUEST_TIMEOUT_MS);
     try {
-      await fetch("https://exp.host/--/api/v2/push/send", {
+      const response = await fetch("https://exp.host/--/api/v2/push/send", {
         method: "POST",
         headers: {
           "Accept": "application/json",
@@ -26,9 +33,50 @@ export async function sendPushNotifications(messages: ExpoPushMessage[]): Promis
           "Content-Type": "application/json",
         },
         body: JSON.stringify(chunk),
+        signal: controller.signal,
       });
+      if (!response.ok) {
+        logger.warn({
+          chunkSize: chunk.length,
+          statusCode: response.status,
+        }, "Push notification provider returned a non-success response");
+        continue;
+      }
+
+      let payload: unknown;
+      try {
+        payload = await response.json();
+      } catch {
+        logger.warn({ chunkSize: chunk.length }, "Push notification provider returned invalid JSON");
+        continue;
+      }
+      const tickets = payload && typeof payload === "object" && "data" in payload
+        ? (payload as { data?: unknown }).data
+        : null;
+      if (!Array.isArray(tickets) || tickets.length !== chunk.length) {
+        logger.warn({
+          chunkSize: chunk.length,
+          ticketCount: Array.isArray(tickets) ? tickets.length : 0,
+        }, "Push notification provider returned an invalid ticket payload");
+        continue;
+      }
+      const ticketErrors = tickets.filter((ticket) =>
+        ticket && typeof ticket === "object" && (ticket as { status?: unknown }).status === "error",
+      ).length;
+      if (ticketErrors > 0) {
+        logger.warn({
+          chunkSize: chunk.length,
+          ticketErrors,
+        }, "Push notification provider reported ticket errors");
+      }
     } catch (err) {
-      // Non-fatal — notifications are best-effort
+      logger.warn({
+        chunkSize: chunk.length,
+        errorName: err instanceof Error ? err.name : "UnknownError",
+        timedOut: controller.signal.aborted,
+      }, "Push notification delivery failed");
+    } finally {
+      clearTimeout(timeout);
     }
   }
 }

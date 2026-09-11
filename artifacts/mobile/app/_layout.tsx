@@ -28,7 +28,9 @@ import { IS_EXPO_GO } from "@/lib/isExpoGo";
 import { API_CONFIGURATION_ERROR, getApiConfig } from "@/lib/apiConfig";
 import { getRoleDestination } from "@/lib/roleDestination";
 
-SplashScreen.preventAutoHideAsync();
+// Splash control is best-effort on web and in Expo Go; an unavailable native
+// splash module must never become an unhandled startup rejection.
+void SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
 const queryClient = new QueryClient();
 const apiConfig = getApiConfig();
@@ -80,10 +82,11 @@ function RootLayoutNav() {
   const { user, isLoading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  const colorScheme = useColorScheme();
+  const pushStatus = usePushNotifications();
+  const theme = colorScheme === "dark" ? colors.dark : colors.light;
 
   // Register push notification token and handle taps
-  usePushNotifications();
-
   useEffect(() => {
     if (isLoading) return;
 
@@ -128,6 +131,34 @@ function RootLayoutNav() {
         <Stack.Screen name="detailing" options={{ presentation: "modal", headerShown: false }} />
       </Stack>
       <AIAssistantWidget />
+      {user && pushStatus === "unavailable" ? (
+        <View
+          accessibilityRole="alert"
+          style={{
+            alignItems: "center",
+            backgroundColor: theme.card,
+            borderColor: theme.border,
+            borderRadius: 10,
+            borderWidth: 1,
+            elevation: 3,
+            flexDirection: "row",
+            left: 12,
+            paddingHorizontal: 12,
+            paddingVertical: 9,
+            position: "absolute",
+            right: 12,
+            shadowColor: theme.foreground,
+            shadowOpacity: 0.12,
+            shadowRadius: 8,
+            top: 8,
+            zIndex: 10,
+          }}
+        >
+          <Text style={{ color: theme.mutedForeground, flex: 1, fontSize: 12 }}>
+            Push notifications are unavailable in this runtime. Job updates remain available in the app.
+          </Text>
+        </View>
+      ) : null}
     </View>
   );
 }

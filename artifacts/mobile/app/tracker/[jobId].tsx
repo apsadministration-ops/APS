@@ -7,9 +7,14 @@ import { useGetJob } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { Feather } from "@expo/vector-icons";
-import * as Location from "expo-location";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getApiUrl } from "@/lib/apiConfig";
+import {
+  requestForegroundLocationPermission,
+  watchForegroundLocation,
+  openAppSettings,
+} from "@/lib/deviceCapabilities";
+import { CapabilityNotice } from "@/components/CapabilityNotice";
 
 const STATUS_ORDER = ["REQUESTED", "OFFERED", "ACCEPTED", "EN_ROUTE", "IN_PROGRESS", "COMPLETED", "PAID"];
 
@@ -65,9 +70,12 @@ export default function TrackerScreen() {
   const { data: job, refetch } = useGetJob(jobId);
 
   const [mechanicCoords, setMechanicCoords] = useState<{ lat: number; lng: number } | null>(null);
-  const [locationPermission, setLocationPermission] = useState<"unknown" | "granted" | "denied">("unknown");
+  const [locationError, setLocationError] = useState<{
+    message: string;
+    canAskAgain: boolean;
+  } | null>(null);
   const [isSharing, setIsSharing] = useState(false);
-  const locationWatchRef = useRef<Location.LocationSubscription | null>(null);
+  const locationWatchRef = useRef<{ remove: () => void } | null>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const isMechanic = user?.role === "mechanic";
@@ -97,28 +105,39 @@ export default function TrackerScreen() {
 
   // Mechanic: start sharing GPS location
   const startSharingLocation = useCallback(async () => {
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== "granted") { setLocationPermission("denied"); return; }
-    setLocationPermission("granted");
+    const permission = await requestForegroundLocationPermission();
+    if (!permission.ok) {
+      setLocationError({
+        message: permission.message,
+        canAskAgain: permission.canAskAgain,
+      });
+      return;
+    }
+    setLocationError(null);
     setIsSharing(true);
 
-    locationWatchRef.current = await Location.watchPositionAsync(
-      { accuracy: Location.Accuracy.High, timeInterval: 15000, distanceInterval: 20 },
-      async (loc) => {
-        const { latitude, longitude } = loc.coords;
-        try {
-          const token = await AsyncStorage.getItem("auth_token");
-          await fetch(getApiUrl(`/jobs/${jobId}/mechanic-location`), {
-            method: "PUT",
-            headers: {
-              "Content-Type": "application/json",
-              ...(token ? { Authorization: `Bearer ${token}` } : {}),
-            },
-            body: JSON.stringify({ lat: latitude, lng: longitude }),
-          });
-        } catch { /* non-fatal */ }
-      },
-    );
+    const watch = await watchForegroundLocation(async ({ latitude, longitude }) => {
+      try {
+        const token = await AsyncStorage.getItem("auth_token");
+        await fetch(getApiUrl(`/jobs/${jobId}/mechanic-location`), {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ lat: latitude, lng: longitude }),
+        });
+      } catch { /* non-fatal */ }
+    });
+    if (!watch.ok) {
+      setIsSharing(false);
+      setLocationError({
+        message: watch.message,
+        canAskAgain: watch.canAskAgain,
+      });
+      return;
+    }
+    locationWatchRef.current = watch.value;
   }, [jobId]);
 
   const stopSharingLocation = useCallback(() => {
@@ -200,11 +219,15 @@ export default function TrackerScreen() {
               <Text style={[styles.locationDesc, { color: colors.mutedForeground }]}>
                 When active, your GPS is sent to the customer every 15 seconds.
               </Text>
-              {locationPermission === "denied" && (
-                <Text style={[styles.locationError, { color: colors.destructive }]}>
-                  Location permission denied. Please enable in device settings.
-                </Text>
-              )}
+              {locationError ? (
+                <CapabilityNotice
+                  message={locationError.message}
+                  canOpenSettings={!locationError.canAskAgain && Platform.OS !== "web"}
+                  onOpenSettings={() => {
+                    void openAppSettings();
+                  }}
+                />
+              ) : null}
               <Pressable
                 style={[styles.locationBtn, { backgroundColor: isSharing ? colors.destructive : colors.primary }]}
                 onPress={isSharing ? stopSharingLocation : startSharingLocation}
@@ -334,7 +357,6 @@ const styles = StyleSheet.create({
   locationHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
   locationTitle: { fontSize: 16, fontWeight: "700" },
   locationDesc: { fontSize: 13, lineHeight: 20 },
-  locationError: { fontSize: 13 },
   locationBtn: {
     flexDirection: "row",
     alignItems: "center",

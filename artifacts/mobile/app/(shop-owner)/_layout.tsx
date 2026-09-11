@@ -80,7 +80,8 @@ export default function ShopOwnerTabLayout() {
         name="bookings"
         options={{
           title: "Bookings",
-          href: null,
+          // Keep the route addressable without creating a web <a> for a null href.
+          tabBarButton: () => null,
           tabBarIcon: ({ color }) => <Feather name="calendar" size={22} color={color} />,
         }}
       />

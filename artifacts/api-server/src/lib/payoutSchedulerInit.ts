@@ -38,8 +38,14 @@ export function stopPayoutScheduler(): void {
 
 async function tick(): Promise<void> {
   await Promise.allSettled([
-    sweepExpiredApprovals().catch((err) => logger.error({ err }, "sweep approvals failed")),
-    sweepExpiredConfirmations().catch((err) => logger.error({ err }, "sweep confirmations failed")),
-    sweepStaleHolds().catch((err) => logger.error({ err }, "sweep stale holds failed")),
+    sweepExpiredApprovals().catch((err) => logger.error({
+      errorName: err instanceof Error ? err.name : "UnknownError",
+    }, "sweep approvals failed")),
+    sweepExpiredConfirmations().catch((err) => logger.error({
+      errorName: err instanceof Error ? err.name : "UnknownError",
+    }, "sweep confirmations failed")),
+    sweepStaleHolds().catch((err) => logger.error({
+      errorName: err instanceof Error ? err.name : "UnknownError",
+    }, "sweep stale holds failed")),
   ]);
 }

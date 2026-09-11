@@ -32,6 +32,7 @@ import rateLimit from "express-rate-limit";
 import { db, usersTable, passwordResetTokensTable } from "@workspace/db";
 import { hashPassword } from "../lib/auth";
 import { sendEmail } from "../lib/email";
+import { getPublicBaseUrl } from "../lib/publicUrl";
 
 const router: IRouter = Router();
 
@@ -48,22 +49,6 @@ const forgotLimiter = rateLimit({
 
 function sha256(s: string): string {
   return crypto.createHash("sha256").update(s).digest("hex");
-}
-
-function getResetBaseUrl(): string {
-  // SECURITY: Never derive this from request headers (Host / X-Forwarded-Host
-  // are attacker-controlled on a public endpoint and would let someone send
-  // victims phishing links pointing at their own domain). Use a trusted
-  // configuration value:
-  //   1. APP_BASE_URL (explicit override, e.g. "https://aps.example.com")
-  //   2. First entry of REPLIT_DOMAINS (set in production deployments)
-  //   3. REPLIT_DEV_DOMAIN (dev preview)
-  const explicit = process.env.APP_BASE_URL?.trim();
-  if (explicit) return explicit.replace(/\/+$/, "");
-  const prodDomains = process.env.REPLIT_DOMAINS?.split(",").map((s) => s.trim()).filter(Boolean);
-  if (prodDomains && prodDomains.length > 0) return `https://${prodDomains[0]}`;
-  if (process.env.REPLIT_DEV_DOMAIN) return `https://${process.env.REPLIT_DEV_DOMAIN}`;
-  return "http://localhost";
 }
 
 function escapeHtml(s: string): string {
@@ -91,6 +76,14 @@ router.post("/auth/forgot-password", forgotLimiter, async (req: Request, res: Re
     res.json(generic);
     return;
   }
+  const baseUrl = getPublicBaseUrl("reset");
+  if (!baseUrl) {
+    // Keep account enumeration protection intact, but do not create a token
+    // that can never be delivered because the production URL is missing.
+    req.log?.error({ errorCode: "public_url_not_configured" }, "Password reset URL unavailable");
+    res.json(generic);
+    return;
+  }
 
   const token = crypto.randomBytes(32).toString("base64url");
   const tokenHash = sha256(token);
@@ -103,7 +96,6 @@ router.post("/auth/forgot-password", forgotLimiter, async (req: Request, res: Re
     requestedIp: req.ip ?? null,
   });
 
-  const baseUrl = getResetBaseUrl();
   const resetUrl = `${baseUrl}/api/auth/reset-password?token=${encodeURIComponent(token)}`;
 
   const subject = "Reset your APS password";

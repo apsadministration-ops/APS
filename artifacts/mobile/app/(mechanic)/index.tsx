@@ -3,7 +3,7 @@ import { useColors } from "@/hooks/useColors";
 import { useGetMechanicDashboard, getGetMechanicDashboardQueryKey } from "@workspace/api-client-react";
 import { useAuth } from "@/context/AuthContext";
 import { Feather } from "@expo/vector-icons";
-import { Link, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import { JobCard } from "@/components/JobCard";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -146,11 +146,9 @@ export default function MechanicDashboard() {
 
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Recent Jobs</Text>
-          <Link href="/(mechanic)/history" asChild>
-            <Pressable>
-              <Text style={[styles.seeAll, { color: colors.primary }]}>See All</Text>
-            </Pressable>
-          </Link>
+          <Pressable onPress={() => router.push("/(mechanic)/history")}>
+            <Text style={[styles.seeAll, { color: colors.primary }]}>See All</Text>
+          </Pressable>
         </View>
 
         {(dashboard.recentJobs ?? []).length === 0 ? (

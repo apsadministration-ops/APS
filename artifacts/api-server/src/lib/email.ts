@@ -11,6 +11,7 @@
  */
 
 import { logger } from "./logger";
+import { isValidProviderHostname } from "./providerConfig";
 
 interface SendEmailArgs {
   to: string;
@@ -36,7 +37,7 @@ async function getResendCreds(): Promise<ResendCreds | null> {
     process.env.REPL_IDENTITY ? `repl ${process.env.REPL_IDENTITY}` :
     process.env.WEB_REPL_RENEWAL ? `depl ${process.env.WEB_REPL_RENEWAL}` :
     null;
-  if (!hostname || !xReplitToken) return null;
+  if (!isValidProviderHostname(hostname) || !xReplitToken) return null;
 
   try {
     const url = `https://${hostname}/api/v2/connection?include_secrets=true&connector_names=resend`;
@@ -52,7 +53,9 @@ async function getResendCreds(): Promise<ResendCreds | null> {
     _credsCache = { value: creds, expiresAt: now + 4 * 60 * 1000 };
     return creds;
   } catch (err) {
-    logger.warn({ err }, "Resend credential fetch failed");
+    logger.warn({
+      errorName: err instanceof Error ? err.name : "UnknownError",
+    }, "Resend credential fetch failed");
     return null;
   }
 }

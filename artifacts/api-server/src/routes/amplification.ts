@@ -25,6 +25,10 @@ import {
   buildAmplificationKit, renderLandingHtml, personalLinks,
 } from "../lib/mechanicAmplification";
 import { assertAiGenerationAllowed, PolicyError } from "../lib/adminGrowthPolicy";
+import {
+  AnthropicUnavailableError,
+  isAnthropicConfigured,
+} from "@workspace/integrations-anthropic-ai";
 
 const router: IRouter = Router();
 
@@ -129,6 +133,13 @@ router.post("/mechanics/me/amplification/content", async (req: AuthRequest, res:
   const meId = req.userId!;
   const parsed = meContentSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Invalid body", issues: parsed.error.issues }); return; }
+  if (!isAnthropicConfigured()) {
+    res.status(503).json({
+      error: "ai_provider_not_configured",
+      message: "AI content generation is temporarily unavailable.",
+    });
+    return;
+  }
   try { await assertAiGenerationAllowed(); }
   catch (err) {
     if (err instanceof PolicyError) { res.status(err.statusCode).json({ error: err.message }); return; }
@@ -153,8 +164,14 @@ router.post("/mechanics/me/amplification/content", async (req: AuthRequest, res:
       briefingContext: parsed.data.briefingContext ?? null,
     });
   } catch (err) {
-    req.log?.error({ err }, "mechanic-self content generation failed");
-    res.status(502).json({ error: "Content generation failed" });
+    if (err instanceof AnthropicUnavailableError) {
+      res.status(503).json({ error: "ai_provider_not_configured" });
+      return;
+    }
+    req.log?.error({
+      errorName: err instanceof Error ? err.name : "UnknownError",
+    }, "mechanic-self content generation failed");
+    res.status(502).json({ error: "content_generation_unavailable" });
     return;
   }
   const topicMap = { spotlight: "mechanic_spotlight", book_with_me: "book_through_aps", referral_push: "referral_campaign" } as const;

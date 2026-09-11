@@ -40,8 +40,11 @@ router.put("/admin/growth/integrations/:key", async (req: AuthRequest, res): Pro
   try {
     await setCredential(key, parsed.data.value, req.user?.id ?? null);
   } catch (err) {
-    req.log?.error({ err, key }, "setCredential failed");
-    res.status(500).json({ error: err instanceof Error ? err.message : "Failed to save credential" });
+    req.log?.error({
+      errorName: err instanceof Error ? err.name : "UnknownError",
+      key,
+    }, "setCredential failed");
+    res.status(500).json({ error: "credential_save_failed" });
     return;
   }
   res.json({ ok: true, key });

@@ -1,10 +1,12 @@
 const fs = require("fs");
+const net = require("net");
 const path = require("path");
 const { spawn } = require("child_process");
 const { Readable } = require("stream");
 const { pipeline } = require("stream/promises");
 
 let metroProcess = null;
+let metroPort = null;
 
 const projectRoot = path.resolve(__dirname, "..");
 
@@ -23,11 +25,9 @@ const workspaceRoot = findWorkspaceRoot(projectRoot);
 const basePath = (process.env.BASE_PATH || "/").replace(/\/+$/, "");
 
 function exitWithError(message) {
-  console.error(message);
-  if (metroProcess) {
-    metroProcess.kill();
-  }
-  process.exit(1);
+  // Let the top-level catch own child cleanup and exit status. Calling
+  // process.exit here can terminate before Metro has been reclaimed.
+  throw new Error(message);
 }
 
 function setupSignalHandlers() {
@@ -112,12 +112,71 @@ function clearMetroCache() {
   console.log("Cache cleared");
 }
 
-async function checkMetroHealth() {
+function parsePort(value) {
+  if (typeof value !== "string" && typeof value !== "number") return null;
+  const port = Number(value);
+  return Number.isInteger(port) && port > 0 && port <= 65535 ? port : null;
+}
+
+function configuredMetroPort() {
+  // PORT is injected by the mobile workflow. METRO_PORT is useful for a
+  // direct build invocation, but neither should be replaced with a fixed
+  // default (which is also used by other artifacts).
+  return parsePort(process.env.METRO_PORT) ?? parsePort(process.env.PORT);
+}
+
+function metroUrl(pathname, port = metroPort) {
+  if (!port) {
+    throw new Error("Metro port has not been resolved");
+  }
+  return `http://127.0.0.1:${port}${pathname}`;
+}
+
+function canConnect(port) {
+  return new Promise((resolve) => {
+    const socket = net.createConnection({ host: "127.0.0.1", port });
+    const finish = (result) => {
+      socket.destroy();
+      resolve(result);
+    };
+    socket.setTimeout(300);
+    socket.once("connect", () => finish(true));
+    socket.once("timeout", () => finish(true));
+    socket.once("error", () => finish(false));
+  });
+}
+
+function findAvailablePort() {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      const port = address && typeof address === "object" ? address.port : null;
+      server.close((closeError) => {
+        if (closeError) {
+          reject(closeError);
+        } else if (port) {
+          resolve(port);
+        } else {
+          reject(new Error("Could not reserve an ephemeral Metro port"));
+        }
+      });
+    });
+  });
+}
+
+async function checkMetroHealth(port = metroPort) {
+  if (!port) return false;
   try {
-    const response = await fetch("http://localhost:8081/status", {
+    const response = await fetch(metroUrl("/status", port), {
       signal: AbortSignal.timeout(5000),
     });
-    return response.ok;
+    if (!response.ok) return false;
+    // Do not mistake another artifact's HTTP server for Metro. A generic
+    // `response.ok` check was the source of the mockup-port collision.
+    const status = await response.text();
+    return status.includes("packager-status:running");
   } catch {
     return false;
   }
@@ -128,18 +187,44 @@ function getExpoPublicReplId() {
 }
 
 async function startMetro(expoPublicDomain, expoPublicReplId) {
-  const isRunning = await checkMetroHealth();
-  if (isRunning) {
-    console.log("Metro already running");
+  const requestedPort = configuredMetroPort();
+  metroPort = requestedPort;
+
+  if (await checkMetroHealth()) {
+    console.log(`Metro already running on port ${metroPort}`);
     return;
   }
 
+  // A configured port may belong to a different artifact. Never kill or
+  // attach to that server; pick a private ephemeral port instead. This keeps
+  // workflow-assigned ports intact while avoiding a fixed-port collision.
+  if (metroPort && (await canConnect(metroPort))) {
+    console.warn(
+      `Port ${metroPort} is occupied by a non-Metro server; selecting an available Metro port.`,
+    );
+    metroPort = null;
+  }
+  if (!metroPort) {
+    metroPort = await findAvailablePort();
+  }
+
+  const isRunning = await checkMetroHealth();
+  if (isRunning) {
+    console.log(`Metro already running on port ${metroPort}`);
+    return;
+  }
+
+  // Only clear cache when this script owns the Metro process. Clearing a
+  // running workflow's cache can invalidate bundles mid-build.
+  clearMetroCache();
   console.log("Starting Metro...");
+  console.log(`Starting Metro on port ${metroPort}`);
   console.log(`Setting EXPO_PUBLIC_DOMAIN=${expoPublicDomain}`);
   const env = {
     ...process.env,
     EXPO_PUBLIC_DOMAIN: expoPublicDomain,
     EXPO_PUBLIC_REPL_ID: expoPublicReplId,
+    PORT: String(metroPort),
   };
 
   if (expoPublicReplId) {
@@ -155,6 +240,8 @@ async function startMetro(expoPublicDomain, expoPublicReplId) {
       "--no-dev",
       "--minify",
       "--localhost",
+      "--port",
+      String(metroPort),
     ],
     {
       stdio: ["ignore", "pipe", "pipe"],
@@ -163,6 +250,15 @@ async function startMetro(expoPublicDomain, expoPublicReplId) {
       env,
     },
   );
+
+  let metroChildError = null;
+  let metroChildExit = null;
+  metroProcess.once("error", (error) => {
+    metroChildError = error;
+  });
+  metroProcess.once("exit", (code, signal) => {
+    metroChildExit = { code, signal };
+  });
 
   if (metroProcess.stdout) {
     metroProcess.stdout.on("data", (data) => {
@@ -180,6 +276,15 @@ async function startMetro(expoPublicDomain, expoPublicReplId) {
   for (let i = 0; i < 60; i++) {
     await new Promise((resolve) => setTimeout(resolve, 1000));
 
+    if (metroChildError) {
+      throw new Error(`Metro failed to start: ${metroChildError.message}`);
+    }
+    if (metroChildExit) {
+      throw new Error(
+        `Metro exited before readiness (code ${metroChildExit.code ?? "unknown"}, signal ${metroChildExit.signal ?? "none"})`,
+      );
+    }
+
     const healthy = await checkMetroHealth();
     if (healthy) {
       console.log("Metro ready");
@@ -187,8 +292,7 @@ async function startMetro(expoPublicDomain, expoPublicReplId) {
     }
   }
 
-  console.error("Metro timeout");
-  process.exit(1);
+  throw new Error("Metro readiness timeout after 60 seconds");
 }
 
 async function downloadFile(url, outputPath) {
@@ -230,7 +334,7 @@ async function downloadFile(url, outputPath) {
 async function downloadBundle(platform, timestamp) {
   const entryPath = path.resolve(projectRoot, "node_modules", "expo-router", "entry");
   const bundlePath = path.relative(workspaceRoot, entryPath);
-  const url = new URL(`http://localhost:8081/${bundlePath}.bundle`);
+  const url = new URL(metroUrl(`/${bundlePath}.bundle`));
   url.searchParams.set("platform", platform);
   url.searchParams.set("dev", "false");
   url.searchParams.set("hot", "false");
@@ -258,7 +362,7 @@ async function downloadManifest(platform) {
 
   try {
     console.log(`Fetching ${platform} manifest...`);
-    const response = await fetch("http://localhost:8081/manifest", {
+    const response = await fetch(metroUrl("/manifest"), {
       headers: { "expo-platform": platform },
       signal: controller.signal,
     });
@@ -326,7 +430,7 @@ function extractAssets(timestamp) {
       const originalPath = match[1];
       const filename = match[3] + "." + match[4];
 
-      const tempUrl = new URL(`http://localhost:8081${originalPath}`);
+      const tempUrl = new URL(metroUrl(originalPath));
       const unstablePath = tempUrl.searchParams.get("unstable_path");
 
       if (!unstablePath) {
@@ -368,7 +472,7 @@ async function downloadAssets(assets, timestamp) {
   const failures = [];
 
   const downloadPromises = assets.map(async (asset) => {
-    const tempUrl = new URL(`http://localhost:8081${asset.originalPath}`);
+    const tempUrl = new URL(metroUrl(asset.originalPath));
     const unstablePath = tempUrl.searchParams.get("unstable_path");
 
     if (!unstablePath) {
@@ -441,7 +545,7 @@ function updateBundleUrls(timestamp, baseUrl) {
     bundle = bundle.replace(
       /httpServerLocation:"(\/[^"]+)"/g,
       (_match, capturedPath) => {
-        const tempUrl = new URL(`http://localhost:8081${capturedPath}`);
+        const tempUrl = new URL(metroUrl(capturedPath));
         const unstablePath = tempUrl.searchParams.get("unstable_path");
 
         if (!unstablePath) {
@@ -516,8 +620,6 @@ async function main() {
   const timestamp = `${Date.now()}-${process.pid}`;
 
   prepareDirectories(timestamp);
-  clearMetroCache();
-
   await startMetro(domain, expoPublicReplId);
 
   const downloadTimeout = 600000;
@@ -564,10 +666,19 @@ async function main() {
   process.exit(0);
 }
 
-main().catch((error) => {
-  console.error("Build failed:", error.message);
-  if (metroProcess) {
-    metroProcess.kill();
-  }
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((error) => {
+    console.error("Build failed:", error.message);
+    if (metroProcess) {
+      metroProcess.kill();
+    }
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  checkMetroHealth,
+  configuredMetroPort,
+  findAvailablePort,
+  parsePort,
+};

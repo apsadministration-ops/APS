@@ -2,12 +2,13 @@
 import { setWebhookSecret, getUncachableStripeClient } from "./stripeClient";
 import { logger } from "./logger";
 import { configureStripeWebhook } from "./stripeWebhookSetup";
+import { getPublicDomain } from "./publicUrl";
 
 export async function initStripeWebhook(): Promise<void> {
   try {
     const result = await configureStripeWebhook({
       signingSecret: process.env["STRIPE_WEBHOOK_SECRET"],
-      domain: (process.env["REPLIT_DOMAINS"] ?? "").split(",")[0],
+      domain: getPublicDomain("domain_callback") ?? undefined,
       setSecret: setWebhookSecret,
       listEndpoints: async () => {
         const stripe = await getUncachableStripeClient();

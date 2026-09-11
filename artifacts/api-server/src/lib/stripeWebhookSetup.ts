@@ -44,7 +44,12 @@ export async function configureStripeWebhook(options: {
     return { status: "configured" as const };
   }
   const domain = options.domain?.trim();
-  if (!domain || !/^[a-zA-Z0-9.-]+(?::\d+)?$/.test(domain)) {
+  if (
+    !domain ||
+    domain.toLowerCase().includes("undefined") ||
+    domain.toLowerCase() === "null" ||
+    !/^[a-zA-Z0-9.-]+(?::\d+)?$/.test(domain)
+  ) {
     return { status: "missing_configuration" as const, matchingEndpoints: 0 };
   }
   const webhookUrl = `https://${domain}/api/stripe/webhook`;

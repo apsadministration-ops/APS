@@ -11,6 +11,7 @@
  * supported aspect.
  */
 import { getOpenAI, isOpenAIConfigured } from "@workspace/integrations-openai-ai";
+import { isValidProviderBaseUrl } from "../providerConfig";
 import {
   MediaProviderError,
   MediaProviderNotConfiguredError,
@@ -37,10 +38,19 @@ export const openaiImageProvider: MediaProvider = {
   capabilities: { image: true, video: false },
 
   isConfigured() {
-    return isOpenAIConfigured();
+    return (
+      isOpenAIConfigured() &&
+      isValidProviderBaseUrl(process.env.AI_INTEGRATIONS_OPENAI_BASE_URL)
+    );
   },
 
   async generateImage(req: GenerateImageRequest): Promise<GeneratedImage> {
+    if (!this.isConfigured()) {
+      throw new MediaProviderNotConfiguredError(
+        this.key,
+        "Connect the Replit OpenAI integration to enable image generation.",
+      );
+    }
     let client;
     try {
       client = getOpenAI();

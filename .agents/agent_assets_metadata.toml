@@ -90,3 +90,17 @@ mtime_ms = 1789160162704
 storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:098396b5-f3fa-4e71-ae39-a5d9b7f5042e/cd49f8e7-c307-413b-b76b-2844b4038300/63660868-131b-4bf2-9fb5-4f260423edb8"
 storage_version_token = "1789160175903001"
 content_type = "text/markdown"
+
+[[outputs]]
+id = "B4a7ibip-WXvIz7Hgkiw6"
+uri = "file://docs/phase5-runtime-readiness.md"
+type = "text"
+title = "APS Phase 5 Runtime Readiness Report"
+description = "Changed files, final verification results, fixes, external blockers, and Expo Go testing limits."
+logical_id = "7a72d1de-80d3-48b9-8ae6-2ca6b103dbda"
+content_hash = "sha256:c5160430df30d885fa6782c2bd94d3a4ed4b0c2c320c8a067b298a8ad71f24de"
+size = 13275
+mtime_ms = 1789165724760
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:098396b5-f3fa-4e71-ae39-a5d9b7f5042e/7a72d1de-80d3-48b9-8ae6-2ca6b103dbda/38b38eb1-f61d-4543-a2d2-30071e3ab2ba"
+storage_version_token = "1789165731935169"
+content_type = "text/markdown"

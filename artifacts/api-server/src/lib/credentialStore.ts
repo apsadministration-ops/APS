@@ -101,7 +101,10 @@ export async function loadCredentialCache(): Promise<void> {
     for (const r of rows) dbConfigured.add(r.key);
     logger.info({ count: rows.length }, "Credential cache loaded");
   } catch (err) {
-    logger.error({ err }, "Failed to hydrate credential cache");
+    logger.error({
+      errorName: err instanceof Error ? err.name : "UnknownError",
+    }, "Failed to hydrate credential cache");
+    throw err;
   }
 }
 
@@ -132,7 +135,10 @@ export async function getCredential(key: string): Promise<string | null> {
     try {
       return decrypt(row.valueEncrypted);
     } catch (err) {
-      logger.error({ err, key }, "credentialStore: decrypt failed — corrupt row");
+      logger.error({
+        errorName: err instanceof Error ? err.name : "UnknownError",
+        key,
+      }, "credentialStore: decrypt failed — corrupt row");
       return null;
     }
   }

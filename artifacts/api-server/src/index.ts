@@ -11,15 +11,15 @@ if (!rawPort) {
 
 const port = Number(rawPort);
 
-if (Number.isNaN(port) || port <= 0) {
+if (!Number.isInteger(port) || port <= 0 || port > 65535) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-app.listen(port, (err) => {
-  if (err) {
-    logger.error({ err }, "Error listening on port");
-    process.exit(1);
-  }
-
+const server = app.listen(port, () => {
   logger.info({ port }, "Server listening");
+});
+
+server.on("error", (err: NodeJS.ErrnoException) => {
+  logger.error({ errorCode: err.code ?? "listen_error" }, "Error listening on port");
+  process.exitCode = 1;
 });

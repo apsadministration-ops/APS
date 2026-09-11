@@ -9,7 +9,7 @@ import { getApiOrigin } from "@/lib/apiConfig";
 
 // Asset URLs returned by the server already include the `/api` prefix
 // (e.g. `/api/media/files/<uuid>.png`), so we concat against the bare domain.
-const ASSET_ORIGIN = getApiOrigin() ?? "";
+const ASSET_ORIGIN = getApiOrigin();
 
 interface Post {
   id: number; platform: string; status: string; topicKind: string; topicTitle: string;
@@ -553,7 +553,7 @@ export default function ContentDetail() {
           {assets.map((a) => {
             const meta = ASSET_STATUS_LABEL[a.status];
             const showImage = a.status !== "generating" && a.status !== "failed" && a.url;
-            const imageUri = showImage ? `${ASSET_ORIGIN}${a.url}` : null;
+            const imageUri = showImage && ASSET_ORIGIN ? `${ASSET_ORIGIN}${a.url}` : null;
             return (
               <View key={a.id} style={[s.assetRow, { borderColor: colors.border }]}>
                 <View style={[s.assetThumb, { backgroundColor: colors.background, borderColor: colors.border }]}>

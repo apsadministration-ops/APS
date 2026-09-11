@@ -112,10 +112,8 @@ export async function publishOne(postId: number): Promise<PublishOutcome> {
     return { ok: true, postId: done?.id ?? claimed.id, externalUrl: result.externalUrl };
   } catch (err) {
     const reason = err instanceof PostingProviderNotConfiguredError
-      ? err.message
-      : err instanceof Error
-        ? err.message
-        : "unknown_publish_error";
+      ? "posting_provider_not_configured"
+      : "posting_provider_error";
     return await markFailed(claimed, reason);
   }
 }
@@ -159,7 +157,10 @@ export async function sweepDuePublishes(now: Date = new Date()): Promise<{
   let succeeded = 0, failed = 0;
   for (const r of due) {
     const out = await publishOne(r.id).catch((err) => {
-      logger.error({ err, postId: r.id }, "publishOne threw");
+      logger.error({
+        errorName: err instanceof Error ? err.name : "UnknownError",
+        postId: r.id,
+      }, "publishOne threw");
       return { ok: false, postId: r.id, error: "exception" } satisfies PublishOutcome;
     });
     if (out.ok) succeeded += 1; else failed += 1;

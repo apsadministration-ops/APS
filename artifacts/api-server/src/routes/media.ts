@@ -28,7 +28,12 @@ import {
   mediaStorageDir,
   INTENT_SPECS,
 } from "../lib/mediaEngine";
-import { listMediaProviders } from "../lib/mediaProviders";
+import {
+  listMediaProviders,
+  defaultImageProvider,
+  defaultVideoProvider,
+  getMediaProvider,
+} from "../lib/mediaProviders";
 import { MediaProviderNotConfiguredError, MediaProviderError } from "../lib/mediaProviders/types";
 
 const router: IRouter = Router();
@@ -105,6 +110,17 @@ router.post("/admin/growth/content/:id/media/generate", async (req: AuthRequest,
     res.status(400).json({ error: "Invalid body", issues: parsed.error.issues });
     return;
   }
+  const imageProvider = parsed.data.providerKey
+    ? getMediaProvider(parsed.data.providerKey)
+    : defaultImageProvider();
+  if (!imageProvider || !imageProvider.isConfigured()) {
+    res.status(503).json({
+      error: "image_provider_not_configured",
+      message: "Image generation is not configured.",
+      providerKey: parsed.data.providerKey ?? imageProvider?.key ?? "default",
+    });
+    return;
+  }
 
   const [post] = await db.select().from(socialPostsTable).where(eq(socialPostsTable.id, id));
   if (!post) { res.status(404).json({ error: "Post not found" }); return; }
@@ -132,16 +148,19 @@ router.post("/admin/growth/content/:id/media/generate", async (req: AuthRequest,
     if (err instanceof MediaProviderNotConfiguredError) {
       res.status(503).json({
         error: "image_provider_not_configured",
-        message: err.message,
+        message: "Image generation is not configured.",
         providerKey: err.providerKey,
       });
       return;
     }
     if (err instanceof MediaProviderError) {
-      res.status(502).json({ error: "image_provider_error", message: err.message });
+      res.status(502).json({ error: "image_provider_error" });
       return;
     }
-    req.log?.error({ err, postId: id }, "media generate failed");
+    req.log?.error({
+      errorName: err instanceof Error ? err.name : "UnknownError",
+      postId: id,
+    }, "media generate failed");
     res.status(500).json({ error: "Media generation failed" });
   }
 });
@@ -162,6 +181,17 @@ router.post("/admin/growth/content/:id/media/generate-video", async (req: AuthRe
   const parsed = generateVideoSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Invalid body", issues: parsed.error.issues });
+    return;
+  }
+  const videoProvider = parsed.data.providerKey
+    ? getMediaProvider(parsed.data.providerKey)
+    : defaultVideoProvider();
+  if (!videoProvider || !videoProvider.isConfigured()) {
+    res.status(503).json({
+      error: "video_provider_not_configured",
+      message: "Video generation is not configured.",
+      providerKey: parsed.data.providerKey ?? videoProvider?.key ?? "default",
+    });
     return;
   }
 
@@ -192,16 +222,19 @@ router.post("/admin/growth/content/:id/media/generate-video", async (req: AuthRe
     if (err instanceof MediaProviderNotConfiguredError) {
       res.status(503).json({
         error: "video_provider_not_configured",
-        message: err.message,
+        message: "Video generation is not configured.",
         providerKey: err.providerKey,
       });
       return;
     }
     if (err instanceof MediaProviderError) {
-      res.status(502).json({ error: "video_provider_error", message: err.message });
+      res.status(502).json({ error: "video_provider_error" });
       return;
     }
-    req.log?.error({ err, postId: id }, "video generate failed");
+    req.log?.error({
+      errorName: err instanceof Error ? err.name : "UnknownError",
+      postId: id,
+    }, "video generate failed");
     res.status(500).json({ error: "Video generation failed" });
   }
 });

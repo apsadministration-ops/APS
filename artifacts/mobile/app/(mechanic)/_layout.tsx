@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useColors } from "@/hooks/useColors";
 import { getRoleDestination } from "@/lib/roleDestination";
+import { IS_EXPO_GO } from "@/lib/isExpoGo";
 
 // iOS-only modules. Loading them on Android Expo Go can crash the app
 // silently because the native modules aren't shipped on Android. We
@@ -15,7 +16,9 @@ import { getRoleDestination } from "@/lib/roleDestination";
 const isIOSPlatform = Platform.OS === "ios";
 
 function isLiquidGlassAvailableSafe(): boolean {
-  if (!isIOSPlatform) return false;
+  // NativeTabs and the glass-effect module are not shipped in Expo Go.
+  // Keep the classic Tabs implementation there even on iOS 26.
+  if (!isIOSPlatform || IS_EXPO_GO) return false;
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const mod = require("expo-glass-effect") as typeof import("expo-glass-effect");
@@ -155,7 +158,8 @@ function ClassicTabLayout() {
             <Feather name="award" size={22} color={color} />,
         }}
       />
-      <Tabs.Screen name="amplification" options={{ href: null }} />
+      {/* Keep the route addressable without creating a web <a> for a null href. */}
+      <Tabs.Screen name="amplification" options={{ tabBarButton: () => null }} />
     </Tabs>
   );
 }

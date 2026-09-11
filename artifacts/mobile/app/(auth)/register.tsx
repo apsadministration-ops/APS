@@ -32,6 +32,7 @@ export default function RegisterScreen() {
   const [zipCode, setZipCode] = useState("");
   const [serviceRadius, setServiceRadius] = useState(25);
   const [verified, setVerified] = useState<VerifiedLocation | null>(null);
+  const [manualAddress, setManualAddress] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [verifyError, setVerifyError] = useState<string | null>(null);
 
@@ -45,7 +46,10 @@ export default function RegisterScreen() {
   // Reset verification on any address-field change
   const onAddressChange = (setter: (v: string) => void) => (v: string) => {
     setter(v);
-    if (verified) setVerified(null);
+    if (verified || manualAddress) {
+      setVerified(null);
+      setManualAddress(false);
+    }
   };
 
   const verifyLocation = async () => {
@@ -55,6 +59,7 @@ export default function RegisterScreen() {
     }
     setVerifying(true);
     setVerifyError(null);
+    setManualAddress(false);
     try {
       const q = encodeURIComponent(`${address}, ${city}, ${region} ${zipCode}, USA`);
       const ctrl = new AbortController();
@@ -103,19 +108,38 @@ export default function RegisterScreen() {
     }
   };
 
+  const continueWithManualAddress = () => {
+    if (!address.trim() || !city.trim() || !region.trim() || !zipCode.trim()) {
+      setVerifyError("Enter street address, city, state, and ZIP code before continuing.");
+      return;
+    }
+    setVerified(null);
+    setManualAddress(true);
+    setVerifyError(null);
+  };
+
   const handleRegister = () => {
     if (!email || !password || !name) {
       alertMessage("Missing info", "Please fill in name, email and password.");
       return;
     }
-    if (!address || !city || !region || !zipCode) {
+    if (!address.trim() || !city.trim() || !region.trim() || !zipCode.trim()) {
       alertMessage("Address required", "Please enter your full home address.");
       return;
     }
-    if (!verified) {
-      alertMessage("Verify address", "Please tap “Verify Address” to confirm your location before signing up.");
+    if (!verified && !manualAddress) {
+      alertMessage(
+        "Address verification needed",
+        "Verify the address, or choose “Continue with typed address” if the lookup service is unavailable.",
+      );
       return;
     }
+    const typedAddress = {
+      address: address.trim(),
+      city: city.trim(),
+      region: region.trim(),
+      zipCode: zipCode.trim(),
+    };
     registerMutation.mutate(
       {
         data: {
@@ -124,12 +148,10 @@ export default function RegisterScreen() {
           password,
           role,
           phone: phone || undefined,
-          address,
-          city: verified.city,
-          region: verified.region,
-          zipCode: verified.zipCode,
-          homeLat: verified.lat,
-          homeLng: verified.lng,
+          ...typedAddress,
+          ...(verified
+            ? { homeLat: verified.lat, homeLng: verified.lng }
+            : {}),
           ...(role === "mechanic" ? { serviceRadiusMiles: serviceRadius } : {}),
         },
       },
@@ -300,10 +322,41 @@ export default function RegisterScreen() {
           {verifyError && (
             <Text style={[styles.error, { color: colors.destructive }]}>{verifyError}</Text>
           )}
+          {verifyError && !manualAddress && !verifying &&
+            address.trim() && city.trim() && region.trim() && zipCode.trim() ? (
+            <Pressable
+              style={[
+                styles.manualAddressBtn,
+                { backgroundColor: colors.card, borderColor: colors.border },
+              ]}
+              onPress={continueWithManualAddress}
+            >
+              <Feather name="edit-3" size={16} color={colors.foreground} />
+              <Text style={[styles.verifyText, { color: colors.foreground }]}>
+                Continue with typed address
+              </Text>
+            </Pressable>
+          ) : null}
           {verified && (
             <Text style={[styles.verifiedAddress, { color: colors.mutedForeground }]} numberOfLines={2}>
               {verified.displayName}
             </Text>
+          )}
+          {manualAddress && (
+            <View
+              style={[
+                styles.manualAddressNotice,
+                { backgroundColor: colors.secondary, borderColor: colors.border },
+              ]}
+            >
+              <Feather name="info" size={16} color={colors.foreground} />
+              <Text style={[styles.manualAddressText, { color: colors.foreground }]}>
+                Address will be saved as entered. Location is unverified and no coordinates will be stored.
+                {role === "mechanic"
+                  ? " Mechanic coverage may be limited until the address can be verified."
+                  : ""}
+              </Text>
+            </View>
           )}
 
           {role === "mechanic" && (
@@ -392,6 +445,16 @@ const styles = StyleSheet.create({
     flexDirection: "row", gap: 8,
   },
   verifyText: { fontSize: 14, fontWeight: "600" },
+  manualAddressBtn: {
+    minHeight: 48, borderRadius: 12, borderWidth: 1,
+    alignItems: "center", justifyContent: "center",
+    flexDirection: "row", gap: 8,
+  },
+  manualAddressNotice: {
+    borderRadius: 10, borderWidth: 1, flexDirection: "row", gap: 8,
+    padding: 10,
+  },
+  manualAddressText: { flex: 1, fontSize: 12, lineHeight: 17 },
   verifiedAddress: { fontSize: 12, marginTop: -8 },
   radiusRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   radiusChip: { paddingHorizontal: 16, height: 40, borderRadius: 20, borderWidth: 1, alignItems: "center", justifyContent: "center" },

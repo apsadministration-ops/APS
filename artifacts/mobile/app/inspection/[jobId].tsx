@@ -12,7 +12,8 @@ import { Feather } from "@expo/vector-icons";
 import { useState } from "react";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { alertMessage } from "@/utils/confirm";
-import * as ImagePicker from "expo-image-picker";
+import { CapabilityNotice } from "@/components/CapabilityNotice";
+import { openAppSettings, pickImageLibrary } from "@/lib/deviceCapabilities";
 
 const CHECKLIST_KEYS = [
   "scratches", "dents", "glass", "wheels", "lights", "interior", "fluidLeaks",
@@ -57,15 +58,21 @@ export default function InspectionScreen() {
   const [items, setItems] = useState<Record<ChecklistKey, DamageChecklistItem>>(blankChecklist());
   const [itemNotes, setItemNotes] = useState<Record<ChecklistKey, string>>({} as Record<ChecklistKey, string>);
   const [error, setError] = useState("");
+  const [photoError, setPhotoError] = useState<{
+    message: string;
+    canAskAgain: boolean;
+  } | null>(null);
 
   const pickImages = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      allowsMultipleSelection: true,
-      quality: 0.8,
-    });
-    if (!result.canceled) {
-      setMediaUrls((prev) => [...prev, ...result.assets.map((a) => a.uri)]);
+    setPhotoError(null);
+    const result = await pickImageLibrary();
+    if (result.status === "selected") {
+      setMediaUrls((prev) => [...prev, ...result.uris]);
+    } else if (result.status === "unavailable") {
+      setPhotoError({
+        message: result.message,
+        canAskAgain: result.canAskAgain,
+      });
     }
   };
 
@@ -183,6 +190,15 @@ export default function InspectionScreen() {
               Add photos ({mediaUrls.length})
             </Text>
           </Pressable>
+          {photoError ? (
+            <CapabilityNotice
+              message={photoError.message}
+              canOpenSettings={!photoError.canAskAgain}
+              onOpenSettings={() => {
+                void openAppSettings();
+              }}
+            />
+          ) : null}
           {mediaUrls.length > 0 && (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
               {mediaUrls.map((uri, i) => (

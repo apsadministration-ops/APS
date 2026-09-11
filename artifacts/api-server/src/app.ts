@@ -1,4 +1,4 @@
-import express, { type Express } from "express";
+import express, { type ErrorRequestHandler, type Express } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
 import router from "./routes";
@@ -11,6 +11,7 @@ import { initMediaProviders } from "./lib/mediaProviders";
 import { initPostingProviders } from "./lib/publishingProviders";
 import { startGrowthScheduler } from "./lib/growthSchedulerInit";
 import { loadCredentialCache } from "./lib/credentialStore";
+import { classifyApiError } from "./lib/apiError";
 
 const app: Express = express();
 
@@ -43,6 +44,27 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use("/api", router);
 
+// Express 5 forwards rejected async handlers here. Keep provider/DB details
+// out of client responses and logs; operational diagnostics belong in the
+// server's structured telemetry, not in a request body.
+const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
+  const { statusCode, errorCode } = classifyApiError(err);
+
+  logger.error({
+    errorName: err instanceof Error ? err.name : "UnknownError",
+    method: req.method,
+    path: req.path,
+    statusCode,
+  }, "Unhandled API request error");
+
+  if (res.headersSent) {
+    _next(err);
+    return;
+  }
+  res.status(statusCode).json({ error: errorCode });
+};
+app.use(errorHandler);
+
 // Load the configured signing secret; inspect missing setup without provisioning endpoints.
 void initStripeWebhook();
 
@@ -67,11 +89,15 @@ initPostingProviders();
 // scheduler can fire publish ticks — otherwise the first sweep would see
 // `hasCredentialSync()` return false for legitimately-saved credentials
 // and skip the platform with a misleading "not configured" error.
-loadCredentialCache().then(() => {
+void loadCredentialCache().then(() => {
   // Growth scheduler: 1-min publish sweep, 30-min winner-iteration sweep,
   // 60-min reuse sweep. Separate from the payout scheduler so a slow
   // platform API can't block payout ticks.
   startGrowthScheduler();
+}).catch((err) => {
+  logger.error({
+    errorName: err instanceof Error ? err.name : "UnknownError",
+  }, "Growth scheduler disabled because credential cache initialization failed");
 });
 
 export default app;

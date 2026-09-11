@@ -37,7 +37,9 @@ export function startGrowthScheduler(): void {
   // One-shot backfill so legacy posts get a score.
   void backfillEngagementScores()
     .then((n) => { if (n > 0) logger.info({ updated: n }, "engagement scores backfilled"); })
-    .catch((err) => logger.error({ err }, "engagement backfill failed"));
+    .catch((err) => logger.error({
+      errorName: err instanceof Error ? err.name : "UnknownError",
+    }, "engagement backfill failed"));
 
   const publishTimer = setInterval(() => { void runPublishTick(); }, PUBLISH_TICK_MS);
   const iterTimer    = setInterval(() => { void runIterationTick(); }, ITERATION_TICK_MS);
@@ -57,17 +59,23 @@ export function stopGrowthScheduler(): void {
 async function runPublishTick(): Promise<void> {
   await sweepDuePublishes()
     .then((r) => { if (r.attempted > 0) logger.info({ ...r }, "publish sweep"); })
-    .catch((err) => logger.error({ err }, "publish sweep failed"));
+    .catch((err) => logger.error({
+      errorName: err instanceof Error ? err.name : "UnknownError",
+    }, "publish sweep failed"));
 }
 
 async function runIterationTick(): Promise<void> {
   await sweepWinnerIterations()
     .then((r) => { if (r.iterated > 0 || r.errors > 0) logger.info({ ...r }, "iteration sweep"); })
-    .catch((err) => logger.error({ err }, "iteration sweep failed"));
+    .catch((err) => logger.error({
+      errorName: err instanceof Error ? err.name : "UnknownError",
+    }, "iteration sweep failed"));
 }
 
 async function runReuseTick(): Promise<void> {
   await sweepReuseCandidates()
     .then((r) => { if (r.reused > 0 || r.errors > 0) logger.info({ ...r }, "reuse sweep"); })
-    .catch((err) => logger.error({ err }, "reuse sweep failed"));
+    .catch((err) => logger.error({
+      errorName: err instanceof Error ? err.name : "UnknownError",
+    }, "reuse sweep failed"));
 }

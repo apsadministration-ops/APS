@@ -55,6 +55,10 @@ import {
   type TopicKind,
 } from "../lib/contentEngine";
 import {
+  AnthropicUnavailableError,
+  isAnthropicConfigured,
+} from "@workspace/integrations-anthropic-ai";
+import {
   getAdminGrowthSettings,
   updateAdminGrowthSettings,
   assertAiGenerationAllowed,
@@ -87,6 +91,15 @@ const router: IRouter = Router();
 router.use("/admin/growth", authenticate, requireRole("admin"));
 
 const PLATFORMS: Platform[] = ["facebook", "instagram", "tiktok", "twitter"];
+
+function aiUnavailable(res: import("express").Response): boolean {
+  if (isAnthropicConfigured()) return false;
+  res.status(503).json({
+    error: "ai_provider_not_configured",
+    message: "AI content generation is temporarily unavailable.",
+  });
+  return true;
+}
 
 /* -------------------------------------------------------------------------- */
 /* Dashboards                                                                 */
@@ -137,6 +150,7 @@ router.get("/admin/growth/amplification", async (_req: AuthRequest, res): Promis
 });
 
 router.get("/admin/growth/trends", async (_req: AuthRequest, res): Promise<void> => {
+  if (aiUnavailable(res)) return;
   try { await assertAiGenerationAllowed(); }
   catch (err) {
     if (err instanceof PolicyError) { res.status(err.statusCode).json({ error: err.message }); return; }
@@ -158,8 +172,14 @@ router.get("/admin/growth/trends", async (_req: AuthRequest, res): Promise<void>
     const ideas = await suggestTrendingTopics({ now: new Date(), topRegions: top, shortages });
     res.json({ ideas });
   } catch (err) {
-    req_log(_req).error({ err }, "trend suggestion failed");
-    res.status(502).json({ error: "Trend engine unavailable", detail: err instanceof Error ? err.message : "unknown" });
+    if (err instanceof AnthropicUnavailableError) {
+      res.status(503).json({ error: "ai_provider_not_configured" });
+      return;
+    }
+    req_log(_req).error({
+      errorName: err instanceof Error ? err.name : "UnknownError",
+    }, "trend suggestion failed");
+    res.status(502).json({ error: "trend_engine_unavailable" });
   }
 });
 
@@ -188,6 +208,7 @@ router.post("/admin/growth/content/generate", async (req: AuthRequest, res): Pro
     res.status(400).json({ error: "Invalid body", issues: parsed.error.issues });
     return;
   }
+  if (aiUnavailable(res)) return;
   const body = parsed.data;
   try { await assertAiGenerationAllowed(); }
   catch (err) {
@@ -203,8 +224,14 @@ router.post("/admin/growth/content/generate", async (req: AuthRequest, res): Pro
       briefingContext: body.briefingContext ?? null,
     });
   } catch (err) {
-    req.log?.error({ err }, "content generation failed");
-    res.status(502).json({ error: "Content generation failed", detail: err instanceof Error ? err.message : "unknown" });
+    if (err instanceof AnthropicUnavailableError) {
+      res.status(503).json({ error: "ai_provider_not_configured" });
+      return;
+    }
+    req.log?.error({
+      errorName: err instanceof Error ? err.name : "UnknownError",
+    }, "content generation failed");
+    res.status(502).json({ error: "content_generation_unavailable" });
     return;
   }
   const [post] = await db.insert(socialPostsTable).values({
@@ -239,6 +266,7 @@ router.post("/admin/growth/content/generate-batch", async (req: AuthRequest, res
     res.status(400).json({ error: "Invalid body", issues: parsed.error.issues });
     return;
   }
+  if (aiUnavailable(res)) return;
   const { platforms, ...rest } = parsed.data;
   try { await assertAiGenerationAllowed(); }
   catch (err) {
@@ -273,8 +301,16 @@ router.post("/admin/growth/content/generate-batch", async (req: AuthRequest, res
       }).returning();
       out.push(post);
     } catch (err) {
-      req.log?.error({ err, platform }, "batch content generation failed");
-      errors.push({ platform, error: err instanceof Error ? err.message : "unknown" });
+      req.log?.error({
+        errorName: err instanceof Error ? err.name : "UnknownError",
+        platform,
+      }, "batch content generation failed");
+      errors.push({
+        platform,
+        error: err instanceof AnthropicUnavailableError
+          ? "ai_provider_not_configured"
+          : "content_generation_failed",
+      });
     }
   }
   res.status(out.length === 0 ? 502 : 201).json({ posts: out, errors });
@@ -452,6 +488,7 @@ router.post("/admin/growth/content/:id/iterate", async (req: AuthRequest, res): 
   if (!Number.isInteger(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   const parsed = iterateSchema.safeParse(req.body ?? {});
   if (!parsed.success) { res.status(400).json({ error: "Invalid body", issues: parsed.error.issues }); return; }
+  if (aiUnavailable(res)) return;
 
   try { await assertAiGenerationAllowed(); }
   catch (err) {
@@ -467,12 +504,19 @@ router.post("/admin/growth/content/:id/iterate", async (req: AuthRequest, res): 
     });
     res.status(201).json(draft);
   } catch (err) {
+    if (err instanceof AnthropicUnavailableError) {
+      res.status(503).json({ error: "ai_provider_not_configured" });
+      return;
+    }
     const msg = err instanceof Error ? err.message : "iterate_failed";
     if (msg === "source_post_not_found") { res.status(404).json({ error: msg }); return; }
     if (msg === "source_not_published" || msg === "already_iterated") {
       res.status(409).json({ error: msg }); return;
     }
-    req.log?.error({ err, postId: id }, "iterate failed");
+    req.log?.error({
+      errorName: err instanceof Error ? err.name : "UnknownError",
+      postId: id,
+    }, "iterate failed");
     res.status(500).json({ error: "iterate_failed" });
   }
 });
@@ -534,7 +578,10 @@ router.post("/admin/growth/content/:id/reuse", async (req: AuthRequest, res): Pr
       msg === "reuse_cap_reached" ||
       msg === "cooldown_active"
     ) { res.status(409).json({ error: msg }); return; }
-    req.log?.error({ err, postId: id }, "reuse failed");
+    req.log?.error({
+      errorName: err instanceof Error ? err.name : "UnknownError",
+      postId: id,
+    }, "reuse failed");
     res.status(500).json({ error: "reuse_failed" });
   }
 });
@@ -675,6 +722,7 @@ router.post("/admin/growth/mechanics/:id/content", async (req: AuthRequest, res)
   if (!Number.isInteger(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   const parsed = mechanicContentSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Invalid body", issues: parsed.error.issues }); return; }
+  if (aiUnavailable(res)) return;
   try { await assertAiGenerationAllowed(); }
   catch (err) {
     if (err instanceof PolicyError) { res.status(err.statusCode).json({ error: err.message }); return; }
@@ -698,8 +746,14 @@ router.post("/admin/growth/mechanics/:id/content", async (req: AuthRequest, res)
       briefingContext: parsed.data.briefingContext ?? null,
     });
   } catch (err) {
-    req.log?.error({ err }, "mechanic content generation failed");
-    res.status(502).json({ error: "Content generation failed", detail: err instanceof Error ? err.message : "unknown" });
+    if (err instanceof AnthropicUnavailableError) {
+      res.status(503).json({ error: "ai_provider_not_configured" });
+      return;
+    }
+    req.log?.error({
+      errorName: err instanceof Error ? err.name : "UnknownError",
+    }, "mechanic content generation failed");
+    res.status(502).json({ error: "content_generation_unavailable" });
     return;
   }
   const topicMap = { spotlight: "mechanic_spotlight", book_with_me: "book_through_aps", referral_push: "referral_campaign" } as const;

@@ -6,7 +6,12 @@ import { authenticate, requireRole, requireActiveMechanic, type AuthRequest } fr
 import { checkoutCreationLimiter, paymentReadLimiter } from "../middlewares/paymentRateLimit";
 import { awardCustomerPoints } from "../lib/loyaltyEngine";
 import { runProgression } from "../lib/tierProgressionEngine";
-import { getStripePublishableKey, getUncachableStripeClient } from "../lib/stripeClient";
+import {
+  getStripePublishableKey,
+  getUncachableStripeClient,
+  StripeNotConfiguredError,
+} from "../lib/stripeClient";
+import { getPublicBaseUrl } from "../lib/publicUrl";
 import { commissionForJob, splitOnNetProfit, findServiceBySlug, partsCostCentsFor, defaultPartsCostPct, type TierKey, type ServiceCategory } from "@workspace/tier-catalog";
 import { isRefundablePayment } from "../lib/authorization";
 
@@ -42,8 +47,8 @@ router.get("/payments/config", paymentReadLimiter, async (_req, res): Promise<vo
   try {
     const publishableKey = await getStripePublishableKey();
     res.json({ publishableKey });
-  } catch (err) {
-    res.status(503).json({ error: "Stripe not configured", details: (err as Error).message });
+  } catch {
+    res.status(503).json({ error: "stripe_provider_not_configured" });
   }
 });
 
@@ -75,6 +80,11 @@ router.post("/payments/jobs/:jobId/checkout", authenticate, checkoutCreationLimi
   }
   const jobId = parseInt(String(req.params.jobId), 10);
   if (isNaN(jobId)) { res.status(400).json({ error: "Invalid job ID" }); return; }
+  const baseUrl = getPublicBaseUrl("payment");
+  if (!baseUrl) {
+    res.status(503).json({ error: "public_url_not_configured" });
+    return;
+  }
 
   try {
     const result = await db.transaction(async (tx) => {
@@ -214,7 +224,6 @@ router.post("/payments/jobs/:jobId/checkout", authenticate, checkoutCreationLimi
     abortCheckout(400, { error: "A shop destination requires a shopId." });
   }
 
-  const baseUrl = `https://${(process.env["REPLIT_DOMAINS"] ?? "").split(",")[0] ?? ""}`;
   // Idempotency key — if the customer double-taps "Pay" or the network
   // retries the request, Stripe returns the SAME session instead of
   // creating two PaymentIntents. Scope is (job, payment-row id) so a
@@ -333,6 +342,11 @@ router.get("/payments/checkout/return", async (req, res): Promise<void> => {
 /* -------------------------------------------------------------------------- */
 
 router.post("/payments/connect/onboarding", authenticate, requireActiveMechanic, async (req: AuthRequest, res): Promise<void> => {
+  const baseUrl = getPublicBaseUrl("payment");
+  if (!baseUrl) {
+    res.status(503).json({ error: "public_url_not_configured" });
+    return;
+  }
   const stripe = await getUncachableStripeClient();
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.userId!));
   if (!user) { res.status(404).json({ error: "User not found" }); return; }
@@ -349,7 +363,6 @@ router.post("/payments/connect/onboarding", authenticate, requireActiveMechanic,
     await db.update(usersTable).set({ stripeAccountId }).where(eq(usersTable.id, user.id));
   }
 
-  const baseUrl = `https://${(process.env["REPLIT_DOMAINS"] ?? "").split(",")[0] ?? ""}`;
   const link = await stripe.accountLinks.create({
     account: stripeAccountId,
     refresh_url: `${baseUrl}/api/payments/connect/return?status=refresh`,
@@ -473,7 +486,11 @@ router.post("/payments/:jobId/refund", authenticate, requireRole("admin"), async
     }
     res.json({ ok: true });
   } catch (err) {
-    res.status(502).json({ error: "Stripe refund failed", details: (err as Error).message });
+    if (err instanceof StripeNotConfiguredError) {
+      res.status(503).json({ error: "stripe_provider_not_configured" });
+      return;
+    }
+    res.status(502).json({ error: "stripe_refund_failed" });
   }
 });
 

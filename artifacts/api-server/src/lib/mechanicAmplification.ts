@@ -17,6 +17,7 @@
 
 import QRCode from "qrcode";
 import type { User, MechanicAmplification } from "@workspace/db";
+import { requirePublicBaseUrl } from "./publicUrl";
 
 export interface AmplificationKit {
   mechanic: {
@@ -43,10 +44,7 @@ const APP_STORE_FALLBACK = "https://apps.apple.com/app/aps-auto-service/id000000
 const PLAY_STORE_FALLBACK = "https://play.google.com/store/apps/details?id=com.aps.autoservice";
 
 export function publicBaseUrl(): string {
-  const domains = (process.env.REPLIT_DOMAINS ?? "").split(",").map((d) => d.trim()).filter(Boolean);
-  if (domains.length > 0) return `https://${domains[0]}`;
-  if (process.env.PUBLIC_BASE_URL) return process.env.PUBLIC_BASE_URL;
-  return "http://localhost:5000";
+  return requirePublicBaseUrl("amplification");
 }
 
 export function personalLinks(referralCode: string | null): AmplificationKit["links"] {

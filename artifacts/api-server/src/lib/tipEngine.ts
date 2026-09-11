@@ -11,6 +11,7 @@
 import { eq } from "drizzle-orm";
 import { db, tipsTable, jobsTable, usersTable } from "@workspace/db";
 import { getUncachableStripeClient } from "./stripeClient";
+import { requirePublicBaseUrl } from "./publicUrl";
 
 const DEFAULT_TIP_PLATFORM_FEE_PCT = 0;
 
@@ -50,6 +51,7 @@ export async function createTipCheckout(input: CreateTipInput): Promise<{ url: s
     throw new Error("Mechanic has not finished payout setup yet.");
   }
   if (!customer) throw new Error("Customer not found");
+  const baseUrl = requirePublicBaseUrl("tip");
 
   const stripe = await getUncachableStripeClient();
   let stripeCustomerId = customer.stripeCustomerId;
@@ -74,7 +76,6 @@ export async function createTipCheckout(input: CreateTipInput): Promise<{ url: s
   }).returning();
   const tipId = tip!.id;
 
-  const baseUrl = `https://${(process.env["REPLIT_DOMAINS"] ?? "").split(",")[0] ?? ""}`;
   // Idempotency key on the pre-inserted tip id — double-taps from the tip
   // screen can't create two Stripe Checkout sessions / charge twice.
   const idempotencyKey = `tip:${tipId}`;

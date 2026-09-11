@@ -9,7 +9,11 @@ import {
   usersTable,
 } from "@workspace/db";
 import { AssistantChatBody } from "@workspace/api-zod";
-import { anthropic } from "@workspace/integrations-anthropic-ai";
+import {
+  anthropic,
+  AnthropicUnavailableError,
+  isAnthropicConfigured,
+} from "@workspace/integrations-anthropic-ai";
 import { authenticate, type AuthRequest } from "../middlewares/authenticate";
 
 const router: IRouter = Router();
@@ -213,6 +217,13 @@ router.post(
       res.status(400).json({ error: parsed.error.message });
       return;
     }
+    if (!isAnthropicConfigured()) {
+      res.status(503).json({
+        error: "ai_provider_not_configured",
+        message: "AI assistant is temporarily unavailable.",
+      });
+      return;
+    }
 
     const { message, history = [], context } = parsed.data;
 
@@ -228,7 +239,9 @@ router.post(
         req.userRole!,
       );
     } catch (err) {
-      req.log.warn({ err }, "Failed to load assistant context");
+      req.log.warn({
+        errorName: err instanceof Error ? err.name : "UnknownError",
+      }, "Failed to load assistant context");
     }
 
     const systemPrompt = contextSummary
@@ -257,7 +270,16 @@ router.post(
       const reply = text || "I couldn't generate a response. Please try rephrasing your question.";
       res.json({ reply, urgency: detectUrgency(reply) });
     } catch (err) {
-      req.log.error({ err }, "Assistant chat failed");
+      if (err instanceof AnthropicUnavailableError) {
+        res.status(503).json({
+          error: "ai_provider_not_configured",
+          message: "AI assistant is temporarily unavailable.",
+        });
+        return;
+      }
+      req.log.error({
+        errorName: err instanceof Error ? err.name : "UnknownError",
+      }, "Assistant chat failed");
       res.status(500).json({ error: "Assistant is temporarily unavailable. Please try again." });
     }
   },

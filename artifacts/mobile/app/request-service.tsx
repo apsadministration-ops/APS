@@ -6,7 +6,8 @@ import { useRouter, Stack, useLocalSearchParams } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { useMemo, useState } from "react";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
-import * as Location from "expo-location";
+import { CapabilityNotice } from "@/components/CapabilityNotice";
+import { getCurrentLocation, openAppSettings } from "@/lib/deviceCapabilities";
 import { success as hapticSuccess } from "@/utils/haptics";
 import {
   JOB_CATALOG, isPricedService, isEuropeanVehicle, quoteForService,
@@ -55,6 +56,10 @@ export default function RequestServiceScreen() {
   const [locating, setLocating] = useState(false);
   const [lookingUpZip, setLookingUpZip] = useState(false);
   const [error, setError] = useState("");
+  const [locationError, setLocationError] = useState<{
+    message: string;
+    canAskAgain: boolean;
+  } | null>(null);
 
   const liftReason = useMemo(() => detectLiftReason(description), [description]);
   const selectedService = useMemo<ServiceDef | null>(
@@ -117,20 +122,16 @@ export default function RequestServiceScreen() {
   };
 
   const getCurrentCoords = async (): Promise<{ lat: number; lng: number } | null> => {
-    if (Platform.OS === "web") {
-      if (typeof navigator === "undefined" || !navigator.geolocation) return null;
-      return await new Promise((resolve) => {
-        navigator.geolocation.getCurrentPosition(
-          (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-          () => resolve(null),
-          { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
-        );
+    const result = await getCurrentLocation();
+    if (!result.ok) {
+      setLocationError({
+        message: result.message,
+        canAskAgain: result.canAskAgain,
       });
+      return null;
     }
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== "granted") return null;
-    const loc = await Location.getCurrentPositionAsync({});
-    return { lat: loc.coords.latitude, lng: loc.coords.longitude };
+    setLocationError(null);
+    return result.value;
   };
 
   const reverseGeocode = async (lat: number, lng: number): Promise<string | null> => {
@@ -154,7 +155,7 @@ export default function RequestServiceScreen() {
       if (!coords) {
         void alertMessage(
           "Location unavailable",
-          "We couldn't access your location. Please allow location access in your browser/system settings, or enter your ZIP code below as a fallback.",
+          "We couldn't access your location. Enter your ZIP code or address below as a fallback.",
         );
         return;
       }
@@ -467,6 +468,15 @@ export default function RequestServiceScreen() {
           <Text style={[styles.helper, { color: colors.mutedForeground }]}>
             Tap the arrow to use your current location, or enter your ZIP code below.
           </Text>
+          {locationError ? (
+            <CapabilityNotice
+              message={locationError.message}
+              canOpenSettings={!locationError.canAskAgain && Platform.OS !== "web"}
+              onOpenSettings={() => {
+                void openAppSettings();
+              }}
+            />
+          ) : null}
 
           <View style={[styles.locationRow, { marginTop: 12 }]}>
             <TextInput

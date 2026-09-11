@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Platform } from "react-native";
 import Constants, { ExecutionEnvironment } from "expo-constants";
 import { useRouter } from "expo-router";
@@ -16,18 +16,33 @@ const IS_EXPO_GO =
 
 type EventSubscriptionLike = { remove: () => void };
 
-export function usePushNotifications() {
+export type PushNotificationStatus =
+  | "checking"
+  | "available"
+  | "unavailable"
+  | "not-applicable";
+
+export function usePushNotifications(): PushNotificationStatus {
   const { user } = useAuth();
   const router = useRouter();
+  const [status, setStatus] = useState<PushNotificationStatus>("checking");
   const notificationListener = useRef<EventSubscriptionLike | null>(null);
   const responseListener = useRef<EventSubscriptionLike | null>(null);
 
   useEffect(() => {
-    if (!user) return;
-    if (IS_EXPO_GO) return; // skip in Expo Go (push removed in SDK 53)
-    if (Platform.OS === "web") return;
+    if (!user) {
+      setStatus("not-applicable");
+      return;
+    }
+    if (IS_EXPO_GO || Platform.OS === "web") {
+      // Push is an optional service. Surface its unavailable state instead of
+      // pretending registration succeeded when this runtime cannot support it.
+      setStatus("unavailable");
+      return;
+    }
 
     let cancelled = false;
+    setStatus("checking");
 
     (async () => {
       // Lazy require so `expo-notifications` is never loaded in Expo Go.
@@ -53,6 +68,7 @@ export function usePushNotifications() {
           finalStatus = status;
         }
         if (finalStatus !== "granted") {
+          setStatus("unavailable");
           console.warn(
             "[push] registration unavailable",
             getPushFailureDiagnostic("permission"),
@@ -62,6 +78,7 @@ export function usePushNotifications() {
 
         const projectId = inferExpoProjectId(Constants);
         if (!projectId) {
+          setStatus("unavailable");
           console.warn(
             "[push] registration unavailable",
             getPushFailureDiagnostic("project-id"),
@@ -73,6 +90,7 @@ export function usePushNotifications() {
         try {
           token = await Notifications.getExpoPushTokenAsync({ projectId });
         } catch (error) {
+          setStatus("unavailable");
           console.warn(
             "[push] registration unavailable",
             getPushFailureDiagnostic("token", error),
@@ -80,12 +98,18 @@ export function usePushNotifications() {
           return;
         }
         const pushToken = token.data;
-        if (cancelled || !pushToken) return;
+        if (cancelled || !pushToken) {
+          setStatus("unavailable");
+          return;
+        }
 
         try {
           const AsyncStorage = (await import("@react-native-async-storage/async-storage")).default;
           const authToken = await AsyncStorage.getItem("auth_token");
-          if (!authToken) return;
+          if (!authToken) {
+            setStatus("unavailable");
+            return;
+          }
           const response = await fetch(getApiUrl("/users/me/push-token"), {
             method: "POST",
             headers: {
@@ -95,12 +119,16 @@ export function usePushNotifications() {
             body: JSON.stringify({ token: pushToken }),
           });
           if (!response.ok) {
+            setStatus("unavailable");
             console.warn(
               "[push] registration unavailable",
               getPushFailureDiagnostic("server", response.status),
             );
+          } else {
+            setStatus("available");
           }
         } catch {
+          setStatus("unavailable");
           console.warn(
             "[push] registration unavailable",
             getPushFailureDiagnostic("server"),
@@ -108,6 +136,7 @@ export function usePushNotifications() {
         }
       } catch {
         // Permission / token errors are non-fatal — app still works without push.
+        setStatus("unavailable");
         console.warn(
           "[push] registration unavailable",
           getPushFailureDiagnostic("token"),
@@ -136,6 +165,7 @@ export function usePushNotifications() {
     })().catch(() => {
       // Native module/listener setup can fail before token registration starts.
       // Keep push optional without allowing an unhandled startup rejection.
+      setStatus("unavailable");
       console.warn("[push] registration unavailable", getPushFailureDiagnostic("native-setup"));
     });
 
@@ -145,4 +175,6 @@ export function usePushNotifications() {
       responseListener.current?.remove();
     };
   }, [user, router]);
+
+  return status;
 }

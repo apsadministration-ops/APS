@@ -21,7 +21,8 @@ import { and, eq, gte, desc, inArray, or, sql } from "drizzle-orm";
 import { db, paymentsTable, jobsTable, tipsTable, payoutEventsTable, usersTable, shopsTable, workConfirmationsTable } from "@workspace/db";
 import { authenticate, requireRole, requireActiveMechanic, type AuthRequest } from "../middlewares/authenticate";
 import { manualRetryCapture } from "../lib/payoutHoldEngine";
-import { getUncachableStripeClient } from "../lib/stripeClient";
+import { getUncachableStripeClient, StripeNotConfiguredError } from "../lib/stripeClient";
+import { getPublicBaseUrl } from "../lib/publicUrl";
 import { canManagePayoutDestination, canRetryCapture } from "../lib/authorization";
 
 const router: IRouter = Router();
@@ -215,7 +216,11 @@ router.get("/payouts/tax-documents", authenticate, async (req: AuthRequest, res:
     const link = await stripe.accounts.createLoginLink(u.stripeAccountId);
     res.json({ url: link.url });
   } catch (err) {
-    res.status(502).json({ error: "Stripe error", details: (err as Error).message });
+    if (err instanceof StripeNotConfiguredError) {
+      res.status(503).json({ error: "stripe_provider_not_configured" });
+      return;
+    }
+    res.status(502).json({ error: "stripe_provider_error" });
   }
 });
 
@@ -271,6 +276,11 @@ router.post("/payouts/shop/connect/onboarding", authenticate, async (req: AuthRe
   if (req.userRole !== "shop_owner" || req.user?.status !== "active") {
     res.status(403).json({ error: "Active shop owners only" }); return;
   }
+  const baseUrl = getPublicBaseUrl("payout");
+  if (!baseUrl) {
+    res.status(503).json({ error: "public_url_not_configured" });
+    return;
+  }
   const stripe = await getUncachableStripeClient();
   const [u] = await db.select().from(usersTable).where(eq(usersTable.id, req.userId!));
   if (!u) { res.status(404).json({ error: "User not found" }); return; }
@@ -288,7 +298,6 @@ router.post("/payouts/shop/connect/onboarding", authenticate, async (req: AuthRe
       .set({ stripeAccountId, stripeAccountType: "company" })
       .where(eq(usersTable.id, u.id));
   }
-  const baseUrl = `https://${(process.env["REPLIT_DOMAINS"] ?? "").split(",")[0] ?? ""}`;
   const link = await stripe.accountLinks.create({
     account: stripeAccountId,
     refresh_url: `${baseUrl}/api/payments/connect/return?status=refresh`,

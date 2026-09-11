@@ -9,8 +9,9 @@ import { useLocalSearchParams, useRouter, Stack } from "expo-router";
 import { useState } from "react";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { Feather } from "@expo/vector-icons";
-import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "expo-haptics";
+import { CapabilityNotice } from "@/components/CapabilityNotice";
+import { openAppSettings, pickImageLibrary } from "@/lib/deviceCapabilities";
 
 const SERVICE_CATEGORIES = ["repair", "diagnostic", "maintenance", "detailing"] as const;
 
@@ -58,6 +59,10 @@ export default function WorkLogScreen() {
   const [recurringIssueTags, setRecurringIssueTags] = useState<string[]>([]);
   const [newTag, setNewTag] = useState("");
   const [error, setError] = useState("");
+  const [photoError, setPhotoError] = useState<{
+    message: string;
+    canAskAgain: boolean;
+  } | null>(null);
 
   const matchingBooking = (myBookings ?? []).find((b) => b.jobId === jid);
   const requiresGhost = job?.requiresGhostGarage === true;
@@ -75,13 +80,15 @@ export default function WorkLogScreen() {
   const removeTag = (idx: number) => setRecurringIssueTags((p) => p.filter((_, i) => i !== idx));
 
   const pickImages = async (setter: (imgs: string[]) => void) => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      allowsMultipleSelection: true,
-      quality: 0.8,
-    });
-    if (!result.canceled) {
-      setter(result.assets.map((a) => a.uri));
+    setPhotoError(null);
+    const result = await pickImageLibrary();
+    if (result.status === "selected") {
+      setter(result.uris);
+    } else if (result.status === "unavailable") {
+      setPhotoError({
+        message: result.message,
+        canAskAgain: result.canAskAgain,
+      });
     }
   };
 
@@ -404,6 +411,15 @@ export default function WorkLogScreen() {
               </Text>
             </Pressable>
           </View>
+          {photoError ? (
+            <CapabilityNotice
+              message={photoError.message}
+              canOpenSettings={!photoError.canAskAgain}
+              onOpenSettings={() => {
+                void openAppSettings();
+              }}
+            />
+          ) : null}
           {afterImages.length > 0 && (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imagePreview}>
               {afterImages.map((uri, i) => (

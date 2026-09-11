@@ -1,12 +1,23 @@
 // Stripe client — credentials fetched from Replit connection API on every call.
 // NEVER cache. NEVER store card data anywhere.
 import Stripe from "stripe";
+import { isValidProviderHostname } from "./providerConfig";
 
 interface StripeConnection {
   settings: {
     publishable?: string;
     secret?: string;
   };
+}
+
+export class StripeNotConfiguredError extends Error {
+  readonly code = "stripe_provider_not_configured";
+  readonly statusCode = 503;
+
+  constructor() {
+    super("Stripe is not configured.");
+    this.name = "StripeNotConfiguredError";
+  }
 }
 
 async function getCredentials(): Promise<{ publishableKey: string; secretKey: string }> {
@@ -17,8 +28,9 @@ async function getCredentials(): Promise<{ publishableKey: string; secretKey: st
       ? "depl " + process.env["WEB_REPL_RENEWAL"]
       : null;
 
-  if (!xReplitToken) throw new Error("Stripe: X-Replit-Token not found");
-  if (!hostname) throw new Error("Stripe: REPLIT_CONNECTORS_HOSTNAME not set");
+  if (!xReplitToken || !isValidProviderHostname(hostname)) {
+    throw new StripeNotConfiguredError();
+  }
 
   const isProduction = process.env["REPLIT_DEPLOYMENT"] === "1";
   const targetEnvironment = isProduction ? "production" : "development";
@@ -28,14 +40,20 @@ async function getCredentials(): Promise<{ publishableKey: string; secretKey: st
   url.searchParams.set("connector_names", "stripe");
   url.searchParams.set("environment", targetEnvironment);
 
-  const response = await fetch(url.toString(), {
-    headers: { Accept: "application/json", "X-Replit-Token": xReplitToken },
-  });
+  let response: Response;
+  try {
+    response = await fetch(url.toString(), {
+      headers: { Accept: "application/json", "X-Replit-Token": xReplitToken },
+    });
+  } catch {
+    throw new StripeNotConfiguredError();
+  }
+  if (!response.ok) throw new StripeNotConfiguredError();
   const data = (await response.json()) as { items?: StripeConnection[] };
   const conn = data.items?.[0];
 
   if (!conn || !conn.settings.publishable || !conn.settings.secret) {
-    throw new Error(`Stripe ${targetEnvironment} connection not found`);
+    throw new StripeNotConfiguredError();
   }
   return { publishableKey: conn.settings.publishable, secretKey: conn.settings.secret };
 }

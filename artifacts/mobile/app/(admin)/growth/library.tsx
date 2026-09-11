@@ -7,7 +7,7 @@ import { alertMessage } from "@/utils/confirm";
 import { growthGet, PLATFORMS, STATUS_LABELS } from "@/lib/growthApi";
 import { getApiOrigin } from "@/lib/apiConfig";
 
-const ASSET_ORIGIN = getApiOrigin() ?? "";
+const ASSET_ORIGIN = getApiOrigin();
 
 interface LibraryThumb { id: number; kind: "image" | "video"; url: string | null; aspectRatio: string }
 interface LibraryPost {
@@ -164,7 +164,9 @@ export default function LibraryScreen() {
             {data.posts.map((post) => {
               const statusMeta = STATUS_LABELS[post.status];
               const platformMeta = PLATFORMS.find((p) => p.value === post.platform);
-              const thumbUri = post.thumb?.url ? `${ASSET_ORIGIN}${post.thumb.url}` : null;
+              const thumbUri = post.thumb?.url && ASSET_ORIGIN
+                ? `${ASSET_ORIGIN}${post.thumb.url}`
+                : null;
               return (
                 <Pressable
                   key={post.id}

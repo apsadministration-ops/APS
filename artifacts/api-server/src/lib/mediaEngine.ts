@@ -140,6 +140,12 @@ export async function generateImagesForPost(opts: GenerateForPostOptions): Promi
       "No image provider is registered. Connect the Replit OpenAI integration.",
     );
   }
+  if (!provider.isConfigured()) {
+    throw new MediaProviderNotConfiguredError(
+      provider.key,
+      "The selected image provider is not configured.",
+    );
+  }
   if (!provider.capabilities.image) {
     throw new MediaProviderError(provider.key, "Provider does not support image generation");
   }
@@ -189,8 +195,16 @@ export async function generateImagesForPost(opts: GenerateForPostOptions): Promi
       }).where(eq(mediaAssetsTable.id, placeholder.id)).returning();
       assets.push(ready);
     } catch (err) {
-      const reason = err instanceof Error ? err.message : "unknown";
-      logger.error({ err, postId: opts.post.id, intent }, "media generation failed");
+      const reason = err instanceof MediaProviderNotConfiguredError
+        ? "media_provider_not_configured"
+        : err instanceof MediaProviderError
+          ? "media_provider_error"
+          : "media_generation_failed";
+      logger.error({
+        errorName: err instanceof Error ? err.name : "UnknownError",
+        postId: opts.post.id,
+        intent,
+      }, "media generation failed");
       const [failed] = await db.update(mediaAssetsTable).set({
         status: "failed",
         failureReason: reason,
@@ -227,6 +241,12 @@ export async function generateVideosForPost(
     throw new MediaProviderNotConfiguredError(
       opts.providerKey ?? "default",
       "No video provider is registered.",
+    );
+  }
+  if (!provider.isConfigured()) {
+    throw new MediaProviderNotConfiguredError(
+      provider.key,
+      "The selected video provider is not configured.",
     );
   }
   if (!provider.capabilities.video || !provider.generateVideo) {
@@ -276,8 +296,16 @@ export async function generateVideosForPost(
       }).where(eq(mediaAssetsTable.id, placeholder.id)).returning();
       assets.push(ready);
     } catch (err) {
-      const reason = err instanceof Error ? err.message : "unknown";
-      logger.error({ err, postId: opts.post.id, intent }, "video generation failed");
+      const reason = err instanceof MediaProviderNotConfiguredError
+        ? "media_provider_not_configured"
+        : err instanceof MediaProviderError
+          ? "media_provider_error"
+          : "media_generation_failed";
+      logger.error({
+        errorName: err instanceof Error ? err.name : "UnknownError",
+        postId: opts.post.id,
+        intent,
+      }, "video generation failed");
       const [failed] = await db.update(mediaAssetsTable).set({
         status: "failed",
         failureReason: reason,

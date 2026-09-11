@@ -5,7 +5,11 @@ import { eq, and, ne, isNull } from "drizzle-orm";
 import type Stripe from "stripe";
 import { db, paymentsTable, usersTable, jobsTable, tipsTable, processedStripeEventsTable } from "@workspace/db";
 import { tryConvertReferral, revertReferralForJob } from "../lib/referralEngine";
-import { getUncachableStripeClient, getWebhookSecret } from "../lib/stripeClient";
+import {
+  getUncachableStripeClient,
+  getWebhookSecret,
+  StripeNotConfiguredError,
+} from "../lib/stripeClient";
 import {
   awardCustomerPoints,
   awardMechanicPoints,
@@ -21,6 +25,10 @@ import {
   handlePayoutEvent,
 } from "../lib/payoutEventEngine";
 import { notifyMechanicTipReceived } from "../lib/notifications";
+
+function errorName(err: unknown): string {
+  return err instanceof Error ? err.name : "UnknownError";
+}
 
 export async function stripeWebhookHandler(req: Request, res: Response): Promise<void> {
   const secret = getWebhookSecret();
@@ -39,7 +47,12 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
     const stripe = await getUncachableStripeClient();
     event = stripe.webhooks.constructEvent(req.body as Buffer, signature, secret);
   } catch (err) {
-    logger.warn({ err }, "Stripe webhook signature verification failed");
+    if (err instanceof StripeNotConfiguredError) {
+      logger.warn({ errorName: errorName(err) }, "Stripe webhook provider unavailable");
+      res.status(503).json({ error: "stripe_provider_not_configured" });
+      return;
+    }
+    logger.warn({ errorName: errorName(err) }, "Stripe webhook signature verification failed");
     res.status(400).json({ error: "Invalid signature" });
     return;
   }
@@ -60,7 +73,7 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
   } catch (err) {
     // Dedup-table failure should not block payment processing — log and
     // proceed (the per-handler idempotency guards still apply).
-    logger.warn({ err, id: event.id }, "Stripe webhook dedup insert failed — proceeding");
+    logger.warn({ errorName: errorName(err), id: event.id }, "Stripe webhook dedup insert failed — proceeding");
   }
   if (!firstDelivery) {
     logger.info({ id: event.id, type: event.type }, "Stripe webhook duplicate delivery — skipping handler");
@@ -79,10 +92,14 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
       await db.delete(processedStripeEventsTable)
         .where(eq(processedStripeEventsTable.eventId, event.id));
     } catch (rollbackErr) {
-      logger.error({ rollbackErr, id: event.id }, "Failed to roll back dedup row after handler error");
+      logger.error({ errorName: errorName(rollbackErr), id: event.id }, "Failed to roll back dedup row after handler error");
     }
     // Return 500 so Stripe will retry per its backoff policy.
-    logger.error({ err, type: event.type, id: event.id }, "Stripe webhook handler error — returning 500 to trigger retry");
+    logger.error({
+      errorName: errorName(err),
+      type: event.type,
+      id: event.id,
+    }, "Stripe webhook handler error — returning 500 to trigger retry");
     res.status(500).json({ error: "Handler failed" });
   }
 }
@@ -127,7 +144,11 @@ async function handleEvent(event: Stripe.Event): Promise<void> {
           await stripe.paymentIntents.cancel(intentId);
           logger.warn({ sessionId: session.id, intentId }, "Orphaned Stripe authorization auto-canceled (no matching payment row)");
         } catch (err) {
-          logger.error({ err, sessionId: session.id, intentId }, "Failed to auto-cancel orphaned Stripe authorization");
+          logger.error({
+            errorName: errorName(err),
+            sessionId: session.id,
+            intentId,
+          }, "Failed to auto-cancel orphaned Stripe authorization");
         }
         break;
       }
@@ -211,14 +232,20 @@ async function handleEvent(event: Stripe.Event): Promise<void> {
           await db.update(paymentsTable).set({ stripeFeeCents: feeCents }).where(eq(paymentsTable.id, payment.id));
         }
       } catch (err) {
-        logger.warn({ err, intentId: intent.id }, "stripe fee backfill failed (non-fatal)");
+        logger.warn({
+          errorName: errorName(err),
+          intentId: intent.id,
+        }, "stripe fee backfill failed (non-fatal)");
       }
       await db.update(jobsTable).set({ status: "PAID" }).where(eq(jobsTable.id, payment.jobId));
       const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, payment.jobId));
       // Trigger tier-progression evaluation now that the mechanic has another paid job.
       if (job?.mechanicId) {
         runProgression(job.mechanicId, "job_paid", { logger })
-          .catch((err) => logger.error({ err, mechanicId: job.mechanicId }, "tier progression failed"));
+          .catch((err) => logger.error({
+            errorName: errorName(err),
+            mechanicId: job.mechanicId,
+          }, "tier progression failed"));
       }
       if (job?.customerId) {
         // CUSTOMER: spending points (1 pt per $1 captured).
@@ -226,12 +253,18 @@ async function handleEvent(event: Stripe.Event): Promise<void> {
         await awardCustomerPoints(
           job.customerId, spendingPoints, "service",
           `Job #${payment.jobId} — service spending`, payment.jobId,
-        ).catch((err) => logger.error({ err, jobId: payment.jobId }, "customer spending points failed"));
+        ).catch((err) => logger.error({
+          errorName: errorName(err),
+          jobId: payment.jobId,
+        }, "customer spending points failed"));
         // REFERRAL CONVERSION — delegated to the isolated referral engine.
         // Engine validates: pending referral exists, this is the customer's
         // FIRST captured payment, and no refund. Idempotent.
         await tryConvertReferral(payment.jobId).catch((err) =>
-          logger.error({ err, jobId: payment.jobId }, "referral conversion failed"),
+          logger.error({
+            errorName: errorName(err),
+            jobId: payment.jobId,
+          }, "referral conversion failed"),
         );
       }
       // MECHANIC: job-volume points weighted by job type.
@@ -240,7 +273,10 @@ async function handleEvent(event: Stripe.Event): Promise<void> {
         await awardMechanicPoints(
           job.mechanicId, base, "job",
           `Job #${payment.jobId} completed (${job.jobType})`, payment.jobId,
-        ).catch((err) => logger.error({ err, jobId: payment.jobId }, "mechanic job points failed"));
+        ).catch((err) => logger.error({
+          errorName: errorName(err),
+          jobId: payment.jobId,
+        }, "mechanic job points failed"));
       }
       logger.info({ jobId: payment.jobId, intentId: intent.id }, "Payment captured + job marked PAID");
       break;
@@ -249,7 +285,7 @@ async function handleEvent(event: Stripe.Event): Promise<void> {
     case "payment_intent.payment_failed": {
       const intent = event.data.object as Stripe.PaymentIntent;
       await db.update(paymentsTable)
-        .set({ status: "failed", failureReason: intent.last_payment_error?.message ?? "Payment failed" })
+        .set({ status: "failed", failureReason: "Payment failed" })
         .where(and(
           eq(paymentsTable.providerPaymentIntentId, intent.id),
           ne(paymentsTable.status, "captured"),
@@ -290,14 +326,23 @@ async function handleEvent(event: Stripe.Event): Promise<void> {
       // loyalty/referral points granted on capture.
       await db.update(jobsTable).set({ status: "COMPLETED" }).where(eq(jobsTable.id, payment.jobId));
       await reverseCustomerPointsForJob(payment.jobId, `Refund — Job #${payment.jobId}`).catch((err) => {
-        logger.error({ err, jobId: payment.jobId }, "customer loyalty reversal failed on refund");
+        logger.error({
+          errorName: errorName(err),
+          jobId: payment.jobId,
+        }, "customer loyalty reversal failed on refund");
       });
       await reverseMechanicPointsForJob(payment.jobId, `Refund — Job #${payment.jobId}`).catch((err) => {
-        logger.error({ err, jobId: payment.jobId }, "mechanic loyalty reversal failed on refund");
+        logger.error({
+          errorName: errorName(err),
+          jobId: payment.jobId,
+        }, "mechanic loyalty reversal failed on refund");
       });
       // REFERRAL REVERSAL — engine handles the un-conversion + points reversal.
       await revertReferralForJob(payment.jobId).catch((err) =>
-        logger.error({ err, jobId: payment.jobId }, "referral revert failed on refund"),
+        logger.error({
+          errorName: errorName(err),
+          jobId: payment.jobId,
+        }, "referral revert failed on refund"),
       );
       logger.info({ jobId: payment.jobId, intentId }, "Payment refunded — job reverted + loyalty reversed");
       break;

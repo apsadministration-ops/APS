@@ -9,10 +9,15 @@ import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useGetJob } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as Location from "expo-location";
 import { alertMessage, confirm } from "@/utils/confirm";
 import { success as hapticSuccess, tap as hapticTap } from "@/utils/haptics";
 import { getApiUrl } from "@/lib/apiConfig";
+import {
+  getCurrentLocation,
+  openAppSettings,
+  watchForegroundLocation,
+} from "@/lib/deviceCapabilities";
+import { CapabilityNotice } from "@/components/CapabilityNotice";
 
 type TransportLeg = {
   id: number;
@@ -92,23 +97,35 @@ export default function TransportScreen() {
   }, [activeLeg?.id, isCustomer, refresh]);
 
   // Mechanic GPS heartbeat for the active leg.
-  const watchRef = useRef<Location.LocationSubscription | null>(null);
+  const watchRef = useRef<{ remove: () => void } | null>(null);
+  const [locationError, setLocationError] = useState<{
+    message: string;
+    canAskAgain: boolean;
+  } | null>(null);
   useEffect(() => {
-    if (!isMechanic || !activeLeg) return;
+    // Preserve the web flow: transport never prompts for browser geolocation.
+    if (!isMechanic || !activeLeg || Platform.OS === "web") return;
     let cancelled = false;
     (async () => {
-      if (Platform.OS === "web") return;
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted" || cancelled) return;
-      watchRef.current = await Location.watchPositionAsync(
-        { accuracy: Location.Accuracy.High, timeInterval: 15000, distanceInterval: 50 },
-        (loc) => {
-          authedJson(`/jobs/${jobId}/transport/legs/${activeLeg.id}/location`, {
-            method: "PATCH",
-            body: JSON.stringify({ lat: loc.coords.latitude, lng: loc.coords.longitude }),
-          }).catch(() => {});
-        },
-      );
+      const watch = await watchForegroundLocation(({ latitude, longitude }) => {
+        authedJson(`/jobs/${jobId}/transport/legs/${activeLeg.id}/location`, {
+          method: "PATCH",
+          body: JSON.stringify({ lat: latitude, lng: longitude }),
+        }).catch(() => {});
+      }, { distanceInterval: 50 });
+      if (cancelled) {
+        if (watch.ok) watch.value.remove();
+        return;
+      }
+      if (!watch.ok) {
+        setLocationError({
+          message: watch.message,
+          canAskAgain: watch.canAskAgain,
+        });
+        return;
+      }
+      setLocationError(null);
+      watchRef.current = watch.value;
     })();
     return () => {
       cancelled = true;
@@ -144,14 +161,15 @@ export default function TransportScreen() {
     setSubmitting(true);
     try {
       let coords: { lat: number; lng: number } | null = null;
-      if (Platform.OS !== "web") {
-        try {
-          const { status } = await Location.requestForegroundPermissionsAsync();
-          if (status === "granted") {
-            const loc = await Location.getCurrentPositionAsync({});
-            coords = { lat: loc.coords.latitude, lng: loc.coords.longitude };
-          }
-        } catch { /* no-op */ }
+      const location = Platform.OS === "web" ? null : await getCurrentLocation();
+      if (location && location.ok) {
+        coords = location.value;
+        setLocationError(null);
+      } else if (location) {
+        setLocationError({
+          message: location.message,
+          canAskAgain: location.canAskAgain,
+        });
       }
       await authedJson(`/jobs/${jobId}/transport/legs`, {
         method: "POST",
@@ -188,11 +206,15 @@ export default function TransportScreen() {
     setSubmitting(true);
     try {
       let coords: { lat: number; lng: number } | null = null;
-      if (Platform.OS !== "web") {
-        try {
-          const loc = await Location.getCurrentPositionAsync({});
-          coords = { lat: loc.coords.latitude, lng: loc.coords.longitude };
-        } catch { /* no-op */ }
+      const location = Platform.OS === "web" ? null : await getCurrentLocation();
+      if (location && location.ok) {
+        coords = location.value;
+        setLocationError(null);
+      } else if (location) {
+        setLocationError({
+          message: location.message,
+          canAskAgain: location.canAskAgain,
+        });
       }
       await authedJson(`/jobs/${jobId}/transport/legs/${leg.id}/finish`, {
         method: "PATCH",
@@ -230,6 +252,15 @@ export default function TransportScreen() {
             Your mechanic is licensed, insured, and respects your vehicle. Mileage is logged before and after every trip — both legs.
           </Text>
         </View>
+        {locationError ? (
+          <CapabilityNotice
+            message={`${locationError.message} Transport mileage will still be logged without GPS coordinates.`}
+            canOpenSettings={!locationError.canAskAgain && Platform.OS !== "web"}
+            onOpenSettings={() => {
+              void openAppSettings();
+            }}
+          />
+        ) : null}
 
         {job?.requiresGhostGarage === false ? (
           <View style={[styles.infoBanner, { backgroundColor: colors.card, borderColor: colors.border }]}>

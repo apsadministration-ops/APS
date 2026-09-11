@@ -18,6 +18,7 @@ import {
   type TierKey,
   type ServiceCategory,
 } from "@workspace/tier-catalog";
+import { parsePositiveSafeInteger } from "../lib/validation";
 
 /**
  * If the job has an uncaptured Stripe authorization, void it so the
@@ -349,7 +350,11 @@ router.post("/jobs/:jobId/transport-approval", authenticate, async (req: AuthReq
 });
 
 router.post("/jobs/:jobId/accept", authenticate, requireActiveMechanic, async (req: AuthRequest, res): Promise<void> => {
-  const jobId = parseInt(String(req.params.jobId), 10);
+  const jobId = parsePositiveSafeInteger(req.params.jobId);
+  if (jobId === null) {
+    res.status(400).json({ error: "Invalid job ID" });
+    return;
+  }
   // Tier gate: load the mechanic's tier ONCE outside the tx so we can fail
   // fast with a clean 403 before locking the job row.
   const [me] = await db.select({ mechanicTier: usersTable.mechanicTier }).from(usersTable).where(eq(usersTable.id, req.userId!));

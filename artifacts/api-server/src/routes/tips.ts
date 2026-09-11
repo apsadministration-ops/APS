@@ -14,6 +14,8 @@ import { db, tipsTable, jobsTable } from "@workspace/db";
 import { authenticate, type AuthRequest } from "../middlewares/authenticate";
 import { tipCreationLimiter } from "../middlewares/paymentRateLimit";
 import { createTipCheckout } from "../lib/tipEngine";
+import { PublicUrlNotConfiguredError } from "../lib/publicUrl";
+import { StripeNotConfiguredError } from "../lib/stripeClient";
 
 const router: IRouter = Router();
 
@@ -33,7 +35,28 @@ router.post("/tips/jobs/:jobId", authenticate, tipCreationLimiter, async (req: A
     });
     res.json(out);
   } catch (err) {
-    res.status(400).json({ error: (err as Error).message });
+    if (err instanceof PublicUrlNotConfiguredError) {
+      res.status(503).json({ error: "public_url_not_configured" });
+      return;
+    }
+    if (err instanceof StripeNotConfiguredError) {
+      res.status(503).json({ error: "stripe_provider_not_configured" });
+      return;
+    }
+    const businessErrors = new Set([
+      "Tip must be at least $1.00",
+      "Tip cannot exceed $500.00",
+      "Job not found",
+      "Not your job",
+      "No mechanic on this job",
+      "Tips can only be added once the job is completed.",
+      "Mechanic has not finished payout setup yet.",
+      "Customer not found",
+    ]);
+    const message = err instanceof Error && businessErrors.has(err.message)
+      ? err.message
+      : "Tip checkout unavailable";
+    res.status(message === "Tip checkout unavailable" ? 502 : 400).json({ error: message });
   }
 });
 

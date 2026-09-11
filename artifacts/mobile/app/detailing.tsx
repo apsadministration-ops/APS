@@ -7,8 +7,9 @@ import { useState } from "react";
 import { useColors } from "@/hooks/useColors";
 import { useListVehicles, useCreateJob } from "@workspace/api-client-react";
 import { Feather } from "@expo/vector-icons";
-import * as Location from "expo-location";
 import * as Haptics from "expo-haptics";
+import { CapabilityNotice } from "@/components/CapabilityNotice";
+import { getCurrentLocation, openAppSettings } from "@/lib/deviceCapabilities";
 import { findServiceBySlug, isEuropeanVehicle, quoteForService, EUROPEAN_PREMIUM } from "@workspace/tier-catalog";
 
 interface Package {
@@ -73,6 +74,10 @@ export default function DetailingScreen() {
   const [locating, setLocating] = useState(false);
   const [lookingUpZip, setLookingUpZip] = useState(false);
   const [error, setError] = useState("");
+  const [locationError, setLocationError] = useState<{
+    message: string;
+    canAskAgain: boolean;
+  } | null>(null);
 
   const fetchWithTimeout = async (url: string, ms = 8000): Promise<Response | null> => {
     const ctrl = new AbortController();
@@ -84,20 +89,16 @@ export default function DetailingScreen() {
   };
 
   const getCurrentCoords = async (): Promise<{ lat: number; lng: number } | null> => {
-    if (Platform.OS === "web") {
-      if (typeof navigator === "undefined" || !navigator.geolocation) return null;
-      return await new Promise((resolve) => {
-        navigator.geolocation.getCurrentPosition(
-          (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-          () => resolve(null),
-          { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
-        );
+    const result = await getCurrentLocation();
+    if (!result.ok) {
+      setLocationError({
+        message: result.message,
+        canAskAgain: result.canAskAgain,
       });
+      return null;
     }
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== "granted") return null;
-    const loc = await Location.getCurrentPositionAsync({});
-    return { lat: loc.coords.latitude, lng: loc.coords.longitude };
+    setLocationError(null);
+    return result.value;
   };
 
   const reverseGeocode = async (lat: number, lng: number): Promise<string | null> => {
@@ -373,6 +374,15 @@ export default function DetailingScreen() {
             </Text>
             {!locating && <Feather name="navigation" size={16} color={locationAddress ? colors.primary : colors.mutedForeground} />}
           </Pressable>
+          {locationError ? (
+            <CapabilityNotice
+              message={locationError.message}
+              canOpenSettings={!locationError.canAskAgain && Platform.OS !== "web"}
+              onOpenSettings={() => {
+                void openAppSettings();
+              }}
+            />
+          ) : null}
 
           <View style={styles.zipRow}>
             <TextInput

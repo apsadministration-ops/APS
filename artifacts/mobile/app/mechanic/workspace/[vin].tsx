@@ -26,7 +26,8 @@ import { useColors } from "@/hooks/useColors";
 import { alertMessage, confirm } from "@/utils/confirm";
 import { useAuth } from "@/context/AuthContext";
 import { VehicleDiagram, type DiagramComponent } from "@/components/VehicleDiagram";
-import { getApiOrigin, getApiUrl } from "@/lib/apiConfig";
+import { API_CONFIGURATION_ERROR, getApiOrigin, getApiUrl } from "@/lib/apiConfig";
+import { CapabilityNotice } from "@/components/CapabilityNotice";
 
 interface Vehicle {
   id: number; vin: string; make: string; model: string; year: number;
@@ -105,7 +106,7 @@ export default function MechanicWorkspaceScreen() {
   const colors = useColors();
   const { vin: vinParam } = useLocalSearchParams<{ vin: string }>();
   const vin = (vinParam ?? "").toUpperCase();
-  const domain = getApiOrigin() ?? "";
+  const domain = getApiOrigin();
   const { user } = useAuth();
 
   const [bundle, setBundle] = useState<Bundle | null>(null);
@@ -124,6 +125,10 @@ export default function MechanicWorkspaceScreen() {
 
   const load = useCallback(async () => {
     setError(null);
+    if (!domain) {
+      setError(API_CONFIGURATION_ERROR);
+      return;
+    }
     const headers = await authHeaders();
     const res = await fetch(getApiUrl(`/mechanic/workspace/by-vin/${vin}`), { headers });
     if (!res.ok) {
@@ -145,6 +150,14 @@ export default function MechanicWorkspaceScreen() {
   // any fetch runs so they never see the loading spinner or even the title.
   if (user && user.role !== "mechanic" && user.role !== "admin") {
     return <Redirect href="/(customer)" />;
+  }
+
+  if (!domain) {
+    return (
+      <View style={[styles.center, { backgroundColor: colors.background }]}>
+        <CapabilityNotice message="API configuration is unavailable. Please restart the app after configuration is restored." />
+      </View>
+    );
   }
 
   if (loading) {
