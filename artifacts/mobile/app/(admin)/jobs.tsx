@@ -9,6 +9,7 @@ import type { JobStatus } from "@workspace/api-client-react";
 import { useState, useEffect, useCallback } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { confirm, alertMessage } from "@/utils/confirm";
+import { getApiUrl } from "@/lib/apiConfig";
 
 interface AdminJob {
   id: number;
@@ -33,18 +34,17 @@ export default function AdminJobsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
-  const domain = process.env.EXPO_PUBLIC_DOMAIN;
 
   const fetchJobs = useCallback(async () => {
     try {
       const token = await AsyncStorage.getItem("auth_token");
-      const res = await fetch(`https://${domain}/api/jobs`, {
-        headers: { Authorization: `Bearer ${token}` },
+      const res = await fetch(getApiUrl("/jobs"), {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (res.ok) setJobs(await res.json());
     } catch { /* non-fatal */ }
     finally { setLoading(false); setRefreshing(false); }
-  }, [domain]);
+  }, []);
 
   useEffect(() => { fetchJobs(); }, [fetchJobs]);
 
@@ -61,9 +61,9 @@ export default function AdminJobsScreen() {
     if (!ok) return;
     try {
       const token = await AsyncStorage.getItem("auth_token");
-      const res = await fetch(`https://${domain}/api/jobs/${job.id}`, {
+      const res = await fetch(getApiUrl(`/jobs/${job.id}`), {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));

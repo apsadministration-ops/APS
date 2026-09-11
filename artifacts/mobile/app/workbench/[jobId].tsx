@@ -33,6 +33,7 @@ import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { StatusBadge } from "@/components/StatusBadge";
 import { confirm, alertMessage } from "@/utils/confirm";
+import { getApiUrl } from "@/lib/apiConfig";
 
 type Tab = "overview" | "parts" | "history" | "recommendations" | "assistant" | "notes";
 
@@ -646,10 +647,12 @@ function RecommendationsTab({
     setSendingId(rec.id);
     try {
       const token = await AsyncStorage.getItem("auth_token");
-      const domain = process.env.EXPO_PUBLIC_DOMAIN;
-      const res = await fetch(`https://${domain}/api/jobs/${jobId}/messages`, {
+      const res = await fetch(getApiUrl(`/jobs/${jobId}/messages`), {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ content }),
       });
       if (!res.ok) throw new Error(`Send failed (${res.status})`);

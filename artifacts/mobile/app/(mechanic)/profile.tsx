@@ -12,6 +12,7 @@ import * as Haptics from "expo-haptics";
 import * as WebBrowser from "expo-web-browser";
 import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getApiUrl } from "@/lib/apiConfig";
 
 const TIER_META: Record<string, { color: string; label: string; icon: string; desc: string }> = {
   detailer: { color: "#60A5FA", label: "Detailer", icon: "droplet", desc: "TIER 1 — entry level, cosmetic and basic services" },
@@ -49,8 +50,6 @@ export default function MechanicProfileScreen() {
   const { user, logout } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const domain = process.env.EXPO_PUBLIC_DOMAIN;
-
   const tier = user?.mechanicTier ?? "detailer";
   const tierMeta = TIER_META[tier] ?? TIER_META.detailer;
   const tierIndex = TIER_ORDER.indexOf(tier);
@@ -67,25 +66,26 @@ export default function MechanicProfileScreen() {
   const fetchData = useCallback(async () => {
     try {
       const token = await AsyncStorage.getItem("auth_token");
-      const meRes = await fetch(`https://${domain}/api/auth/me`, { headers: { Authorization: `Bearer ${token}` } });
+      const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+      const meRes = await fetch(getApiUrl("/auth/me"), { headers: authHeaders });
       if (meRes.ok) {
         const me = await meRes.json();
         try { setCertifications(JSON.parse(me.certifications ?? "[]")); } catch { setCertifications([]); }
       }
-      const lRes = await fetch(`https://${domain}/api/loyalty`, { headers: { Authorization: `Bearer ${token}` } });
+      const lRes = await fetch(getApiUrl("/loyalty"), { headers: authHeaders });
       if (lRes.ok) setLoyalty(await lRes.json());
-      const cRes = await fetch(`https://${domain}/api/payments/connect/status`, { headers: { Authorization: `Bearer ${token}` } });
+      const cRes = await fetch(getApiUrl("/payments/connect/status"), { headers: authHeaders });
       if (cRes.ok) setConnect(await cRes.json());
     } catch { /* non-fatal */ }
-  }, [domain]);
+  }, []);
 
   const handlePayouts = async () => {
     setPayoutsLoading(true);
     try {
       const token = await AsyncStorage.getItem("auth_token");
-      const res = await fetch(`https://${domain}/api/payments/connect/onboarding`, {
+      const res = await fetch(getApiUrl("/payments/connect/onboarding"), {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       const data = await res.json();
       if (!res.ok || !data.url) return;
@@ -104,9 +104,12 @@ export default function MechanicProfileScreen() {
     try {
       const token = await AsyncStorage.getItem("auth_token");
       const updated = [...certifications, newCert.trim()];
-      const res = await fetch(`https://${domain}/api/users/${user?.id}`, {
+      const res = await fetch(getApiUrl(`/users/${user?.id}`), {
         method: "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ certifications: JSON.stringify(updated) }),
       });
       if (res.ok) { setCertifications(updated); setNewCert(""); setShowAddCert(false); }

@@ -12,6 +12,7 @@ import { db, disputesTable, jobsTable, paymentsTable, usersTable } from "@worksp
 import { authenticate, requireRole, type AuthRequest } from "../middlewares/authenticate";
 import { notifyMechanicDisputeResolved } from "../lib/notifications";
 import { manualRetryCapture } from "../lib/payoutHoldEngine";
+import { canResolveDispute } from "../lib/authorization";
 
 const router: IRouter = Router();
 
@@ -54,7 +55,16 @@ router.post("/admin/disputes/:id/resolve", authenticate, requireRole("admin"), a
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const [d] = await db.select().from(disputesTable).where(eq(disputesTable.id, id));
   if (!d) { res.status(404).json({ error: "Not found" }); return; }
-  if (d.kind === "stripe_chargeback" && parsed.data.outcome !== "under_review") {
+  if (!["open", "under_review"].includes(d.status)) {
+    res.status(409).json({ error: `Dispute is already ${d.status}.` });
+    return;
+  }
+  if (!canResolveDispute({
+    role: req.userRole,
+    disputeStatus: d.status,
+    kind: d.kind,
+    outcome: parsed.data.outcome,
+  })) {
     res.status(400).json({ error: "Stripe-chargeback outcomes are owned by Stripe; you can only mark this as under_review here." });
     return;
   }
@@ -66,16 +76,32 @@ router.post("/admin/disputes/:id/resolve", authenticate, requireRole("admin"), a
       resolvedById: req.userId!,
       resolvedAt: isFinal ? new Date() : null,
     })
-    .where(eq(disputesTable.id, id))
+    // Do not allow two concurrent resolutions to overwrite a final outcome.
+    .where(and(
+      eq(disputesTable.id, id),
+      or(eq(disputesTable.status, "open"), eq(disputesTable.status, "under_review")),
+    ))
     .returning();
+  if (!updated) {
+    res.status(409).json({ error: "Dispute was resolved by another request." });
+    return;
+  }
   // If the mechanic won an internal dispute, unblock the payment AND
   // automatically re-fire capture so funds release without a second admin
   // step. retryCapture() resets the captureFired lock then calls captureNow.
   if (parsed.data.outcome === "resolved_mechanic" && d.paymentId) {
-    await db.update(paymentsTable)
+    const [rearmed] = await db.update(paymentsTable)
       .set({ captureBlockedReason: null, status: "capture_pending" })
-      .where(and(eq(paymentsTable.id, d.paymentId), eq(paymentsTable.status, "disputed")));
-    void manualRetryCapture(d.jobId).catch(() => { /* surfaced via payment.status */ });
+      .where(and(
+        eq(paymentsTable.id, d.paymentId),
+        eq(paymentsTable.jobId, d.jobId),
+        eq(paymentsTable.status, "disputed"),
+      ))
+      .returning({ id: paymentsTable.id });
+    if (rearmed) {
+      void manualRetryCapture(d.jobId, { allowCapturePending: true })
+        .catch(() => { /* surfaced via payment.status */ });
+    }
   }
   if (isFinal && d.mechanicId) {
     const [mech] = await db.select().from(usersTable).where(eq(usersTable.id, d.mechanicId));

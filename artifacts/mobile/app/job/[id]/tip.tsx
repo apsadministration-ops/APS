@@ -9,6 +9,7 @@ import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useColors } from "@/hooks/useColors";
+import { getApiUrl } from "@/lib/apiConfig";
 
 const PRESETS = [5, 10, 20, 40];
 
@@ -17,7 +18,6 @@ export default function TipScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const jobId = Number(id);
-  const domain = process.env.EXPO_PUBLIC_DOMAIN;
   const [amount, setAmount] = useState<number>(10);
   const [custom, setCustom] = useState("");
   const [busy, setBusy] = useState(false);
@@ -34,7 +34,7 @@ export default function TipScreen() {
     setError(null);
     try {
       const token = await AsyncStorage.getItem("auth_token");
-      const res = await fetch(`https://${domain}/api/tips/jobs/${jobId}`, {
+      const res = await fetch(getApiUrl(`/tips/jobs/${jobId}`), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -48,7 +48,12 @@ export default function TipScreen() {
         setBusy(false);
         return;
       }
-      if (json.url) await Linking.openURL(json.url);
+      if (!json.url) {
+        setError("Could not start the tip checkout. Please try again.");
+        setBusy(false);
+        return;
+      }
+      await Linking.openURL(json.url);
       router.back();
     } catch {
       setError("Network error.");

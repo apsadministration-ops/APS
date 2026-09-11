@@ -11,6 +11,7 @@ import { Stack } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useColors } from "@/hooks/useColors";
+import { getApiUrl } from "@/lib/apiConfig";
 
 interface Dispute {
   id: number; jobId: number; customerId: number; mechanicId: number | null;
@@ -22,7 +23,6 @@ interface Dispute {
 
 export default function DisputesScreen() {
   const colors = useColors();
-  const domain = process.env.EXPO_PUBLIC_DOMAIN;
   const [rows, setRows] = useState<Dispute[]>([]);
   const [filter, setFilter] = useState<"all" | "open" | "under_review">("open");
   const [loading, setLoading] = useState(true);
@@ -36,7 +36,7 @@ export default function DisputesScreen() {
     try {
       const token = await AsyncStorage.getItem("auth_token");
       const q = filter === "all" ? "" : `?status=${filter}`;
-      const res = await fetch(`https://${domain}/api/disputes${q}`, {
+    const res = await fetch(getApiUrl(`/disputes${q}`), {
         headers: token ? { Authorization: `Bearer ${token}` } as Record<string, string> : {},
       });
       setRows(await res.json());
@@ -44,7 +44,7 @@ export default function DisputesScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [domain, filter]);
+  }, [filter]);
   useEffect(() => { setLoading(true); void load(); }, [load]);
 
   async function resolve() {
@@ -52,7 +52,7 @@ export default function DisputesScreen() {
     setBusy(true);
     try {
       const token = await AsyncStorage.getItem("auth_token");
-      await fetch(`https://${domain}/api/admin/disputes/${editing.id}/resolve`, {
+      await fetch(getApiUrl(`/admin/disputes/${editing.id}/resolve`), {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } as Record<string, string> : {}) },
         body: JSON.stringify({ outcome, notes }),

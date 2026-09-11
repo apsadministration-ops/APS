@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useColors } from "@/hooks/useColors";
 import { Feather } from "@expo/vector-icons";
+import { getApiUrl } from "@/lib/apiConfig";
 
 interface Global {
   windowDays: number;
@@ -40,11 +41,9 @@ interface FlaggedRow {
 }
 
 const fmt = (c: number) => `$${(c / 100).toFixed(2)}`;
-const domain = process.env.EXPO_PUBLIC_DOMAIN;
-
 async function authedGet<T>(path: string): Promise<T> {
   const token = await AsyncStorage.getItem("auth_token");
-  const res = await fetch(`https://${domain}/api${path}`, {
+  const res = await fetch(getApiUrl(path), {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
   if (!res.ok) throw new Error(await res.text());

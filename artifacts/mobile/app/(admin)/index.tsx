@@ -7,6 +7,7 @@ import { useState, useEffect, useCallback } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
+import { getApiUrl } from "@/lib/apiConfig";
 
 interface DashboardStats {
   totalUsers: number;
@@ -44,15 +45,13 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const domain = process.env.EXPO_PUBLIC_DOMAIN;
-
   const fetchStats = useCallback(async () => {
     try {
       const token = await AsyncStorage.getItem("auth_token");
       const [usersRes, jobsRes, paymentsRes] = await Promise.all([
-        fetch(`https://${domain}/api/users`, { headers: { Authorization: `Bearer ${token}` } }),
-        fetch(`https://${domain}/api/jobs`, { headers: { Authorization: `Bearer ${token}` } }),
-        fetch(`https://${domain}/api/payments`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(getApiUrl("/users"), { headers: token ? { Authorization: `Bearer ${token}` } : {} }),
+        fetch(getApiUrl("/jobs"), { headers: token ? { Authorization: `Bearer ${token}` } : {} }),
+        fetch(getApiUrl("/payments"), { headers: token ? { Authorization: `Bearer ${token}` } : {} }),
       ]);
       const [users, jobs, payments] = await Promise.all([
         usersRes.json(), jobsRes.json(), paymentsRes.json(),
@@ -82,7 +81,7 @@ export default function AdminDashboard() {
       });
     } catch { /* non-fatal */ }
     finally { setLoading(false); setRefreshing(false); }
-  }, [domain]);
+  }, []);
 
   useEffect(() => { fetchStats(); }, [fetchStats]);
 

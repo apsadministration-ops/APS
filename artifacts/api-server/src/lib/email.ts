@@ -3,8 +3,8 @@
  *
  * Uses Resend when the connection is configured. If not configured (e.g. dev
  * environments where the Replit connection hasn't been bound yet), the
- * helper degrades gracefully: it logs the email body to the server log so
- * the developer can copy the reset link without an outbound mail provider.
+ * helper returns a failure to the caller. Email bodies and reset links are
+ * never written to logs.
  *
  * Never cache the Resend client — tokens expire. Always re-fetch credentials
  * via `getResendClient()` on each send.
@@ -58,7 +58,7 @@ async function getResendCreds(): Promise<ResendCreds | null> {
 }
 
 /**
- * Send an email. Returns `{ ok: true }` if delivered (or logged in dev), or
+ * Send an email. Returns `{ ok: true }` if delivered, or
  * `{ ok: false, reason }` so callers can decide whether to surface the error.
  *
  * For password reset: always return `ok: true` to the user regardless, to
@@ -67,10 +67,7 @@ async function getResendCreds(): Promise<ResendCreds | null> {
 export async function sendEmail(args: SendEmailArgs): Promise<{ ok: boolean; reason?: string }> {
   const creds = await getResendCreds();
   if (!creds) {
-    logger.warn(
-      { to: args.to, subject: args.subject, preview: args.text.slice(0, 200) },
-      "Resend not configured — email NOT sent. Showing preview in logs (dev only).",
-    );
+    logger.warn({ subject: args.subject }, "Resend not configured — email NOT sent");
     return { ok: false, reason: "email_provider_not_configured" };
   }
   try {
@@ -89,13 +86,15 @@ export async function sendEmail(args: SendEmailArgs): Promise<{ ok: boolean; rea
       }),
     });
     if (!r.ok) {
-      const body = await r.text().catch(() => "");
-      logger.error({ status: r.status, body }, "Resend send failed");
+      // Do not log the provider response: it can echo recipient or message
+      // material, including a reset link.
+      await r.text().catch(() => "");
+      logger.error({ status: r.status }, "Resend send failed");
       return { ok: false, reason: `resend_${r.status}` };
     }
     return { ok: true };
-  } catch (err) {
-    logger.error({ err }, "Resend send threw");
+  } catch {
+    logger.error("Resend send threw");
     return { ok: false, reason: "send_exception" };
   }
 }

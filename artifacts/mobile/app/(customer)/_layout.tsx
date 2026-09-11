@@ -7,6 +7,7 @@ import { Platform, StyleSheet, View, useColorScheme } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useColors } from "@/hooks/useColors";
+import { getRoleDestination } from "@/lib/roleDestination";
 
 // iOS-only modules. Loading them on Android Expo Go can crash the app
 // silently because the native modules aren't shipped on Android. We
@@ -135,7 +136,7 @@ export default function TabLayout() {
   if (isLoading) return null;
   if (!user) return <Redirect href="/(auth)/login" />;
   if (user.role !== "customer") {
-    return <Redirect href={user.role === "admin" ? "/(admin)" : "/(mechanic)"} />;
+    return <Redirect href={getRoleDestination(user.role) ?? "/(auth)/login"} />;
   }
   if (isLiquidGlassAvailableSafe()) {
     return <NativeTabLayout />;

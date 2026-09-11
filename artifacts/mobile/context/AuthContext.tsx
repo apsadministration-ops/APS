@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { setAuthTokenGetter, User } from "@workspace/api-client-react";
+import { getApiConfig, getApiUrl } from "@/lib/apiConfig";
 
 interface AuthContextType {
   user: User | null;
@@ -18,6 +19,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    const apiConfig = getApiConfig();
+    if (!apiConfig.valid) {
+      // The root layout normally prevents this provider from mounting. Keep a
+      // defensive gate here so auth never trusts cached state or initializes a
+      // client against an unconfigured endpoint.
+      setIsLoading(false);
+      return;
+    }
+
     setAuthTokenGetter(async () => {
       return await AsyncStorage.getItem("auth_token");
     });
@@ -33,20 +43,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // SESSION_SECRET) would otherwise leave the user "logged in" locally
           // while every API call fails with "Invalid or expired token". By
           // verifying here we can clear a bad token and route to login instead.
-          const domain = process.env.EXPO_PUBLIC_DOMAIN;
-          if (!domain) {
-            // No API domain configured — can't validate remotely. Trust the
-            // cached session rather than blocking startup.
-            setToken(storedToken);
-            setUser(JSON.parse(storedUser));
-            return;
-          }
           // Bound the validation so a slow/unreachable network can't leave the
           // app on a blank startup screen indefinitely.
           const controller = new AbortController();
           const timeout = setTimeout(() => controller.abort(), 5000);
           try {
-            const res = await fetch(`https://${domain}/api/auth/me`, {
+            const res = await fetch(getApiUrl("/auth/me"), {
               headers: { Authorization: `Bearer ${storedToken}` },
               signal: controller.signal,
             });

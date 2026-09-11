@@ -7,6 +7,7 @@ import { useColors } from "@/hooks/useColors";
 import { Feather } from "@expo/vector-icons";
 import { useState, useEffect, useCallback } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getApiUrl } from "@/lib/apiConfig";
 
 interface Payment {
   id: number;
@@ -47,18 +48,16 @@ export default function AdminPaymentsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [releasing, setReleasing] = useState<number | null>(null);
   const [filter, setFilter] = useState<"all" | "open" | "completed">("open");
-  const domain = process.env.EXPO_PUBLIC_DOMAIN;
-
   const fetchPayments = useCallback(async () => {
     try {
       const token = await AsyncStorage.getItem("auth_token");
-      const res = await fetch(`https://${domain}/api/payments`, {
-        headers: { Authorization: `Bearer ${token}` },
+      const res = await fetch(getApiUrl("/payments"), {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (res.ok) setPayments(await res.json());
     } catch { /* non-fatal */ }
     finally { setLoading(false); setRefreshing(false); }
-  }, [domain]);
+  }, []);
 
   useEffect(() => { fetchPayments(); }, [fetchPayments]);
 
@@ -73,11 +72,19 @@ export default function AdminPaymentsScreen() {
     try {
       const token = await AsyncStorage.getItem("auth_token");
       // Server route is keyed by jobId, not the payment row id.
-      const res = await fetch(`https://${domain}/api/payments/${jobId}/release`, {
+      const res = await fetch(getApiUrl(`/payments/${jobId}/release`), {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
-      if (res.ok) fetchPayments();
+      if (res.ok) {
+        void fetchPayments();
+      } else {
+        await confirm({
+          title: "Payment release failed",
+          message: "The payment was not released. Please try again.",
+          confirmText: "OK",
+        });
+      }
     } catch { /* non-fatal */ }
     finally { setReleasing(null); }
   };

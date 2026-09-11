@@ -5,8 +5,9 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "expo-router";
 import { alertMessage } from "@/utils/confirm";
 import { growthGet, PLATFORMS, STATUS_LABELS } from "@/lib/growthApi";
+import { getApiOrigin } from "@/lib/apiConfig";
 
-const ASSET_ORIGIN = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
+const ASSET_ORIGIN = getApiOrigin() ?? "";
 
 interface LibraryThumb { id: number; kind: "image" | "video"; url: string | null; aspectRatio: string }
 interface LibraryPost {

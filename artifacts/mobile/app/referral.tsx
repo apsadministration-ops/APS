@@ -8,6 +8,7 @@ import { useColors } from "@/hooks/useColors";
 import { Feather } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Clipboard from "expo-clipboard";
+import { getApiUrl } from "@/lib/apiConfig";
 
 type FriendStatus = "pending" | "converted" | "rewarded";
 
@@ -40,18 +41,16 @@ export default function ReferralScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [copied, setCopied] = useState(false);
-  const domain = process.env.EXPO_PUBLIC_DOMAIN;
-
   const fetchData = useCallback(async () => {
     try {
       const token = await AsyncStorage.getItem("auth_token");
-      const res = await fetch(`https://${domain}/api/referral`, {
-        headers: { Authorization: `Bearer ${token}` },
+      const res = await fetch(getApiUrl("/referral"), {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (res.ok) setData(await res.json());
     } catch { /* non-fatal */ }
     finally { setLoading(false); setRefreshing(false); }
-  }, [domain]);
+  }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 

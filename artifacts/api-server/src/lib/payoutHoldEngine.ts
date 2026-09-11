@@ -39,6 +39,7 @@ import { logger } from "./logger";
 import { getUncachableStripeClient } from "./stripeClient";
 import { findServiceBySlug, partsCostCentsFor, defaultPartsCostPct, type ServiceCategory } from "@workspace/tier-catalog";
 import { computeBreakdown } from "./financialEngine";
+import { canRespondToWorkConfirmation } from "./authorization";
 import {
   notifyCustomerWorkAwaitingConfirmation,
   notifyMechanicWorkUnderReview,
@@ -118,11 +119,16 @@ export async function applyWorkDecision(input: WorkDecision): Promise<WorkDecisi
     `);
     const conf = (lockedRows.rows[0] ?? null) as typeof workConfirmationsTable.$inferSelect | null;
     if (!conf) return { ok: false as const, status: 404, error: "No work confirmation pending for this job." };
-    if (input.viewerRole !== "admin" && conf.customerId !== input.viewerId) {
-      return { ok: false as const, status: 403, error: "Only the customer can respond to this confirmation." };
-    }
     if (conf.status !== "pending") {
       return { ok: false as const, status: 409, error: `Already ${conf.status}.` };
+    }
+    if (!canRespondToWorkConfirmation({
+      role: input.viewerRole,
+      userId: input.viewerId,
+      customerId: conf.customerId,
+      confirmationStatus: conf.status,
+    })) {
+      return { ok: false as const, status: 403, error: "Only the customer can respond to this confirmation." };
     }
 
     if (input.decision === "confirmed") {
@@ -236,6 +242,12 @@ export async function captureNow(
   if (pmt.captureBlockedReason) {
     await releaseLock();
     return { ok: false, reason: pmt.captureBlockedReason };
+  }
+  // Legacy split rows must not capture entirely to the mechanic while the
+  // secondary shop transfer is unimplemented.
+  if (pmt.payoutDestination === "split") {
+    await releaseLock();
+    return { ok: false, reason: "split_payout_not_supported" };
   }
   if (pmt.status !== "capture_pending") {
     // Already captured / refunded / disputed — safe no-op, but unlock so a
@@ -368,13 +380,60 @@ export async function sweepStaleHolds(): Promise<number> {
   return stale.length;
 }
 
-export async function manualRetryCapture(jobId: number): Promise<{ ok: boolean; reason?: string }> {
+export async function manualRetryCapture(
+  jobId: number,
+  options: { allowCapturePending?: boolean } = {},
+): Promise<{ ok: boolean; reason?: string }> {
+  const [job] = await db.select({ status: jobsTable.status })
+    .from(jobsTable)
+    .where(eq(jobsTable.id, jobId));
+  if (!job) return { ok: false, reason: "job_not_found" };
+  if (job.status !== "COMPLETED") return { ok: false, reason: "invalid_job_state" };
+
+  const [payment] = await db.select({ status: paymentsTable.status })
+    .from(paymentsTable)
+    .where(eq(paymentsTable.jobId, jobId));
+  if (!payment) return { ok: false, reason: "payment_not_found" };
+
+  // The public retry route is for failed captures only. The one exception is
+  // the already-admin-gated dispute-resolution path, which deliberately
+  // re-arms a disputed payment after it has changed back to capture_pending.
+  if (payment.status !== "payout_failed" && !(options.allowCapturePending && payment.status === "capture_pending")) {
+    return { ok: false, reason: "invalid_payment_state" };
+  }
+
   // Allow retry on payout_failed by resetting state back to capture_pending.
-  await db.update(paymentsTable)
-    .set({ status: "capture_pending", failureReason: null })
-    .where(and(eq(paymentsTable.jobId, jobId), eq(paymentsTable.status, "payout_failed")));
-  await db.update(workConfirmationsTable)
-    .set({ captureFired: "false" })
-    .where(eq(workConfirmationsTable.jobId, jobId));
+  if (payment.status === "payout_failed") {
+    // Claim the failed-payment transition and re-arm the confirmation under
+    // one transaction. The conditional UPDATE's RETURNING row is the
+    // concurrency claim; if another retry won, do not touch captureFired.
+    const claimed = await db.transaction(async (tx) => {
+      const [updated] = await tx.update(paymentsTable)
+        .set({ status: "capture_pending", failureReason: null })
+        .where(and(eq(paymentsTable.jobId, jobId), eq(paymentsTable.status, "payout_failed")))
+        .returning({ id: paymentsTable.id });
+      if (!updated) return false;
+      // Never turn an in-flight claim back to false. A sweeper/manual retry
+      // may have claimed it after the payment read above.
+      await tx.update(workConfirmationsTable)
+        .set({ captureFired: "false" })
+        .where(and(
+          eq(workConfirmationsTable.jobId, jobId),
+          eq(workConfirmationsTable.captureFired, "false"),
+        ));
+      return true;
+    });
+    if (!claimed) return { ok: false, reason: "retry_claim_lost" };
+  } else if (options.allowCapturePending) {
+    // Dispute resolution already performed the payment transition. Re-arm
+    // only while the capture lock is still false; never reset a concurrent
+    // sweeper's true claim and risk a second Stripe capture.
+    await db.update(workConfirmationsTable)
+      .set({ captureFired: "false" })
+      .where(and(
+        eq(workConfirmationsTable.jobId, jobId),
+        eq(workConfirmationsTable.captureFired, "false"),
+      ));
+  }
   return captureNow(jobId, "admin_manual");
 }

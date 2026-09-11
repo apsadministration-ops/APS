@@ -16,6 +16,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { confirm } from "@/utils/confirm";
+import { getApiUrl } from "@/lib/apiConfig";
 
 const CATEGORIES_CUSTOMER = [
   ["professionalism", "Professionalism"],
@@ -45,8 +46,6 @@ export default function SubmitReviewScreen() {
   const { user } = useAuth();
   const { jobId } = useLocalSearchParams<{ jobId: string }>();
   const numericJobId = Number(jobId);
-  const domain = process.env.EXPO_PUBLIC_DOMAIN;
-
   const isCustomer = user?.role === "customer";
   const cats = isCustomer ? CATEGORIES_CUSTOMER : CATEGORIES_MECHANIC;
 
@@ -63,9 +62,12 @@ export default function SubmitReviewScreen() {
     setSubmitting(true);
     try {
       const token = await AsyncStorage.getItem("auth_token");
-      const res = await fetch(`https://${domain}/api/reviews`, {
+       const res = await fetch(getApiUrl("/reviews"), {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+         headers: {
+           ...(token ? { Authorization: `Bearer ${token}` } : {}),
+           "Content-Type": "application/json",
+         },
         body: JSON.stringify({
           jobId: numericJobId,
           overallRating: overall,

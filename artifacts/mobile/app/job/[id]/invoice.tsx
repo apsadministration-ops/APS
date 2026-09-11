@@ -3,6 +3,7 @@ import { Stack, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useColors } from "@/hooks/useColors";
+import { getApiUrl } from "@/lib/apiConfig";
 
 interface Invoice {
   jobId: number;
@@ -34,8 +35,7 @@ export default function InvoiceScreen() {
     (async () => {
       try {
         const token = await AsyncStorage.getItem("auth_token");
-        const domain = process.env.EXPO_PUBLIC_DOMAIN;
-        const res = await fetch(`https://${domain}/api/jobs/${id}/invoice`, {
+        const res = await fetch(getApiUrl(`/jobs/${id}/invoice`), {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         });
         if (!res.ok) throw new Error(await res.text());

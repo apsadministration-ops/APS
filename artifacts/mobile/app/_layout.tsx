@@ -23,12 +23,15 @@ import { MileagePromptHost } from "@/app/transport/[jobId]";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { setBaseUrl } from "@workspace/api-client-react";
-import { View } from "react-native";
+import { Text, View } from "react-native";
 import { IS_EXPO_GO } from "@/lib/isExpoGo";
+import { API_CONFIGURATION_ERROR, getApiConfig } from "@/lib/apiConfig";
+import { getRoleDestination } from "@/lib/roleDestination";
 
 SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
+const apiConfig = getApiConfig();
 
 // react-native-keyboard-controller ships its own native code, which Expo Go
 // does not bundle — importing/mounting it there crashes to a white screen. So
@@ -42,8 +45,36 @@ function KeyboardProviderCompat({ children }: { children: React.ReactNode }) {
   return <KeyboardProvider>{children}</KeyboardProvider>;
 }
 
-// Needed for Expo to reach the API server correctly
-setBaseUrl(`https://${process.env.EXPO_PUBLIC_DOMAIN}`);
+// Needed for Expo to reach the API server correctly.  Do not initialize the
+// generated client with `https://undefined` when build-time configuration is
+// missing; the root layout shows a safe, visible error instead.
+if (apiConfig.valid) {
+  setBaseUrl(apiConfig.origin);
+}
+
+function ConfigurationErrorScreen() {
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === "dark";
+  const theme = isDark ? colors.dark : colors.light;
+
+  return (
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: theme.background,
+        justifyContent: "center",
+        paddingHorizontal: 28,
+      }}
+    >
+      <Text style={{ color: theme.foreground, fontSize: 22, fontWeight: "700", marginBottom: 10 }}>
+        App configuration error
+      </Text>
+      <Text style={{ color: theme.mutedForeground, fontSize: 15, lineHeight: 22 }}>
+        {API_CONFIGURATION_ERROR}
+      </Text>
+    </View>
+  );
+}
 
 function RootLayoutNav() {
   const { user, isLoading } = useAuth();
@@ -61,15 +92,8 @@ function RootLayoutNav() {
     if (!user && !inAuthGroup) {
       router.replace("/(auth)/login");
     } else if (user && inAuthGroup) {
-      if (user.role === "customer") {
-        router.replace("/(customer)");
-      } else if (user.role === "mechanic") {
-        router.replace("/(mechanic)");
-      } else if (user.role === "admin") {
-        router.replace("/(admin)");
-      } else if (user.role === "shop_owner") {
-        router.replace("/(shop-owner)");
-      }
+      const destination = getRoleDestination(user.role);
+      if (destination) router.replace(destination);
     }
   }, [user, isLoading, segments]);
 
@@ -153,6 +177,10 @@ export default function RootLayout() {
 
   if (Platform.OS !== "web" && !fontsLoaded && !fontError) {
     return null;
+  }
+
+  if (!apiConfig.valid) {
+    return <ConfigurationErrorScreen />;
   }
 
   return (

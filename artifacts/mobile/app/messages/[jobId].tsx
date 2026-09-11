@@ -9,6 +9,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { Feather } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getApiUrl } from "@/lib/apiConfig";
 
 interface ChatMessage {
   id: number;
@@ -67,13 +68,11 @@ export default function MessagesScreen() {
   const listRef = useRef<FlatList>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const domain = process.env.EXPO_PUBLIC_DOMAIN;
-
   const fetchMessages = useCallback(async () => {
     try {
       const token = await AsyncStorage.getItem("auth_token");
-      const res = await fetch(`https://${domain}/api/jobs/${jobId}/messages`, {
-        headers: { Authorization: `Bearer ${token}` },
+      const res = await fetch(getApiUrl(`/jobs/${jobId}/messages`), {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (res.ok) {
         const data = await res.json();
@@ -81,7 +80,7 @@ export default function MessagesScreen() {
       }
     } catch { /* non-fatal */ }
     finally { setLoading(false); }
-  }, [jobId, domain]);
+  }, [jobId]);
 
   useEffect(() => {
     fetchMessages();
@@ -102,9 +101,12 @@ export default function MessagesScreen() {
     setSending(true);
     try {
       const token = await AsyncStorage.getItem("auth_token");
-      const res = await fetch(`https://${domain}/api/jobs/${jobId}/messages`, {
+      const res = await fetch(getApiUrl(`/jobs/${jobId}/messages`), {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ content: text }),
       });
       if (res.ok) {

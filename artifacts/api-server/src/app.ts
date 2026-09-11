@@ -43,7 +43,7 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use("/api", router);
 
-// Fire-and-forget: register webhook endpoint with Stripe + cache the signing secret.
+// Load the configured signing secret; inspect missing setup without provisioning endpoints.
 void initStripeWebhook();
 
 // In-process cron — sweeps approval expiry (60s) and work-confirmation

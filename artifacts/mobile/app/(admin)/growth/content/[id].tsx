@@ -5,10 +5,11 @@ import { useState, useEffect, useCallback } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { confirm, alertMessage } from "@/utils/confirm";
 import { growthGet, growthSend, PLATFORMS, STATUS_LABELS, TOPIC_LABELS } from "@/lib/growthApi";
+import { getApiOrigin } from "@/lib/apiConfig";
 
 // Asset URLs returned by the server already include the `/api` prefix
 // (e.g. `/api/media/files/<uuid>.png`), so we concat against the bare domain.
-const ASSET_ORIGIN = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
+const ASSET_ORIGIN = getApiOrigin() ?? "";
 
 interface Post {
   id: number; platform: string; status: string; topicKind: string; topicTitle: string;

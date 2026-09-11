@@ -4,6 +4,7 @@ import {
 import { confirm } from "@/utils/confirm";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
+import { getApiUrl } from "@/lib/apiConfig";
 import { useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -47,21 +48,19 @@ export default function ProfileScreen() {
   const { user, logout } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const domain = process.env.EXPO_PUBLIC_DOMAIN;
-
   const [loyalty, setLoyalty] = useState<LoyaltyData | null>(null);
   const [loadingLoyalty, setLoadingLoyalty] = useState(true);
 
   const fetchLoyalty = useCallback(async () => {
     try {
       const token = await AsyncStorage.getItem("auth_token");
-      const res = await fetch(`https://${domain}/api/loyalty`, {
-        headers: { Authorization: `Bearer ${token}` },
+      const res = await fetch(getApiUrl("/loyalty"), {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (res.ok) setLoyalty(await res.json());
     } catch { /* non-fatal */ }
     finally { setLoadingLoyalty(false); }
-  }, [domain]);
+  }, []);
 
   useEffect(() => { fetchLoyalty(); }, [fetchLoyalty]);
 

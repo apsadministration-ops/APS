@@ -14,6 +14,7 @@ import { Stack, useLocalSearchParams } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useColors } from "@/hooks/useColors";
+import { getApiUrl } from "@/lib/apiConfig";
 
 interface BadgeDto { key: string; label: string; description: string; awardedAt: string }
 interface ReputationDto {
@@ -60,8 +61,6 @@ export default function ProfileScreen() {
   const colors = useColors();
   const { id } = useLocalSearchParams<{ id: string }>();
   const userId = parseInt(String(id), 10);
-  const domain = process.env.EXPO_PUBLIC_DOMAIN;
-
   const [rep, setRep] = useState<ReputationDto | null>(null);
   const [reviews, setReviews] = useState<ReviewDto[]>([]);
   const [loading, setLoading] = useState(true);
@@ -69,14 +68,14 @@ export default function ProfileScreen() {
 
   const load = useCallback(async () => {
     const token = await AsyncStorage.getItem("auth_token");
-    const headers = { Authorization: `Bearer ${token}` };
+    const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
     const [repRes, reviewsRes] = await Promise.all([
-      fetch(`https://${domain}/api/reputation/${userId}`, { headers }),
-      fetch(`https://${domain}/api/reviews/user/${userId}`, { headers }),
+      fetch(getApiUrl(`/reputation/${userId}`), { headers }),
+      fetch(getApiUrl(`/reviews/user/${userId}`), { headers }),
     ]);
     if (repRes.ok) setRep(await repRes.json());
     if (reviewsRes.ok) setReviews(await reviewsRes.json());
-  }, [domain, userId]);
+  }, [userId]);
 
   useEffect(() => { load().finally(() => setLoading(false)); }, [load]);
   const onRefresh = useCallback(async () => {

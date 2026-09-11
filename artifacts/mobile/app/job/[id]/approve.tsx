@@ -16,6 +16,7 @@ import { Feather } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useColors } from "@/hooks/useColors";
 import { confirm } from "@/utils/confirm";
+import { getApiUrl } from "@/lib/apiConfig";
 
 interface ApprovalDto {
   id: number;
@@ -62,7 +63,6 @@ export default function ApproveMechanicScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const jobId = Number(id);
-  const domain = process.env.EXPO_PUBLIC_DOMAIN;
 
   const [approval, setApproval] = useState<ApprovalDto | null>(null);
   const [loading, setLoading] = useState(true);
@@ -75,8 +75,8 @@ export default function ApproveMechanicScreen() {
   const fetchApproval = useCallback(async () => {
     try {
       const token = await AsyncStorage.getItem("auth_token");
-      const res = await fetch(`https://${domain}/api/approvals/job/${jobId}`, {
-        headers: { Authorization: `Bearer ${token}` },
+      const res = await fetch(getApiUrl(`/approvals/job/${jobId}`), {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (res.ok) {
         const data = (await res.json()) as ApprovalDto;
@@ -90,7 +90,7 @@ export default function ApproveMechanicScreen() {
       }
     } catch { /* non-fatal — keep last good state */ }
     finally { setLoading(false); }
-  }, [domain, jobId, router]);
+  }, [jobId, router]);
 
   useEffect(() => { fetchApproval(); }, [fetchApproval]);
 
@@ -120,11 +120,14 @@ export default function ApproveMechanicScreen() {
     setSubmitting(true);
     try {
       const token = await AsyncStorage.getItem("auth_token");
-      const url = `https://${domain}/api/approvals/${jobId}/${decision}`;
+      const url = getApiUrl(`/approvals/${jobId}/${decision}`);
       const body = decision === "decline" ? JSON.stringify({ reason: declineReason }) : undefined;
       const res = await fetch(url, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body,
       });
       if (!res.ok) {
@@ -133,6 +136,12 @@ export default function ApproveMechanicScreen() {
         return;
       }
       router.replace(decision === "approve" ? `/job/${jobId}` : "/(customer)");
+    } catch {
+      await confirm({
+        title: "Couldn't submit",
+        message: "We couldn't reach the server. Please try again.",
+        confirmText: "OK",
+      });
     } finally {
       setSubmitting(false);
     }

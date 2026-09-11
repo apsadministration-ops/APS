@@ -10,6 +10,7 @@ import { Stack, useLocalSearchParams } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useColors } from "@/hooks/useColors";
+import { getApiUrl } from "@/lib/apiConfig";
 
 interface Payment { id: number; status: string; amount: number; mechanicPayout: number; platformFee: number; captureBlockedReason: string | null; failureReason: string | null }
 interface Confirmation { status: string; expiresAt: string; respondedAt: string | null; disputeReason: string | null }
@@ -21,18 +22,17 @@ export default function PayoutDetail() {
   const colors = useColors();
   const { jobId } = useLocalSearchParams<{ jobId: string }>();
   const id = Number(jobId);
-  const domain = process.env.EXPO_PUBLIC_DOMAIN;
   const [data, setData] = useState<Detail | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const token = await AsyncStorage.getItem("auth_token");
-    const res = await fetch(`https://${domain}/api/payouts/job/${id}`, {
+    const res = await fetch(getApiUrl(`/payouts/job/${id}`), {
       headers: token ? { Authorization: `Bearer ${token}` } as Record<string, string> : {},
     });
     setData(await res.json());
-  }, [domain, id]);
+  }, [id]);
   useEffect(() => { void load(); }, [load]);
 
   async function retry() {
@@ -40,12 +40,16 @@ export default function PayoutDetail() {
     setMsg(null);
     try {
       const token = await AsyncStorage.getItem("auth_token");
-      const res = await fetch(`https://${domain}/api/payouts/${id}/retry`, {
+      const res = await fetch(getApiUrl(`/payouts/${id}/retry`), {
         method: "POST",
         headers: token ? { Authorization: `Bearer ${token}` } as Record<string, string> : {},
       });
       const json = await res.json();
-      setMsg(json.ok ? "Capture retried successfully." : `Retry: ${json.reason ?? "failed"}`);
+      setMsg(
+        res.ok && json.ok === true
+          ? "Capture retried successfully."
+          : `Retry: ${json.reason ?? `request failed (${res.status})`}`,
+      );
       await load();
     } finally {
       setBusy(false);

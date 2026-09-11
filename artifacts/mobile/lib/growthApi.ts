@@ -4,8 +4,7 @@
  * the admin section (index/users/payments/jobs).
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
-
-const domain = process.env.EXPO_PUBLIC_DOMAIN;
+import { getApiUrl } from "@/lib/apiConfig";
 
 async function authHeaders(): Promise<Record<string, string>> {
   const token = await AsyncStorage.getItem("auth_token");
@@ -14,7 +13,7 @@ async function authHeaders(): Promise<Record<string, string>> {
 
 export async function growthGet<T>(path: string): Promise<T> {
   const headers = await authHeaders();
-  const res = await fetch(`https://${domain}/api${path}`, { headers });
+  const res = await fetch(getApiUrl(path), { headers });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new Error(text || `Request failed: ${res.status}`);
@@ -24,7 +23,7 @@ export async function growthGet<T>(path: string): Promise<T> {
 
 export async function growthSend<T>(method: "POST" | "PUT" | "PATCH" | "DELETE", path: string, body?: unknown): Promise<T | null> {
   const headers = { ...(await authHeaders()), "Content-Type": "application/json" };
-  const res = await fetch(`https://${domain}/api${path}`, {
+  const res = await fetch(getApiUrl(path), {
     method,
     headers,
     body: body == null ? undefined : JSON.stringify(body),

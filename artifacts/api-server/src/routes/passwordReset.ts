@@ -84,12 +84,10 @@ router.post("/auth/forgot-password", forgotLimiter, async (req: Request, res: Re
 
   const [user] = await db.select().from(usersTable).where(eq(usersTable.email, email));
   if (!user) {
-    req.log?.info({ email }, "Password reset requested for unknown email");
     res.json(generic);
     return;
   }
   if (user.status === "suspended") {
-    req.log?.info({ userId: user.id }, "Password reset requested for suspended account");
     res.json(generic);
     return;
   }
@@ -143,11 +141,9 @@ router.post("/auth/forgot-password", forgotLimiter, async (req: Request, res: Re
 
   const result = await sendEmail({ to: email, subject, html, text });
   if (!result.ok) {
-    // Only echo the reset URL in non-production logs — surfacing it in prod
-    // logs would let anyone with log access take over the account.
-    const logPayload: Record<string, unknown> = { userId: user.id, reason: result.reason };
-    if (process.env.NODE_ENV !== "production") logPayload.resetUrl = resetUrl;
-    req.log?.warn(logPayload, "Password reset email NOT sent");
+    // Never log the reset URL, token, recipient, or email body. The generic
+    // response below still prevents account enumeration.
+    req.log?.warn({ userId: user.id, reason: result.reason }, "Password reset email NOT sent");
   } else {
     req.log?.info({ userId: user.id }, "Password reset email sent");
   }

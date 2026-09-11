@@ -22,8 +22,22 @@ import { db, paymentsTable, jobsTable, tipsTable, payoutEventsTable, usersTable,
 import { authenticate, requireRole, requireActiveMechanic, type AuthRequest } from "../middlewares/authenticate";
 import { manualRetryCapture } from "../lib/payoutHoldEngine";
 import { getUncachableStripeClient } from "../lib/stripeClient";
+import { canManagePayoutDestination, canRetryCapture } from "../lib/authorization";
 
 const router: IRouter = Router();
+
+class DestinationAbort extends Error {
+  constructor(
+    readonly status: number,
+    readonly body: Record<string, unknown>,
+  ) {
+    super("Payout destination request rejected");
+  }
+}
+
+function abortDestination(status: number, body: Record<string, unknown>): never {
+  throw new DestinationAbort(status, body);
+}
 
 function windowStart(window: string): Date {
   const now = new Date();
@@ -210,10 +224,25 @@ router.post("/payouts/:jobId/retry", authenticate, async (req: AuthRequest, res:
   if (!Number.isInteger(jobId)) { res.status(400).json({ error: "Bad jobId" }); return; }
   const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, jobId));
   if (!job) { res.status(404).json({ error: "Not found" }); return; }
-  if (req.userRole !== "admin" && req.userId !== job.mechanicId) {
+  const [payment] = await db.select({ status: paymentsTable.status })
+    .from(paymentsTable)
+    .where(eq(paymentsTable.jobId, jobId));
+  if (!payment) { res.status(404).json({ error: "Payment not found" }); return; }
+  if (!canRetryCapture({
+    role: req.userRole,
+    status: req.user?.status,
+    userId: req.userId,
+    assignedMechanicId: job.mechanicId,
+    jobStatus: job.status,
+    paymentStatus: payment.status,
+  })) {
     res.status(403).json({ error: "Forbidden" }); return;
   }
   const out = await manualRetryCapture(jobId);
+  if (!out.ok) {
+    res.status(409).json({ error: out.reason ?? "Capture retry is not available for this payment." });
+    return;
+  }
   res.json(out);
 });
 
@@ -239,7 +268,9 @@ router.get("/admin/payouts/overview", authenticate, requireRole("admin"), async 
 /* -------------------------------------------------------------------------- */
 
 router.post("/payouts/shop/connect/onboarding", authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
-  if (req.userRole !== "shop_owner") { res.status(403).json({ error: "Shop owners only" }); return; }
+  if (req.userRole !== "shop_owner" || req.user?.status !== "active") {
+    res.status(403).json({ error: "Active shop owners only" }); return;
+  }
   const stripe = await getUncachableStripeClient();
   const [u] = await db.select().from(usersTable).where(eq(usersTable.id, req.userId!));
   if (!u) { res.status(404).json({ error: "User not found" }); return; }
@@ -268,7 +299,9 @@ router.post("/payouts/shop/connect/onboarding", authenticate, async (req: AuthRe
 });
 
 router.get("/payouts/shop/connect/status", authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
-  if (req.userRole !== "shop_owner") { res.status(403).json({ error: "Shop owners only" }); return; }
+  if (req.userRole !== "shop_owner" || req.user?.status !== "active") {
+    res.status(403).json({ error: "Active shop owners only" }); return;
+  }
   const [u] = await db.select().from(usersTable).where(eq(usersTable.id, req.userId!));
   if (!u?.stripeAccountId) {
     res.json({ accountId: null, ready: false, chargesEnabled: false, payoutsEnabled: false, detailsSubmitted: false });
@@ -297,31 +330,109 @@ router.patch("/payouts/job/:jobId/destination", authenticate, async (req: AuthRe
   if (!["shop_owner", "admin"].includes(req.userRole ?? "")) {
     res.status(403).json({ error: "Forbidden" }); return;
   }
+  if (req.userRole === "shop_owner" && req.user?.status !== "active") {
+    res.status(403).json({ error: "Your shop owner account is not active." }); return;
+  }
   const jobId = Number(req.params.jobId);
   if (!Number.isInteger(jobId)) { res.status(400).json({ error: "Bad jobId" }); return; }
   const body = req.body as { destination?: string; shopId?: number; shopSplitPct?: number };
   const dest = body.destination;
-  if (!dest || !["mechanic", "shop", "split"].includes(dest)) {
-    res.status(400).json({ error: "destination must be mechanic|shop|split" }); return;
+  if (!dest || !["mechanic", "shop"].includes(dest)) {
+    res.status(400).json({ error: "Split payouts are not supported; destination must be mechanic or shop." }); return;
   }
-  const [pmt] = await db.select().from(paymentsTable).where(eq(paymentsTable.jobId, jobId));
-  if (!pmt) { res.status(404).json({ error: "Payment not found" }); return; }
-  if (!["pending", "authorized", "capture_pending"].includes(pmt.status)) {
-    res.status(409).json({ error: "Cannot change destination after capture." }); return;
+  const requestedShopId = body.shopId == null ? null : Number(body.shopId);
+  if (dest === "shop" && (!requestedShopId || !Number.isInteger(requestedShopId))) {
+    res.status(400).json({ error: "shopId is required for shop payouts" }); return;
   }
-  // Shop owner can only redirect to a shop they own.
-  if (req.userRole === "shop_owner") {
-    if (!body.shopId) { res.status(400).json({ error: "shopId is required for shop owners" }); return; }
-    const [shop] = await db.select().from(shopsTable).where(and(eq(shopsTable.id, body.shopId), eq(shopsTable.ownerId, req.userId!)));
-    if (!shop) { res.status(403).json({ error: "Not your shop" }); return; }
+  if (dest === "mechanic" && requestedShopId !== null) {
+    res.status(400).json({ error: "shopId is only valid for shop payouts." }); return;
   }
-  const splitPct = dest === "split" ? Math.max(0, Math.min(100, body.shopSplitPct ?? 0)) : null;
-  const [updated] = await db.update(paymentsTable).set({
-    payoutDestination: dest as "mechanic" | "shop" | "split",
-    shopId: body.shopId ?? null,
-    shopSplitPct: splitPct,
-  }).where(eq(paymentsTable.id, pmt.id)).returning();
-  res.json(updated);
+
+  try {
+    const result = await db.transaction(async (tx) => {
+      // Match checkout's lock. This makes the destination snapshot and the
+      // Stripe-bound destination one serialized operation per job.
+      await tx.execute(sql`SELECT id FROM jobs WHERE id = ${jobId} FOR UPDATE`);
+      const [job] = await tx.select({
+        customerId: jobsTable.customerId,
+        postedByShopId: jobsTable.postedByShopId,
+      }).from(jobsTable).where(eq(jobsTable.id, jobId));
+      if (!job) abortDestination(404, { error: "Job not found" });
+
+      let ownsPostedShop = false;
+      if (req.userRole === "shop_owner" && job.postedByShopId != null) {
+        const [postedShop] = await tx.select({ id: shopsTable.id })
+          .from(shopsTable)
+          .where(and(
+            eq(shopsTable.id, job.postedByShopId),
+            eq(shopsTable.ownerId, req.userId!),
+          ));
+        ownsPostedShop = !!postedShop;
+      }
+      if (!canManagePayoutDestination({
+        role: req.userRole,
+        status: req.user?.status,
+        userId: req.userId,
+        customerId: job.customerId,
+        ownsPostedShop,
+      })) {
+        abortDestination(403, { error: "You do not control this job's payout destination." });
+      }
+
+      if (dest === "shop") {
+        const [shop] = await tx.select().from(shopsTable).where(eq(shopsTable.id, requestedShopId!));
+        if (!shop) abortDestination(403, { error: "Not your shop" });
+        if (shop.status !== "active") abortDestination(409, { error: "Shop is inactive." });
+        if (req.userRole === "shop_owner" && shop.ownerId !== req.userId) {
+          abortDestination(403, { error: "Not your shop" });
+        }
+      }
+
+      const [pmt] = await tx.select().from(paymentsTable).where(eq(paymentsTable.jobId, jobId));
+      // Stripe fixes transfer_data.destination when the Checkout session
+      // creates its PaymentIntent. A pending setup row has no provider
+      // references yet and is intentionally completed by checkout.
+      if (pmt && (pmt.status !== "pending" || pmt.providerSessionId || pmt.providerPaymentIntentId)) {
+        abortDestination(409, { error: "Cannot change destination after Stripe checkout has started." });
+      }
+
+      const values = {
+        payoutDestination: dest as "mechanic" | "shop" | "split",
+        shopId: requestedShopId,
+        shopSplitPct: null,
+      };
+      if (pmt) {
+        const [updated] = await tx.update(paymentsTable)
+          .set(values)
+          .where(eq(paymentsTable.id, pmt.id))
+          .returning();
+        return { status: 200, body: updated };
+      }
+
+      // Checkout normally creates the payment row, but this zeroed pending
+      // setup row preserves the pre-checkout destination feature using the
+      // existing non-null payment columns. Checkout fills financial snapshots
+      // and provider references under the same job lock.
+      const [created] = await tx.insert(paymentsTable).values({
+        jobId,
+        amount: 0,
+        platformFee: 0,
+        mechanicPayout: 0,
+        status: "pending",
+        payoutDestination: values.payoutDestination,
+        shopId: values.shopId,
+        shopSplitPct: null,
+      }).returning();
+      return { status: 200, body: created };
+    });
+    res.status(result.status).json(result.body);
+  } catch (error) {
+    if (error instanceof DestinationAbort) {
+      res.status(error.status).json(error.body);
+      return;
+    }
+    throw error;
+  }
 });
 
 /* -------------------------------------------------------------------------- */

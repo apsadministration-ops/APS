@@ -8,6 +8,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Feather } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
+import { getApiUrl } from "@/lib/apiConfig";
 
 interface LedgerEntry {
   id: number;
@@ -60,8 +61,6 @@ export default function LoyaltyScreen() {
   const { user, refreshUser } = useAuth() as any;
   const role: "customer" | "mechanic" = user?.role === "mechanic" ? "mechanic" : "customer";
   const isMechanic = role === "mechanic";
-  const domain = process.env.EXPO_PUBLIC_DOMAIN;
-
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [redeeming, setRedeeming] = useState<string | null>(null);
@@ -71,15 +70,15 @@ export default function LoyaltyScreen() {
   const [rewards, setRewards] = useState<Reward[]>([]);
   const [redemptions, setRedemptions] = useState<Redemption[]>([]);
 
-  const baseUrl = `https://${domain}/api/loyalty/${isMechanic ? "mechanic" : "customer"}`;
-  const rewardsUrl = `https://${domain}/api/loyalty/rewards/${isMechanic ? "mechanic" : "customer"}`;
+  const baseUrl = getApiUrl(`/loyalty/${isMechanic ? "mechanic" : "customer"}`);
+  const rewardsUrl = getApiUrl(`/loyalty/rewards/${isMechanic ? "mechanic" : "customer"}`);
   const redemptionsUrl = `${baseUrl}/redemptions`;
   const redeemUrl = `${baseUrl}/redeem`;
 
   const fetchAll = useCallback(async () => {
     try {
       const token = await AsyncStorage.getItem("auth_token");
-      const headers = { Authorization: `Bearer ${token}` };
+      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
       const [bRes, rRes, dRes] = await Promise.all([
         fetch(baseUrl, { headers }),
         fetch(rewardsUrl, { headers }),
@@ -125,7 +124,10 @@ export default function LoyaltyScreen() {
       const token = await AsyncStorage.getItem("auth_token");
       const res = await fetch(redeemUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ rewardKey: reward.key }),
       });
       const data = await res.json();

@@ -16,6 +16,7 @@ import * as Haptics from "expo-haptics";
 import * as WebBrowser from "expo-web-browser";
 import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getApiUrl } from "@/lib/apiConfig";
 
 const STATUS_ORDER = ["REQUESTED", "OFFERED", "ACCEPTED", "EN_ROUTE", "IN_PROGRESS", "COMPLETED", "PAID"];
 
@@ -74,20 +75,24 @@ export default function JobDetailScreen() {
     setPayLoading(true);
     try {
       const token = await AsyncStorage.getItem("auth_token");
-      const domain = process.env.EXPO_PUBLIC_DOMAIN;
-      const res = await fetch(`https://${domain}/api/payments/jobs/${jobId}/checkout`, {
+      const res = await fetch(getApiUrl(`/payments/jobs/${jobId}/checkout`), {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({})) as { url?: string; error?: string };
       if (!res.ok) {
         await alertMessage("Payment unavailable", data.error ?? "Could not start checkout.");
         return;
       }
-      if (data.url) {
-        if (Platform.OS === "web") window.open(data.url, "_blank");
-        else await WebBrowser.openBrowserAsync(data.url);
+      if (!data.url) {
+        await alertMessage("Payment unavailable", "Checkout could not be started. Please try again.");
+        return;
       }
+      if (Platform.OS === "web") window.open(data.url, "_blank");
+      else await WebBrowser.openBrowserAsync(data.url);
     } catch (e: any) {
       await alertMessage("Network error", e?.message ?? "Try again.");
     } finally {

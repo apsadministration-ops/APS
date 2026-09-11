@@ -4,8 +4,8 @@ import { useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
-
-const API_BASE = `https://${process.env.EXPO_PUBLIC_DOMAIN}/api`;
+import { getApiUrl } from "@/lib/apiConfig";
+import { classifyForgotPasswordResponse } from "@/lib/forgotPassword";
 
 export default function ForgotPasswordScreen() {
   const [email, setEmail] = useState("");
@@ -21,18 +21,22 @@ export default function ForgotPasswordScreen() {
     setError(null);
     setSubmitting(true);
     try {
-      const res = await fetch(`${API_BASE}/auth/forgot-password`, {
+      const res = await fetch(getApiUrl("/auth/forgot-password"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim() }),
       });
-      if (res.status === 429) {
+      const outcome = classifyForgotPasswordResponse(res.status);
+      if (outcome === "rate-limited") {
         setError("Too many requests. Please wait a few minutes and try again.");
-        return;
+      } else if (outcome === "success") {
+        // Keep the response generic even when the account does not exist.
+        setDone(true);
+      } else {
+        // Do not surface response bodies: they can disclose account details
+        // and are not needed to explain a failed request.
+        setError("We couldn't process that request. Please try again.");
       }
-      // Server always returns 200 with a generic message — even if the email
-      // doesn't exist — to prevent account enumeration. Mirror that in UI.
-      setDone(true);
     } catch {
       setError("Network error. Please check your connection and try again.");
     } finally {

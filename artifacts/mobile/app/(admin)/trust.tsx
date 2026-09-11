@@ -19,6 +19,7 @@ import { Stack, useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useColors } from "@/hooks/useColors";
+import { getApiUrl } from "@/lib/apiConfig";
 import { confirm, alertMessage } from "@/utils/confirm";
 
 interface OverviewMechanic {
@@ -50,7 +51,6 @@ function trustColor(score: number): string {
 export default function AdminTrustScreen() {
   const colors = useColors();
   const router = useRouter();
-  const domain = process.env.EXPO_PUBLIC_DOMAIN;
 
   const [overview, setOverview] = useState<OverviewDto | null>(null);
   const [reviews, setReviews] = useState<ReviewRow[]>([]);
@@ -61,14 +61,14 @@ export default function AdminTrustScreen() {
 
   const load = useCallback(async () => {
     const token = await AsyncStorage.getItem("auth_token");
-    const headers = { Authorization: `Bearer ${token}` };
+    const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
     const [oRes, rRes] = await Promise.all([
-      fetch(`https://${domain}/api/admin/trust/overview`, { headers }),
-      fetch(`https://${domain}/api/admin/reviews/recent?limit=50`, { headers }),
+      fetch(getApiUrl("/admin/trust/overview"), { headers }),
+      fetch(getApiUrl("/admin/reviews/recent?limit=50"), { headers }),
     ]);
     if (oRes.ok) setOverview(await oRes.json());
     if (rRes.ok) setReviews(await rRes.json());
-  }, [domain]);
+  }, []);
 
   useEffect(() => { load().finally(() => setLoading(false)); }, [load]);
   const onRefresh = useCallback(async () => {
@@ -91,9 +91,12 @@ export default function AdminTrustScreen() {
     setRemovingId(r.id);
     try {
       const token = await AsyncStorage.getItem("auth_token");
-      const res = await fetch(`https://${domain}/api/reviews/${r.id}/moderate-remove`, {
+      const res = await fetch(getApiUrl(`/reviews/${r.id}/moderate-remove`), {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ reason }),
       });
       if (!res.ok) {

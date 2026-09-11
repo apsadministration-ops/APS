@@ -9,6 +9,7 @@ import { useAuth } from "@/context/AuthContext";
 import { Feather } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getApiUrl } from "@/lib/apiConfig";
 
 const STATUS_ORDER = ["REQUESTED", "OFFERED", "ACCEPTED", "EN_ROUTE", "IN_PROGRESS", "COMPLETED", "PAID"];
 
@@ -107,10 +108,12 @@ export default function TrackerScreen() {
         const { latitude, longitude } = loc.coords;
         try {
           const token = await AsyncStorage.getItem("auth_token");
-          const domain = process.env.EXPO_PUBLIC_DOMAIN;
-          await fetch(`https://${domain}/api/jobs/${jobId}/mechanic-location`, {
+          await fetch(getApiUrl(`/jobs/${jobId}/mechanic-location`), {
             method: "PUT",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            headers: {
+              "Content-Type": "application/json",
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
             body: JSON.stringify({ lat: latitude, lng: longitude }),
           });
         } catch { /* non-fatal */ }

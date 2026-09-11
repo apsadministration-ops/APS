@@ -5,6 +5,7 @@ import { RegisterBody, LoginBody } from "@workspace/api-zod";
 import { hashPassword, verifyPassword, signToken } from "../lib/auth";
 import { authenticate, type AuthRequest } from "../middlewares/authenticate";
 import { recordReferralSignup } from "../lib/referralEngine";
+import { hasValidAdminSetupKey } from "../lib/authorization";
 
 // Format APS-XXXXXX (6 chars after the prefix) — distinctive, brand-friendly,
 // and easy to share verbally. 32^6 ≈ 1B combinations, plenty for our scale.
@@ -149,8 +150,11 @@ router.get("/auth/me", authenticate, async (req: AuthRequest, res): Promise<void
 
 router.post("/auth/admin-setup", async (req, res): Promise<void> => {
   const setupKey = req.headers["x-setup-key"];
-  const validKey = process.env.ADMIN_SETUP_KEY ?? "aps-admin-setup";
-  if (setupKey !== validKey) {
+  if (!process.env.ADMIN_SETUP_KEY?.trim()) {
+    res.status(503).json({ error: "Admin setup is not configured" });
+    return;
+  }
+  if (!hasValidAdminSetupKey(setupKey)) {
     res.status(403).json({ error: "Invalid setup key" });
     return;
   }

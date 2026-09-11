@@ -6,6 +6,7 @@ import { Platform, StyleSheet, View, useColorScheme } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
+import { getRoleDestination } from "@/lib/roleDestination";
 
 export default function AdminTabLayout() {
   const { user, isLoading } = useAuth();
@@ -19,7 +20,7 @@ export default function AdminTabLayout() {
   if (isLoading) return null;
   if (!user) return <Redirect href="/(auth)/login" />;
   if (user.role !== "admin") {
-    return <Redirect href={user.role === "mechanic" ? "/(mechanic)" : "/(customer)"} />;
+    return <Redirect href={getRoleDestination(user.role) ?? "/(auth)/login"} />;
   }
 
   return (

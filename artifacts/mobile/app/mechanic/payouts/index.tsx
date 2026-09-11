@@ -10,6 +10,7 @@ import { Stack, useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useColors } from "@/hooks/useColors";
+import { getApiUrl } from "@/lib/apiConfig";
 
 type Window = "today" | "week" | "month" | "year";
 
@@ -28,7 +29,6 @@ interface EventRow {
 export default function PayoutsHome() {
   const colors = useColors();
   const router = useRouter();
-  const domain = process.env.EXPO_PUBLIC_DOMAIN;
   const [window, setWindow] = useState<Window>("month");
   const [summary, setSummary] = useState<Summary | null>(null);
   const [buckets, setBuckets] = useState<Buckets>({});
@@ -42,10 +42,10 @@ export default function PayoutsHome() {
       const token = await AsyncStorage.getItem("auth_token");
       const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
       const [s, b, j, e] = await Promise.all([
-        fetch(`https://${domain}/api/payouts/summary?window=${window}`, { headers }).then((r) => r.json()),
-        fetch(`https://${domain}/api/payouts/buckets`, { headers }).then((r) => r.json()),
-        fetch(`https://${domain}/api/payouts/jobs?limit=20`, { headers }).then((r) => r.json()),
-        fetch(`https://${domain}/api/payouts/events?limit=20`, { headers }).then((r) => r.json()),
+        fetch(getApiUrl(`/payouts/summary?window=${window}`), { headers }).then((r) => r.json()),
+        fetch(getApiUrl("/payouts/buckets"), { headers }).then((r) => r.json()),
+        fetch(getApiUrl("/payouts/jobs?limit=20"), { headers }).then((r) => r.json()),
+        fetch(getApiUrl("/payouts/events?limit=20"), { headers }).then((r) => r.json()),
       ]);
       setSummary(s);
       setBuckets(b);
@@ -55,18 +55,18 @@ export default function PayoutsHome() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [domain, window]);
+  }, [window]);
 
   useEffect(() => { setLoading(true); void load(); }, [load]);
 
   async function openTaxDocs() {
     try {
       const token = await AsyncStorage.getItem("auth_token");
-      const res = await fetch(`https://${domain}/api/payouts/tax-documents`, {
+      const res = await fetch(getApiUrl("/payouts/tax-documents"), {
         headers: token ? { Authorization: `Bearer ${token}` } as Record<string, string> : {},
       });
       const json = await res.json();
-      if (json.url) await Linking.openURL(json.url);
+      if (res.ok && json.url) await Linking.openURL(json.url);
     } catch { /* noop */ }
   }
 

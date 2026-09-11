@@ -3,6 +3,8 @@ import { Platform } from "react-native";
 import Constants, { ExecutionEnvironment } from "expo-constants";
 import { useRouter } from "expo-router";
 import { useAuth } from "@/context/AuthContext";
+import { getApiUrl } from "@/lib/apiConfig";
+import { getPushFailureDiagnostic, inferExpoProjectId } from "@/lib/pushDiagnostics";
 
 // Push notification registration was removed from Expo Go in SDK 53.
 // Even *importing* `expo-notifications` on Android Expo Go logs a hard
@@ -50,9 +52,33 @@ export function usePushNotifications() {
           const { status } = await Notifications.requestPermissionsAsync();
           finalStatus = status;
         }
-        if (finalStatus !== "granted") return;
+        if (finalStatus !== "granted") {
+          console.warn(
+            "[push] registration unavailable",
+            getPushFailureDiagnostic("permission"),
+          );
+          return;
+        }
 
-        const token = await Notifications.getExpoPushTokenAsync();
+        const projectId = inferExpoProjectId(Constants);
+        if (!projectId) {
+          console.warn(
+            "[push] registration unavailable",
+            getPushFailureDiagnostic("project-id"),
+          );
+          return;
+        }
+
+        let token: { data?: string };
+        try {
+          token = await Notifications.getExpoPushTokenAsync({ projectId });
+        } catch (error) {
+          console.warn(
+            "[push] registration unavailable",
+            getPushFailureDiagnostic("token", error),
+          );
+          return;
+        }
         const pushToken = token.data;
         if (cancelled || !pushToken) return;
 
@@ -60,8 +86,7 @@ export function usePushNotifications() {
           const AsyncStorage = (await import("@react-native-async-storage/async-storage")).default;
           const authToken = await AsyncStorage.getItem("auth_token");
           if (!authToken) return;
-          const domain = process.env.EXPO_PUBLIC_DOMAIN;
-          await fetch(`https://${domain}/api/users/me/push-token`, {
+          const response = await fetch(getApiUrl("/users/me/push-token"), {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -69,11 +94,24 @@ export function usePushNotifications() {
             },
             body: JSON.stringify({ token: pushToken }),
           });
+          if (!response.ok) {
+            console.warn(
+              "[push] registration unavailable",
+              getPushFailureDiagnostic("server", response.status),
+            );
+          }
         } catch {
-          // Non-fatal
+          console.warn(
+            "[push] registration unavailable",
+            getPushFailureDiagnostic("server"),
+          );
         }
       } catch {
         // Permission / token errors are non-fatal — app still works without push.
+        console.warn(
+          "[push] registration unavailable",
+          getPushFailureDiagnostic("token"),
+        );
         return;
       }
 
@@ -95,7 +133,11 @@ export function usePushNotifications() {
           }
         }
       });
-    })();
+    })().catch(() => {
+      // Native module/listener setup can fail before token registration starts.
+      // Keep push optional without allowing an unhandled startup rejection.
+      console.warn("[push] registration unavailable", getPushFailureDiagnostic("native-setup"));
+    });
 
     return () => {
       cancelled = true;

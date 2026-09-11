@@ -7,6 +7,7 @@ import { useColors } from "@/hooks/useColors";
 import { Feather } from "@expo/vector-icons";
 import { useState, useEffect, useCallback } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getApiUrl } from "@/lib/apiConfig";
 
 interface AppUser {
   id: number;
@@ -130,18 +131,17 @@ export default function AdminUsersScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<TabKey>("mechanic");
-  const domain = process.env.EXPO_PUBLIC_DOMAIN;
 
   const fetchUsers = useCallback(async () => {
     try {
       const token = await AsyncStorage.getItem("auth_token");
-      const res = await fetch(`https://${domain}/api/users`, {
-        headers: { Authorization: `Bearer ${token}` },
+      const res = await fetch(getApiUrl("/users"), {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (res.ok) setUsers(await res.json());
     } catch { /* non-fatal */ }
     finally { setLoading(false); setRefreshing(false); }
-  }, [domain]);
+  }, []);
 
   useEffect(() => { fetchUsers(); }, [fetchUsers]);
 
@@ -156,9 +156,12 @@ export default function AdminUsersScreen() {
       if (!ok) return;
       try {
         const token = await AsyncStorage.getItem("auth_token");
-        const res = await fetch(`https://${domain}/api/users/${userId}`, {
+        const res = await fetch(getApiUrl(`/users/${userId}`), {
           method: "PATCH",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
           body: JSON.stringify({ mechanicTier: extra }),
         });
         if (res.ok) fetchUsers();
@@ -177,9 +180,9 @@ export default function AdminUsersScreen() {
       if (!ok) return;
       try {
         const token = await AsyncStorage.getItem("auth_token");
-        const res = await fetch(`https://${domain}/api/users/${userId}`, {
+        const res = await fetch(getApiUrl(`/users/${userId}`), {
           method: "DELETE",
-          headers: { Authorization: `Bearer ${token}` },
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
         });
         if (res.ok) {
           fetchUsers();
@@ -209,9 +212,12 @@ export default function AdminUsersScreen() {
     if (!ok) return;
     try {
       const token = await AsyncStorage.getItem("auth_token");
-      const res = await fetch(`https://${domain}/api/users/${userId}`, {
+        const res = await fetch(getApiUrl(`/users/${userId}`), {
         method: "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
         body: JSON.stringify({ status: newStatus }),
       });
       if (res.ok) fetchUsers();

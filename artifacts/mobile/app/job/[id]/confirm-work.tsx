@@ -13,6 +13,7 @@ import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useColors } from "@/hooks/useColors";
+import { getApiUrl } from "@/lib/apiConfig";
 
 interface ConfirmDto {
   id: number;
@@ -28,7 +29,6 @@ export default function ConfirmWorkScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const jobId = Number(id);
-  const domain = process.env.EXPO_PUBLIC_DOMAIN;
   const [data, setData] = useState<ConfirmDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -40,7 +40,7 @@ export default function ConfirmWorkScreen() {
   const load = useCallback(async () => {
     try {
       const token = await AsyncStorage.getItem("auth_token");
-      const res = await fetch(`https://${domain}/api/work-confirmations/job/${jobId}`, {
+      const res = await fetch(getApiUrl(`/work-confirmations/job/${jobId}`), {
         headers: token ? { Authorization: `Bearer ${token}` } as Record<string, string> : {},
       });
       if (!res.ok) {
@@ -56,7 +56,7 @@ export default function ConfirmWorkScreen() {
       setError("Network error.");
       setLoading(false);
     }
-  }, [domain, jobId]);
+  }, [jobId]);
 
   useEffect(() => { void load(); }, [load]);
   // 12s server resync.
@@ -82,7 +82,7 @@ export default function ConfirmWorkScreen() {
     setError(null);
     try {
       const token = await AsyncStorage.getItem("auth_token");
-      const res = await fetch(`https://${domain}/api/work-confirmations/${jobId}/${path}`, {
+      const res = await fetch(getApiUrl(`/work-confirmations/${jobId}/${path}`), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -93,6 +93,12 @@ export default function ConfirmWorkScreen() {
       const json = await res.json();
       if (!res.ok) {
         setError(json.error ?? "Could not submit.");
+        setBusy(false);
+        return;
+      }
+      if (path === "confirm" && json.capture?.ok === false) {
+        setData((current) => current ? { ...current, status: "confirmed" } : current);
+        setError("Work confirmed, but payment has not completed. Check payment status or contact support.");
         setBusy(false);
         return;
       }
@@ -162,9 +168,12 @@ export default function ConfirmWorkScreen() {
       {done ? (
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, marginTop: 16 }]}>
           <Text style={{ color: colors.foreground, fontWeight: "600" }}>
-            {data.status === "confirmed" ? "Confirmed — payment is on the way." :
-             data.status === "auto_confirmed" ? "Auto-confirmed after 24h. Payment is on the way." :
-             "Disputed — our team will review."}
+            {data.status === "disputed" ? "Disputed — our team will review." :
+             `${data.status === "auto_confirmed" ? "Auto-confirmed after 24h." : "Work confirmed."} ${
+               ["captured", "released"].includes(data.payment?.status ?? "")
+                 ? "Payment captured; payout status is shown separately."
+                 : "Payment has not completed yet. Check payment status for updates."
+             }`}
           </Text>
         </View>
       ) : !showDispute ? (

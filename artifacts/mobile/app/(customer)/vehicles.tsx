@@ -11,13 +11,12 @@ import { useState } from "react";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import * as Haptics from "expo-haptics";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getApiUrl } from "@/lib/apiConfig";
 
 export default function VehiclesScreen() {
   const colors = useColors();
   const { data: vehicles, isLoading, refetch } = useListVehicles();
   const createMutation = useCreateVehicle();
-  const domain = process.env.EXPO_PUBLIC_DOMAIN;
-
   const [showForm, setShowForm] = useState(false);
   const [vin, setVin] = useState("");
   const [plateNumber, setPlateNumber] = useState("");
@@ -82,9 +81,9 @@ export default function VehiclesScreen() {
     setRemovingId(vehicleId);
     try {
       const token = await AsyncStorage.getItem("auth_token");
-      const res = await fetch(`https://${domain}/api/vehicles/${vehicleId}`, {
+      const res = await fetch(getApiUrl(`/vehicles/${vehicleId}`), {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (res.ok) {
         try { await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning); } catch { /* web */ }

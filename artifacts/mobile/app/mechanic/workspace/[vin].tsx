@@ -26,6 +26,7 @@ import { useColors } from "@/hooks/useColors";
 import { alertMessage, confirm } from "@/utils/confirm";
 import { useAuth } from "@/context/AuthContext";
 import { VehicleDiagram, type DiagramComponent } from "@/components/VehicleDiagram";
+import { getApiOrigin, getApiUrl } from "@/lib/apiConfig";
 
 interface Vehicle {
   id: number; vin: string; make: string; model: string; year: number;
@@ -104,7 +105,7 @@ export default function MechanicWorkspaceScreen() {
   const colors = useColors();
   const { vin: vinParam } = useLocalSearchParams<{ vin: string }>();
   const vin = (vinParam ?? "").toUpperCase();
-  const domain = process.env.EXPO_PUBLIC_DOMAIN;
+  const domain = getApiOrigin() ?? "";
   const { user } = useAuth();
 
   const [bundle, setBundle] = useState<Bundle | null>(null);
@@ -115,13 +116,16 @@ export default function MechanicWorkspaceScreen() {
 
   const authHeaders = useCallback(async () => {
     const token = await AsyncStorage.getItem("auth_token");
-    return { "Content-Type": "application/json", Authorization: `Bearer ${token}` } as Record<string, string>;
+    return {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    } as Record<string, string>;
   }, []);
 
   const load = useCallback(async () => {
     setError(null);
     const headers = await authHeaders();
-    const res = await fetch(`https://${domain}/api/mechanic/workspace/by-vin/${vin}`, { headers });
+    const res = await fetch(getApiUrl(`/mechanic/workspace/by-vin/${vin}`), { headers });
     if (!res.ok) {
       const d = await res.json().catch(() => ({}));
       setError(d.error ?? `Failed to load workspace (${res.status})`);
@@ -475,7 +479,7 @@ function AddPartModal({
     setSaving(true);
     try {
       const headers = await authHeaders();
-      const res = await fetch(`https://${domain}/api/mechanic/vehicles/${vehicleId}/installed-parts`, {
+      const res = await fetch(getApiUrl(`/mechanic/vehicles/${vehicleId}/installed-parts`), {
         method: "POST",
         headers,
         body: JSON.stringify({
@@ -564,7 +568,7 @@ function CompatibilityTab({
   useEffect(() => {
     (async () => {
       const headers = await authHeaders();
-      const res = await fetch(`https://${domain}/api/mechanic/parts/categories`, { headers });
+      const res = await fetch(getApiUrl("/mechanic/parts/categories"), { headers });
       if (res.ok) setCategories(await res.json());
     })();
   }, [domain, authHeaders]);
@@ -572,7 +576,7 @@ function CompatibilityTab({
   const lookup = useCallback(async (key: string) => {
     setSelected(key); setCompat(null); setLoading(true);
     const headers = await authHeaders();
-    const res = await fetch(`https://${domain}/api/mechanic/vehicles/${vehicleId}/compatibility?category=${key}`, { headers });
+    const res = await fetch(getApiUrl(`/mechanic/vehicles/${vehicleId}/compatibility?category=${key}`), { headers });
     if (res.ok) setCompat(await res.json());
     setLoading(false);
   }, [domain, vehicleId, authHeaders]);
@@ -656,7 +660,7 @@ function RecosTab({
   const submit = async () => {
     if (!title.trim()) return;
     const headers = await authHeaders();
-    const res = await fetch(`https://${domain}/api/mechanic/vehicles/${bundle.vehicle.id}/recommendations`, {
+    const res = await fetch(getApiUrl(`/mechanic/vehicles/${bundle.vehicle.id}/recommendations`), {
       method: "POST", headers,
       body: JSON.stringify({ title: title.trim(), description: desc.trim() || undefined, urgency }),
     });
@@ -669,7 +673,7 @@ function RecosTab({
     const ok = await confirm({ title: status === "addressed" ? "Mark addressed?" : "Dismiss?" });
     if (!ok) return;
     const headers = await authHeaders();
-    const res = await fetch(`https://${domain}/api/mechanic/recommendations/${id}`, {
+    const res = await fetch(getApiUrl(`/mechanic/recommendations/${id}`), {
       method: "PATCH", headers, body: JSON.stringify({ status }),
     });
     if (!res.ok) { await alertMessage("Update failed"); return; }
@@ -763,7 +767,7 @@ function NotesTab({
   const submit = async () => {
     if (!title.trim()) return;
     const headers = await authHeaders();
-    const res = await fetch(`https://${domain}/api/mechanic/vehicles/${bundle.vehicle.id}/notes`, {
+    const res = await fetch(getApiUrl(`/mechanic/vehicles/${bundle.vehicle.id}/notes`), {
       method: "POST", headers,
       body: JSON.stringify({ title: title.trim(), body: body.trim() || undefined, type, severity }),
     });
@@ -774,7 +778,7 @@ function NotesTab({
 
   const toggleResolved = async (n: Note) => {
     const headers = await authHeaders();
-    const res = await fetch(`https://${domain}/api/mechanic/notes/${n.id}`, {
+    const res = await fetch(getApiUrl(`/mechanic/notes/${n.id}`), {
       method: "PATCH", headers, body: JSON.stringify({ resolved: !n.resolvedAt }),
     });
     if (!res.ok) { await alertMessage("Update failed"); return; }
@@ -889,7 +893,7 @@ function DiagramTab({
   const tap = useCallback(async (k: DiagramComponent) => {
     setActive(k); setData(null); setLoading(true);
     const headers = await authHeaders();
-    const res = await fetch(`https://${domain}/api/mechanic/vehicles/${vehicleId}/diagram-lookup?component=${k}`, { headers });
+    const res = await fetch(getApiUrl(`/mechanic/vehicles/${vehicleId}/diagram-lookup?component=${k}`), { headers });
     if (res.ok) setData(await res.json());
     setLoading(false);
   }, [domain, vehicleId, authHeaders]);

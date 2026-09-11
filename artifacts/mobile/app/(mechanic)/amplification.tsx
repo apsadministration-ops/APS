@@ -21,12 +21,11 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Clipboard from "expo-clipboard";
 import * as WebBrowser from "expo-web-browser";
-
-const domain = process.env.EXPO_PUBLIC_DOMAIN;
+import { getApiUrl } from "@/lib/apiConfig";
 
 async function authedFetch(path: string, init?: RequestInit) {
   const token = await AsyncStorage.getItem("auth_token");
-  return fetch(`https://${domain}/api${path}`, {
+  return fetch(getApiUrl(path), {
     ...init,
     headers: {
       ...(init?.headers ?? {}),
@@ -321,8 +320,12 @@ function KitTab({ kit, onCopy, onShare }: {
   const colors = useColors();
   const code = kit.mechanic.referralCode ?? "—";
   const link = kit.links.personalBookingLink;
-  const cardSvgUrl = kit.mechanic.referralCode ? `https://${domain}/api/p/m/${encodeURIComponent(kit.mechanic.referralCode)}/card.svg` : null;
-  const vcardUrl = kit.mechanic.referralCode ? `https://${domain}/api/p/m/${encodeURIComponent(kit.mechanic.referralCode)}/vcard` : null;
+  const cardSvgUrl = kit.mechanic.referralCode
+    ? getApiUrl(`/p/m/${encodeURIComponent(kit.mechanic.referralCode)}/card.svg`)
+    : null;
+  const vcardUrl = kit.mechanic.referralCode
+    ? getApiUrl(`/p/m/${encodeURIComponent(kit.mechanic.referralCode)}/vcard`)
+    : null;
 
   return (
     <View>

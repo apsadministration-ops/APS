@@ -25,6 +25,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useColors } from "@/hooks/useColors";
 import { alertMessage } from "@/utils/confirm";
 import { useAuth } from "@/context/AuthContext";
+import { getApiUrl } from "@/lib/apiConfig";
 
 interface DecodedPreview {
   year: number | null; make: string | null; model: string | null;
@@ -38,8 +39,6 @@ export default function MechanicVinScreen() {
   const colors = useColors();
   const router = useRouter();
   const { user } = useAuth();
-  const domain = process.env.EXPO_PUBLIC_DOMAIN;
-
   const [vin, setVin] = useState("");
   const [decoding, setDecoding] = useState(false);
   const [decoded, setDecoded] = useState<DecodedPreview | null>(null);
@@ -57,9 +56,12 @@ export default function MechanicVinScreen() {
     setDecoding(true);
     try {
       const token = await AsyncStorage.getItem("auth_token");
-      const res = await fetch(`https://${domain}/api/mechanic/vin/decode`, {
+      const res = await fetch(getApiUrl("/mechanic/vin/decode"), {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ vin: cleanVin }),
       });
       const data = await res.json();
@@ -73,7 +75,7 @@ export default function MechanicVinScreen() {
     } finally {
       setDecoding(false);
     }
-  }, [cleanVin, looksValid, domain]);
+  }, [cleanVin, looksValid]);
 
   const openWorkspace = () => {
     router.push(`/mechanic/workspace/${cleanVin}` as never);

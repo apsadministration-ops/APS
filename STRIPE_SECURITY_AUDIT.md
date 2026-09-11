@@ -157,6 +157,17 @@ Card-testing defense: an attacker hitting `POST /payments/jobs/:id/checkout` wit
 
 ---
 
+## 5.1 Known financial gap — split payouts
+
+The schema retains `payoutDestination="split"` and `shopSplitPct` for future
+product work, but APS does **not** execute split payouts today. Destination
+selection now rejects new split requests, and checkout fails closed for any
+legacy split row rather than silently sending the full amount to the mechanic.
+A future implementation must add an atomic secondary Connect transfer,
+idempotency, and matching ledger/audit entries before split mode is re-enabled.
+
+---
+
 ## 6. Manual testing checklist
 
 Run against test mode (`pk_test_*`, `sk_test_*`) with the **Stripe CLI** for webhook delivery (`stripe listen --forward-to localhost:80/api/stripe/webhook`).

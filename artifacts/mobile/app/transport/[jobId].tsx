@@ -12,6 +12,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Location from "expo-location";
 import { alertMessage, confirm } from "@/utils/confirm";
 import { success as hapticSuccess, tap as hapticTap } from "@/utils/haptics";
+import { getApiUrl } from "@/lib/apiConfig";
 
 type TransportLeg = {
   id: number;
@@ -31,14 +32,9 @@ type TransportLeg = {
   notes: string | null;
 };
 
-const apiBase = () => {
-  const domain = process.env.EXPO_PUBLIC_DOMAIN;
-  return domain ? `https://${domain}/api` : "/api";
-};
-
 async function authedJson<T>(path: string, init?: RequestInit): Promise<T> {
   const token = await AsyncStorage.getItem("auth_token");
-  const res = await fetch(`${apiBase()}${path}`, {
+  const res = await fetch(getApiUrl(path), {
     ...init,
     headers: {
       "Content-Type": "application/json",

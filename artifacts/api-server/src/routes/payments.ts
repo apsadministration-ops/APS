@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db, paymentsTable, jobsTable, usersTable, shopsTable } from "@workspace/db";
 import { tryConvertReferral } from "../lib/referralEngine";
 import { authenticate, requireRole, requireActiveMechanic, type AuthRequest } from "../middlewares/authenticate";
@@ -8,8 +8,31 @@ import { awardCustomerPoints } from "../lib/loyaltyEngine";
 import { runProgression } from "../lib/tierProgressionEngine";
 import { getStripePublishableKey, getUncachableStripeClient } from "../lib/stripeClient";
 import { commissionForJob, splitOnNetProfit, findServiceBySlug, partsCostCentsFor, defaultPartsCostPct, type TierKey, type ServiceCategory } from "@workspace/tier-catalog";
+import { isRefundablePayment } from "../lib/authorization";
 
 const router: IRouter = Router();
+
+type CheckoutResponse = {
+  status: number;
+  body: Record<string, unknown>;
+};
+
+function checkoutResponse(status: number, body: Record<string, unknown>): CheckoutResponse {
+  return { status, body };
+}
+
+class CheckoutAbort extends Error {
+  constructor(
+    readonly status: number,
+    readonly body: Record<string, unknown>,
+  ) {
+    super("Checkout request rejected");
+  }
+}
+
+function abortCheckout(status: number, body: Record<string, unknown>): never {
+  throw new CheckoutAbort(status, body);
+}
 
 /* -------------------------------------------------------------------------- */
 /* CONFIG                                                                     */
@@ -46,32 +69,36 @@ router.get("/payments", authenticate, async (req: AuthRequest, res): Promise<voi
 /* -------------------------------------------------------------------------- */
 
 router.post("/payments/jobs/:jobId/checkout", authenticate, checkoutCreationLimiter, async (req: AuthRequest, res): Promise<void> => {
-  if (req.userRole !== "customer") {
-    res.status(403).json({ error: "Only customers can authorize payment" });
+  if (!["customer", "shop_owner"].includes(req.userRole ?? "")) {
+    res.status(403).json({ error: "Only the customer can authorize payment" });
     return;
   }
   const jobId = parseInt(String(req.params.jobId), 10);
   if (isNaN(jobId)) { res.status(400).json({ error: "Invalid job ID" }); return; }
 
-  const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, jobId));
-  if (!job) { res.status(404).json({ error: "Job not found" }); return; }
-  if (job.customerId !== req.userId) { res.status(403).json({ error: "Not your job" }); return; }
-  if (job.status !== "ACCEPTED") {
-    res.status(400).json({ error: `Cannot authorize payment on a job in status ${job.status}` });
-    return;
-  }
-  if (!job.mechanicId) { res.status(400).json({ error: "Job has no assigned mechanic yet" }); return; }
-  if (!job.estimatedPrice || job.estimatedPrice <= 0) {
-    res.status(400).json({ error: "Job has no estimated price" });
-    return;
-  }
+  try {
+    const result = await db.transaction(async (tx) => {
+      // Destination edits and checkout both serialize on this row. Keep the
+      // lock through Stripe session creation and the payment-row write so the
+      // transfer destination sent to Stripe cannot differ from the snapshot
+      // committed to the database.
+      await tx.execute(sql`SELECT id FROM jobs WHERE id = ${jobId} FOR UPDATE`);
+      const [job] = await tx.select().from(jobsTable).where(eq(jobsTable.id, jobId));
+      if (!job) abortCheckout(404, { error: "Job not found" });
+      if (job.customerId !== req.userId) abortCheckout(403, { error: "Not your job" });
+      if (job.status !== "ACCEPTED") {
+      abortCheckout(400, { error: `Cannot authorize payment on a job in status ${job.status}` });
+      }
+      if (!job.mechanicId) abortCheckout(400, { error: "Job has no assigned mechanic yet" });
+      if (!job.estimatedPrice || job.estimatedPrice <= 0) {
+        abortCheckout(400, { error: "Job has no estimated price" });
+      }
 
-  // Idempotency: don't create a second authorized intent for the same job.
-  const [existing] = await db.select().from(paymentsTable).where(eq(paymentsTable.jobId, jobId));
-  if (existing && ["authorized", "captured", "released", "held"].includes(existing.status)) {
-    res.status(409).json({ error: "Payment already authorized for this job", paymentId: existing.id });
-    return;
-  }
+      // Idempotency: don't create a second authorized intent for the same job.
+      const [existing] = await tx.select().from(paymentsTable).where(eq(paymentsTable.jobId, jobId));
+      if (existing && ["authorized", "captured", "released", "held"].includes(existing.status)) {
+        abortCheckout(409, { error: "Payment already authorized for this job", paymentId: existing.id });
+      }
   // If a previous "pending" attempt left a session/intent dangling, void it
   // before creating a new one. Otherwise the old session could still be
   // completed by the customer (in another tab) and create a ghost hold on
@@ -88,12 +115,11 @@ router.post("/payments/jobs/:jobId/checkout", authenticate, checkoutCreationLimi
     } catch { /* non-fatal — proceed with new session */ }
   }
 
-  const [customer] = await db.select().from(usersTable).where(eq(usersTable.id, req.userId!));
-  const [mechanic] = await db.select().from(usersTable).where(eq(usersTable.id, job.mechanicId));
-  if (!customer || !mechanic) { res.status(404).json({ error: "User not found" }); return; }
+  const [customer] = await tx.select().from(usersTable).where(eq(usersTable.id, req.userId!));
+  const [mechanic] = await tx.select().from(usersTable).where(eq(usersTable.id, job.mechanicId));
+  if (!customer || !mechanic) abortCheckout(404, { error: "User not found" });
   if (!mechanic.stripeAccountId || !mechanic.stripeAccountReady) {
-    res.status(400).json({ error: "Mechanic has not completed payout onboarding yet" });
-    return;
+    abortCheckout(400, { error: "Mechanic has not completed payout onboarding yet" });
   }
 
   const stripe = await getUncachableStripeClient();
@@ -107,7 +133,7 @@ router.post("/payments/jobs/:jobId/checkout", authenticate, checkoutCreationLimi
       metadata: { userId: String(customer.id) },
     });
     stripeCustomerId = created.id;
-    await db.update(usersTable).set({ stripeCustomerId }).where(eq(usersTable.id, customer.id));
+    await tx.update(usersTable).set({ stripeCustomerId }).where(eq(usersTable.id, customer.id));
   }
 
   // Tax handling — customer can pass a sales-tax rate (decimal 0..0.15)
@@ -162,24 +188,30 @@ router.post("/payments/jobs/:jobId/checkout", authenticate, checkoutCreationLimi
   // customer authorizes. Stripe `transfer_data.destination` is fixed at PI
   // creation, so this is the only point at which we can route to a shop.
   //
-  // Modes:
+  // Supported modes:
   //   "mechanic" (default) → mechanic's connected account
   //   "shop"               → shop's connected account
-  //   "split"              → routed to mechanic at capture time; the shop's
-  //                          share is moved with a follow-up Stripe transfer
-  //                          (post-capture). Schema/UI ready; secondary
-  //                          transfer execution is left for a future change
-  //                          and is logged via payout_events when wired.
+  //
+  // Split payouts are intentionally not implemented. Never silently route a
+  // requested split to the mechanic, because that would create an incorrect
+  // financial result. Existing split rows fail closed below until a future
+  // implementation adds an atomic secondary transfer + ledger entry.
   let transferDestination = mechanic.stripeAccountId;
   let resolvedShopId: number | null = existing?.shopId ?? null;
   let resolvedDestination: "mechanic" | "shop" | "split" = (existing?.payoutDestination ?? "mechanic") as "mechanic" | "shop" | "split";
+  if (resolvedDestination === "split") {
+    abortCheckout(409, { error: "Split payouts are not supported yet. Choose mechanic or shop." });
+  }
   if (resolvedDestination === "shop" && resolvedShopId) {
-    const [shop] = await db.select().from(shopsTable).where(eq(shopsTable.id, resolvedShopId));
-    if (!shop?.stripeAccountId || !shop.stripeAccountReady) {
-      res.status(400).json({ error: "Selected shop has not finished payout setup yet." });
-      return;
+    const [shop] = await tx.select().from(shopsTable).where(eq(shopsTable.id, resolvedShopId));
+    if (!shop || shop.status !== "active" || !shop.stripeAccountId || !shop.stripeAccountReady) {
+      abortCheckout(400, { error: "Selected shop has not finished payout setup yet." });
     }
     transferDestination = shop.stripeAccountId;
+  } else if (resolvedDestination === "shop") {
+    // A shop destination without a concrete shop would otherwise fall
+    // through to the mechanic account while retaining payoutDestination=shop.
+    abortCheckout(400, { error: "A shop destination requires a shopId." });
   }
 
   const baseUrl = `https://${(process.env["REPLIT_DOMAINS"] ?? "").split(",")[0] ?? ""}`;
@@ -229,11 +261,11 @@ router.post("/payments/jobs/:jobId/checkout", authenticate, checkoutCreationLimi
   const totalCost = amountCents / 100;
   // Stamp the tax + estimate snapshot on both the payment row AND the job
   // row so admin reporting + customer invoice are consistent before capture.
-  await db.update(jobsTable).set({ taxCents }).where(eq(jobsTable.id, jobId));
+  await tx.update(jobsTable).set({ taxCents }).where(eq(jobsTable.id, jobId));
   if (existing) {
     // Reset Stripe references so a late webhook from the previous (now
     // canceled) intent can't flip this fresh row back to authorized.
-    await db.update(paymentsTable)
+    await tx.update(paymentsTable)
       .set({
         amount: totalCost,
         platformFee: platformFeeCents / 100,
@@ -254,7 +286,7 @@ router.post("/payments/jobs/:jobId/checkout", authenticate, checkoutCreationLimi
       })
       .where(eq(paymentsTable.id, existing.id));
   } else {
-    await db.insert(paymentsTable).values({
+    await tx.insert(paymentsTable).values({
       jobId,
       amount: totalCost,
       platformFee: platformFeeCents / 100,
@@ -273,7 +305,16 @@ router.post("/payments/jobs/:jobId/checkout", authenticate, checkoutCreationLimi
     });
   }
 
-  res.json({ url: session.url, sessionId: session.id });
+      return checkoutResponse(200, { url: session.url, sessionId: session.id });
+    });
+    res.status(result.status).json(result.body);
+  } catch (error) {
+    if (error instanceof CheckoutAbort) {
+      res.status(error.status).json(error.body);
+      return;
+    }
+    throw error;
+  }
 });
 
 /**
@@ -361,14 +402,22 @@ router.post("/payments/:jobId/release", authenticate, requireRole("admin"), asyn
     });
     return;
   }
-  if (["captured", "released"].includes(payment.status)) {
-    res.status(400).json({ error: "Payment already released" });
+  if (payment.status !== "held") {
+    if (["captured", "released"].includes(payment.status)) {
+      res.status(400).json({ error: "Payment already released" });
+    } else {
+      res.status(400).json({ error: `Cannot release a legacy payment in status "${payment.status}".` });
+    }
     return;
   }
   const [updated] = await db.update(paymentsTable)
     .set({ status: "released", releasedAt: new Date() })
-    .where(eq(paymentsTable.jobId, jobId))
+    .where(and(eq(paymentsTable.jobId, jobId), eq(paymentsTable.status, "held")))
     .returning();
+  if (!updated) {
+    res.status(409).json({ error: "Payment was released by another request." });
+    return;
+  }
   await db.update(jobsTable).set({ status: "PAID" }).where(eq(jobsTable.id, jobId));
   const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, jobId));
   if (job?.mechanicId) {
@@ -396,11 +445,12 @@ router.post("/payments/:jobId/refund", authenticate, requireRole("admin"), async
   const [payment] = await db.select().from(paymentsTable).where(eq(paymentsTable.jobId, jobId));
   if (!payment) { res.status(404).json({ error: "Payment not found" }); return; }
   if (payment.status === "refunded") { res.status(400).json({ error: "Payment already refunded" }); return; }
-  if (!payment.providerPaymentIntentId) {
+  const paymentIntentId = payment.providerPaymentIntentId;
+  if (!paymentIntentId) {
     res.status(400).json({ error: "This is a legacy (non-Stripe) payment and cannot be refunded through this endpoint." });
     return;
   }
-  if (!["captured", "authorized"].includes(payment.status)) {
+  if (!isRefundablePayment({ status: payment.status, providerPaymentIntentId: paymentIntentId })) {
     res.status(400).json({ error: `Cannot refund a payment in status "${payment.status}".` });
     return;
   }
@@ -408,7 +458,7 @@ router.post("/payments/:jobId/refund", authenticate, requireRole("admin"), async
     const stripe = await getUncachableStripeClient();
     if (payment.status === "authorized") {
       // Funds not yet captured — cancel the intent, no refund needed.
-      await stripe.paymentIntents.cancel(payment.providerPaymentIntentId);
+      await stripe.paymentIntents.cancel(paymentIntentId);
       // Webhook payment_intent.canceled will set status. Reflect immediately too.
       await db.update(paymentsTable).set({ status: "canceled" }).where(eq(paymentsTable.id, payment.id));
     } else {
@@ -416,7 +466,7 @@ router.post("/payments/:jobId/refund", authenticate, requireRole("admin"), async
       // + job/loyalty reversal; doing it here too would risk double-reversal,
       // so we leave job status / loyalty to the webhook.
       await stripe.refunds.create({
-        payment_intent: payment.providerPaymentIntentId,
+        payment_intent: paymentIntentId,
         reverse_transfer: true,
         refund_application_fee: true,
       });
