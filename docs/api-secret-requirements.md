@@ -1,6 +1,6 @@
-# Phase 3 API, secret, and integration requirements
+# APS API, secret, and integration requirements — Phase 4 preparation
 
-**Status:** final current-phase inventory and internal-test snapshot; values were
+**Status:** Phase 4 source reconciliation and preparation guidance complete; Phase 3 tests are retained as historical evidence, not rerun claims. Values were
 not inspected or copied. External/provider checks that are explicitly marked
 unrun remain release gates.  
 **Audience:** the person preparing a Phase 3 beta/release, plus the owner of the
@@ -13,6 +13,13 @@ feature is implemented. Do not paste secrets into this document, source
 control, tickets, screenshots, or chat.
 
 ## How to read the counts
+
+**Start here for practical setup:** [Beta configuration checklist](beta-configuration-checklist.md).
+Sections 10–13 below add the exact per-secret decision matrix, all-44
+now/wait decisions, acquisition instructions, and business timing.
+“Active” in the 44/15 counts means a first-party consumer or configuration
+setter exists, including dormant catalog probes. It does **not** mean a
+credential enables a functional feature or is mandatory for beta.
 
 The counts below are reproducible from the source tree as follows:
 
@@ -720,3 +727,212 @@ iOS signing, Android signing, APNs and FCM) are documented separately:
 Certificates, passwords and key files inside a provider-managed signing
 category are not counted individually; dormant documentation-only names are
 not additional active secrets.
+
+## 10. Exact secret-bearing environment variables: configure now or wait
+
+All **15** values in this table must remain private and server-side. None
+belongs in `EXPO_PUBLIC_*`, a committed file, chat, or a report. “Beta” means
+the selected beta feature scope: taking real payments in a beta requires
+live payment requirements, while a supervised no-money Expo Go test does not.
+Private test credentials are safe only in the provider's corresponding test
+environment; they are never safe to disclose. Platform identities and session
+secrets do not have a Stripe-style test mode.
+
+Source abbreviations below refer to existing files, not proposed components:
+`auth` = `artifacts/api-server/src/lib/auth.ts`;
+`credentials` = `artifacts/api-server/src/lib/credentialStore.ts`;
+`catalog` = `artifacts/api-server/src/lib/integrationCatalog.ts`;
+`stripeClient` = `artifacts/api-server/src/lib/stripeClient.ts`;
+`email` = `artifacts/api-server/src/lib/email.ts`.
+Earlier tables retain line references.
+
+| Exact secret name | Provider / controls / actual consumer | Basic APS | Beta | Production | Obtain now; business/domain prerequisite; test use |
+| --- | --- | --- | --- | --- | --- |
+| `DATABASE_URL` | PostgreSQL authenticated connection; `lib/db/src/index.ts`, Drizzle config and operational scripts | Required | Required for DB flows | Required | Existing platform DB configuration; no LLC/domain needed. Use development DB credentials only for development; keep production separate |
+| `SESSION_SECRET` | APS JWT signing and integration-store encryption; `auth`, `credentials` | Configure now; do not rely on development fallback | Required | Required, at least 32 characters | Generate cryptographically strong private material in a secure secret manager; no provider, billing, domain or LLC. Different environments should have deliberate isolation. Preserve existing value: changing it invalidates JWTs and can make stored credentials unreadable without a migration |
+| `AI_INTEGRATIONS_ANTHROPIC_API_KEY` | Replit Anthropic proxy; `lib/integrations-anthropic-ai/src/client.ts`; assistant/content route imports | Required by current API imports | Required by current API imports | Required by current API imports | Managed Replit AI integration now; billed usage/available credits, no LLC or verified domain. Development requests are still billable—not a free sandbox |
+| `ADMIN_SETUP_KEY` | APS admin bootstrap; `routes/auth.ts`, `lib/authorization.ts` | No, if an admin already exists | Only if bootstrap is needed | Only if bootstrap is needed | Generate secure random value; no outside account. Leave absent when bootstrap is not needed. Use a separate dev key; never weaken production bootstrap |
+| `STRIPE_WEBHOOK_SECRET` | Stripe signature verification; `lib/stripeInit.ts`, `lib/stripeWebhookSetup.ts`, webhook handler via cached secret | No | Required if Stripe test/live flows are in scope | Required for payment launch | Reveal secret from the intended **existing** test endpoint now; test and live endpoint secrets differ. No LLC needed for test preparation. Live account activation/verification is separate. Endpoint URL and event list must match |
+| `REPL_IDENTITY` | Replit platform bearer identity for Stripe/Resend connector lookup; `stripeClient`, `email` | No for non-connector flows | Connector features only | Connector features if this platform identity is supplied | Platform injects it; do not obtain/copy/rotate manually. No personal business prerequisites. Not a provider test key; connector environment determines credential selection |
+| `WEB_REPL_RENEWAL` | Alternative deployment bearer identity for the same connector clients | No for non-connector flows | When deployment connector lookup uses this alternative | Same conditional requirement | Platform-managed alternative to `REPL_IDENTITY`, not a second manually supplied key. Private; never fabricate a value |
+| `AI_INTEGRATIONS_OPENAI_API_KEY` | Replit OpenAI image proxy; `lib/integrations-openai-ai/src/client.ts`, `lib/mediaProviders/openaiImage.ts` | No | Only if AI images are included | Only if AI images are included | Managed integration now; metered usage/credits, no LLC/domain. No free image-generation test mode is assumed |
+| `OPENAI_API_KEY` | BYO alias for `openai_api_key` in `catalog`/`credentials`; current image adapter does not consume it | No | No for current implemented image path | No for current implemented image path | A direct OpenAI API account can issue one, but **do not obtain/pay for it for APS now**. Direct API billing and eligibility would apply; ChatGPT subscription is not the current app's credential |
+| `PARTSTECH_API_KEY` | `lib/suppliers/external/partsTechStub.ts` readiness probe with shop ID; no functional external search/order | No | No | No until adapter work is done | Wait. Supplier shop/integration approval may be required; commercial terms and sandbox availability must be confirmed with PartsTech. A key alone cannot enable ordering |
+| `FACEBOOK_PAGE_TOKEN` | Catalog alias `facebook_page_token`; Facebook publishing stub | No | No | No until publishing implemented | Wait. Meta developer/Page access and appropriate permissions/review needed; LLC is not automatically required to create a Page. Test users/apps may help future development; no APS live adapter exists |
+| `INSTAGRAM_ACCESS_TOKEN` | Catalog alias `instagram_access_token`; Instagram publishing stub | No | No | No until publishing implemented | Wait. Current catalog expects a linked Instagram Business account/Page token model; Meta permissions/review needed. A Business profile is not itself proof an LLC is required |
+| `TIKTOK_ACCESS_TOKEN` | Catalog alias `tiktok_access_token`; TikTok posting stub | No | No | No until publishing implemented | Wait. Developer app, account authorization and posting scopes/review needed. Provider test restrictions and commercial terms must be checked when implementation is scheduled |
+| `TWITTER_ACCESS_TOKEN` | Catalog alias `twitter_access_token`; X publishing stub | No | No | No until publishing implemented | Wait. X developer app/API access and user authorization needed; access pricing/limits may require paid billing. No APS publishing path exists to exercise it |
+| `TWITTER_ACCESS_TOKEN_SECRET` | Optional catalog alias `twitter_access_token_secret`; OAuth 1.0a alternative only | No | No | No until an OAuth 1.0a adapter is chosen | Wait. Not needed alongside an OAuth 2-only implementation. No reason to create an extra credential now |
+
+**Non-env secrets still required for their features:** Stripe connector
+`settings.secret`, Resend connector `settings.api_key`, and native signing/
+push/store credentials in section 3.5. Stripe `settings.publishable` is public,
+but still should come from the correctly selected connector environment.
+Neither `STRIPE_SECRET_KEY` nor `RESEND_API_KEY` is an implemented environment
+input for these adapters. Do not copy connector keys into unused env names.
+
+## 11. All 44 consumed configuration names — exact preparation decisions
+
+Primary classification avoids counting overlapping uses twice. Production
+relevance does not mean “set only in production”: core secrets are also
+needed on a public beta server. Source references and secret flags are in
+sections 2 and 10.
+
+| # | Name | Primary group | Now or wait / exact purpose |
+| ---: | --- | --- | --- |
+| 1 | `DATABASE_URL` | Required core / secret | Now: preserve managed development connection; separate production configuration later |
+| 2 | `PORT` | Required core | Now: platform injects service-specific port; do not hardcode a shared port |
+| 3 | `SESSION_SECRET` | Required secret | Now: retain strong configured value; do not rotate casually |
+| 4 | `NODE_ENV` | Required core | Development for dev; production for exposed release runtime. Never use API dev script as production start |
+| 5 | `AI_INTEGRATIONS_ANTHROPIC_API_KEY` | Required secret | Now: API import prerequisite, not only a future assistant option |
+| 6 | `AI_INTEGRATIONS_ANTHROPIC_BASE_URL` | Required core / provider endpoint | Now: paired managed proxy endpoint; non-secret despite prior storage in secret metadata |
+| 7 | `EXPO_PUBLIC_DOMAIN` | Public mobile | Now: actual HTTPS API host for Expo Go; real deployed API host before beta/native builds |
+| 8 | `EXPO_PUBLIC_REPL_ID` | Public mobile / build metadata | Derived by existing dev/build tooling; not an API key or EAS project ID |
+| 9 | `REPLIT_DEV_DOMAIN` | Development configuration | Platform-provided API development host; never use as an assumed production URL |
+| 10 | `REPLIT_EXPO_DEV_DOMAIN` | Development configuration | Platform-provided Expo origin; not the API origin |
+| 11 | `EXPO_PACKAGER_PROXY_URL` | Development configuration | Existing script derives it; no manual credential acquisition |
+| 12 | `REACT_NATIVE_PACKAGER_HOSTNAME` | Development configuration | Existing script derives it; no provider account |
+| 13 | `REPL_ID` | Development / build metadata | Platform-provided ID used by build fallbacks/Vite plugins |
+| 14 | `npm_config_user_agent` | Development tooling | Package manager sets it; do not configure manually |
+| 15 | `BASE_PATH` | Framework routing | Now where Vite configs require it; platform-managed artifact path. Mobile build defaults to root |
+| 16 | `BASE_URL` | Framework built-in | Vite derives it from base; never create a secret for it |
+| 17 | `REPLIT_INTERNAL_APP_DOMAIN` | Production build metadata | Platform deployment/build input when available; no manual fake domain |
+| 18 | `REPLIT_DOMAINS` | Deployment / feature URLs | Verify supplied domain(s) before payment, reset and referral flows; app uses first domain |
+| 19 | `REPLIT_DEPLOYMENT` | Production connector selection | Platform-managed flag selects connector production settings; do not toggle to simulate test mode |
+| 20 | `REPLIT_CONNECTORS_HOSTNAME` | Feature-specific platform | Supplied by platform for Stripe/Resend; not a secret or provider-issued API host to invent |
+| 21 | `REPL_IDENTITY` | Feature-specific secret | Platform injects connector identity; never ask user to paste it |
+| 22 | `WEB_REPL_RENEWAL` | Feature-specific alternative secret | Platform alternative deployment identity; not both identities manually required |
+| 23 | `ADMIN_SETUP_KEY` | Feature-specific secret | Configure only if admin bootstrap required; existing admin login does not need it |
+| 24 | `STRIPE_WEBHOOK_SECRET` | Feature-specific secret | Prepare existing test endpoint secret now if payments beta planned; live separately |
+| 25 | `AI_INTEGRATIONS_OPENAI_API_KEY` | Feature-specific secret | Wait unless image generation is in beta; then provision proxy |
+| 26 | `AI_INTEGRATIONS_OPENAI_BASE_URL` | Feature-specific provider endpoint | Same decision as its paired proxy key |
+| 27 | `MEDIA_STORAGE_DIR` | Optional / feature-specific | Default local path for dev; if generated media is included, verify writable durable storage for hosted use |
+| 28 | `LOG_LEVEL` | Optional | Default `info`; change only for operational need, never enable secret logging |
+| 29 | `APP_BASE_URL` | Optional trusted URL override | Set/verify before password-reset email; use actual intended public origin |
+| 30 | `PUBLIC_BASE_URL` | Optional link override | Needed only if amplification/share links require override |
+| 31 | `APP_STORE_URL` | Optional store link | Wait until actual iOS listing exists; do not fabricate a listing |
+| 32 | `PLAY_STORE_URL` | Optional store link | Wait until actual Android listing exists |
+| 33 | `APS_BASE_URL` | Optional development/demo | Only for manually running the existing demo against a chosen API; not app runtime |
+| 34 | `PARTSTECH_API_KEY` | Dormant feature probe / secret | Wait for actual adapter project and supplier approval |
+| 35 | `PARTSTECH_SHOP_ID` | Dormant feature probe / public identifier | Same; code is a stub even with both values |
+| 36 | `OPENAI_API_KEY` | Dormant BYO alias / secret | Wait; current images use the proxy pair instead |
+| 37 | `FACEBOOK_PAGE_TOKEN` | Dormant publishing alias / secret | Wait for publishing implementation |
+| 38 | `FACEBOOK_PAGE_ID` | Dormant publishing alias / public ID | Wait with Facebook implementation |
+| 39 | `INSTAGRAM_ACCESS_TOKEN` | Dormant publishing alias / secret | Wait for publishing implementation |
+| 40 | `INSTAGRAM_USER_ID` | Dormant publishing alias / public ID | Wait with Instagram implementation |
+| 41 | `TIKTOK_ACCESS_TOKEN` | Dormant publishing alias / secret | Wait for publishing implementation |
+| 42 | `TIKTOK_OPEN_ID` | Dormant publishing alias / public ID | Wait with TikTok implementation |
+| 43 | `TWITTER_ACCESS_TOKEN` | Dormant publishing alias / secret | Wait for publishing implementation/access model |
+| 44 | `TWITTER_ACCESS_TOKEN_SECRET` | Dormant optional OAuth alias / secret | Wait; only relevant if future adapter chooses OAuth 1.0a |
+
+### Documentation-only, unused and duplicate configuration
+
+- **Documentation-only / not consumed:** `STRIPE_SECRET_KEY`,
+  `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `TWILIO_ACCOUNT_SID`,
+  `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`; comment-only
+  `STRIPE_API_VERSION`. Do not configure any of them for the current app.
+- **Dormant, not proven deprecated:** the nine catalog fallback names and
+  PartsTech pair have actual code references. They remain in the 44, but
+  their provider features are not functional. No variable is removed here.
+- **Aliases to consolidate only in future code work:** nine lower-case DB
+  catalog keys vs nine uppercase environment fallbacks; DB wins today.
+  `OPENAI_API_KEY` is not a replacement for the proxy key. Choosing one
+  authoritative credential path later is useful, but blindly deleting
+  aliases now changes functionality.
+- **Overlapping URL purposes:** `APP_BASE_URL`, `PUBLIC_BASE_URL`,
+  `REPLIT_DOMAINS`, `REPLIT_DEV_DOMAIN`, `EXPO_PUBLIC_DOMAIN`,
+  `REPLIT_INTERNAL_APP_DOMAIN` have different consumers/precedence.
+  Keep them consistent; do not rename them into one variable without code work.
+- **Intentional alternatives, not cleanup targets:** `REPL_IDENTITY` vs
+  `WEB_REPL_RENEWAL`; test vs production credentials; `REPL_ID` vs
+  build-derived `EXPO_PUBLIC_REPL_ID`; Vite `BASE_URL` vs service `BASE_PATH`.
+
+## 12. Credential acquisition: exact destinations and prerequisites
+
+Official pages were consulted during Phase 4. Plan limits, regional fees,
+eligibility and review requirements can change; verify the linked provider
+page before paying. No account was created, secret requested, endpoint
+changed or billing enabled during this audit.
+
+| Provider / exact destination | Account / cost / billing | Domain/business verification and testing | What goes where |
+| --- | --- | --- | --- |
+| Existing Replit project: [Secrets](https://docs.replit.com/core-concepts/project-editor/app-setup/secrets), [AI Integrations](https://docs.replit.com/features/integrations/replit-ai-integrations) | Existing workspace; managed AI use is billed against Replit credits at public API pricing. A separate Anthropic/OpenAI developer account is unnecessary for the current proxy path | No LLC or sending-domain verification; service eligibility and available usage credits still apply. AI calls are real metered calls, not Stripe test mode | Provision managed Anthropic key/base pair; provision OpenAI pair only for images. Platform injects database/connector identities; never manually copy platform bearer tokens |
+| Secure password/secret manager, then project Secrets | No external API subscription for session/admin random material | No domain/LLC. Dev and prod separation; these are real private signing/bootstrap secrets, not placeholder test strings | Preserve current strong `SESSION_SECRET`; generate `ADMIN_SETUP_KEY` only if bootstrap needed. Do not generate/display values in this report |
+| [Stripe Dashboard](https://dashboard.stripe.com/), [API keys](https://dashboard.stripe.com/apikeys), [Workbench webhooks](https://dashboard.stripe.com/workbench/webhooks), [Connect testing](https://docs.stripe.com/connect/testing) | Stripe account/sandbox; test-mode transactions simulate money. Live fees apply to real usage and depend on Connect/product setup; no live bank settlement needed to prepare test integration | Test mode/sandboxes available without completing APS live entity onboarding. HTTPS callback origin needed; no sending-domain DNS verification. Live identity/entity/bank/capability checks are separate | Existing Replit Stripe connector stores test secret and publishable settings. Reveal existing endpoint signing secret into `STRIPE_WEBHOOK_SECRET` via secure Secrets. Do not copy API key into unused `STRIPE_SECRET_KEY`; do not create duplicate endpoints |
+| [Resend signup](https://resend.com/signup), [API keys](https://resend.com/api-keys), [Domains](https://resend.com/domains), [Pricing](https://resend.com/pricing) | Developer/team account; free tier available for modest testing. No paid subscription needed within free limits; enable paid billing only if required volume/features exceed them | Domain/DNS control required for your own sender; not an LLC prerequisite. Provider testing addresses/restricted default sender are not production delivery acceptance | Connect Resend through Replit. API key becomes connector `settings.api_key`; authorized sender becomes `settings.from_email`. No current `RESEND_API_KEY` env consumer. Prefer least-privilege sending/domain scope |
+| Your domain registrar/DNS provider; [Resend domain setup](https://resend.com/docs/add-a-domain) | Existing domain or paid domain registration; DNS hosting plan depends on registrar | Ownership/control needed, not LLC. Reserve brand domain now if desired; legal trademark/ownership checks remain your responsibility | Copy Resend's exact DKIM/SPF/return-path records to DNS, including MX/CNAME where specified; add suitable DMARC. DNS records are public, API key stays private. Never add a second conflicting SPF record |
+| [Expo account](https://expo.dev/signup), [Expo dashboard](https://expo.dev/), [EAS Build setup](https://docs.expo.dev/build/setup/), [EAS plans](https://docs.expo.dev/billing/plans/) | Expo account; limited free EAS build/update usage available. Paid plan needed only for desired quotas/priority/features | No LLC to create/link project. Expo Go tests need no store account. Native distribution has signing/platform restrictions | EAS initialization creates project ID; set `expo.extra.eas.projectId`/owner as appropriate. Public project ID is not `EXPO_PUBLIC_REPL_ID` and is not a secret. Set actual public API domain in build profile; secrets remain on server |
+| [Apple enrollment](https://developer.apple.com/programs/enroll/), [App Store Connect](https://appstoreconnect.apple.com/), [Certificates/keys](https://developer.apple.com/account/resources/) | Apple Account with 2FA; paid Developer Program for App Store/distribution requirements (standard listed fee USD 99/year, regional exceptions/waivers may apply) | Individual enrollment does not require LLC. Enrollment **as APS organization** requires legal entity, authority and generally D-U-N-S plus organization domain/site. Expo Go requires none of this | EAS manages signing/APNs credentials; fill real bundle/app/team/submission IDs, never embed private signing material in JS. TestFlight/native distribution is separate from Expo Go |
+| [Google Play Console](https://play.google.com/console/signup), [Enrollment requirements](https://support.google.com/googleplay/android-developer/answer/6112435), [Google Cloud IAM](https://console.cloud.google.com/iam-admin/serviceaccounts) | Google account and Play developer registration (listed USD 25 one-time fee; confirm current regional terms). Service accounts are IAM identities, not purchased API keys | Individual or organization enrollment subject to verification; organization/D-U-N-S requirements where applicable. Play testing/release policies apply. Sideloaded Android dev APK/Expo Go does not inherently need Play enrollment | Create matching package/app record; least-privilege Play submission service-account JSON belongs in secure EAS/CI credential storage, not source or mobile bundle. Fill actual submit configuration only when distribution is planned |
+| [Firebase Console](https://console.firebase.google.com/), [Expo FCM setup](https://docs.expo.dev/push-notifications/fcm-credentials/) | Google/Firebase project; FCM is a no-cost product, broader cloud usage/billing is separate | No LLC prerequisite. Needed only for Android native push in chosen build, not current Expo Go flow | Configure Android Firebase app and FCM v1 service-account credential through EAS. Public client config and private server/service-account JSON are different. APS server uses Expo Push; no current `FCM_*` env input |
+| [OpenAI direct API keys](https://platform.openai.com/api-keys) | Direct API account with applicable API billing if deliberately choosing BYO later; not needed for current managed proxy | No general LLC/domain requirement; usage/verification eligibility may apply. Do not assume a ChatGPT plan pays API usage | **Wait:** current `OPENAI_API_KEY` catalog alias does not power the implemented image adapter |
+| [PartsTech](https://partstech.com/) | Shop/integration account and provider-approved commercial/API access; pricing/billing/sandbox entitlement not verified for APS | Shop approval/account IDs may be required; exact legal-entity terms must be confirmed with provider | **Wait:** no operational adapter. Future provider-approved API key/shop ID would match `PARTSTECH_API_KEY`/`PARTSTECH_SHOP_ID`; do not open/pay an account merely for a readiness probe |
+| [Meta developer apps](https://developers.facebook.com/apps/), [TikTok developer portal](https://developers.tiktok.com/), [X developer portal](https://developer.x.com/) | Developer app plus target Page/professional/user accounts; developer access/review and any paid API tier depend on provider and selected scopes | Meta professional/Page requirements, TikTok posting approval, X posting access; do not assume ordinary social signup grants API production publishing | **Wait:** future tokens/IDs correspond to catalog aliases. No APS OAuth callback/refresh/publish implementation; do not buy access or invent redirect URLs now |
+
+### Free/public services needing no copied credential
+
+NHTSA vPIC (`https://vpic.nhtsa.dot.gov/api/`) and public Nominatim
+(`https://nominatim.openstreetmap.org/`) use unauthenticated requests in APS.
+They need network availability and compliance with provider usage policies,
+not a Google Maps/Mapbox/NHTSA key. Public Nominatim is not a purchased SLA;
+review attribution, identification, caching and rate limits before scaling.
+Internal growth analytics and curated parts need the existing database only.
+Local generated-media files need storage durability/access planning, not a
+Cloudinary/S3 credential that no adapter consumes.
+
+## 13. Business timing and local/beta/production decisions
+
+### Genuine business-dependent steps
+
+| Step | Wait for what, and why? | Can anything be prepared now? |
+| --- | --- | --- |
+| Live Stripe activation as APS LLC | Accurate legal entity/tax/representative information and provider-required verification. Do not enroll a nonexistent entity or substitute invented information | Stripe account/test sandbox, test connector and existing test webhook review |
+| Live Connect verification | Each payee's applicable identity/business information and capabilities. APS formation does not automatically verify independent mechanics/shops | Simulate connected accounts/onboarding with Stripe's designated test facilities |
+| Production settlement / bank payouts | Accepted live capabilities and verified payout banking for the intended entity/payee; actual funds require a real eligible destination | Designate account ownership and review provider requirements; no bank details in project docs |
+| Tax/business identity information | Actual applicable tax identifiers and legal details; requirements vary by country and business type. EIN is not a universal Stripe test requirement | Collect provider's requirement checklist, not sensitive documents |
+| Apple enrollment as APS organization | Legal entity, binding authority, generally D-U-N-S, domain email/public site; organization seller identity must be real | Reserve domain, make website, create individual Apple Account with 2FA; do not imply it is enrolled as APS |
+| Google Play enrollment as APS organization | Applicable organization identity/D-U-N-S and verification; business account must match intended publisher | Review account-type/testing requirements. Individual enrollment is a separate choice, not automatically appropriate for future APS ownership |
+| Supplier commercial onboarding, if later implemented | Provider-dependent shop/company approval and purchasing/payment terms, not established by repository | Ask for API eligibility/pricing documentation; no subscription or credential collection required for beta |
+
+**Not intrinsically business-gated:** production domain ownership, hosting,
+TLS, DNS control, Resend verified sender, Expo/EAS project, AI proxy access
+and development database. They can be prepared now. If they must ultimately
+be owned/paid for by APS LLC, plan ownership/billing transfer or defer the
+organization-owned purchase by choice—not because the code requires an EIN.
+App Store/Google Play individual accounts can exist before an LLC; enrolling
+**as the intended organization** is the conditional wait.
+
+| Stage | Required baseline | Conditional additions / what must not delay it |
+| --- | --- | --- |
+| Local/Replit development and Expo Go | Existing DB/schema, API port, strong session secret, Anthropic proxy pair, valid reachable mobile API host; platform supplies runtime metadata | Admin setup only if needed. No Stripe/email/store/social/parts/video credentials required for supervised no-money flows. Native device tests still necessary |
+| Private supervised beta | Same baseline on reachable service, controlled accounts, confirmed auth/role boundaries and device testing; no exposed weak dev fallback | Password reset email strongly recommended; supervised account recovery may be explicitly limited. Native push/store accounts only if included |
+| Open beta | Stable secure hosted API/domain/DB and session secret, appropriate production-mode runtime, operational recovery/support; verify actual native/API journeys | Treat password-reset delivery as a release gate if self-service recovery is advertised. Money, push, media and store distribution each trigger their own launch requirements |
+| Production launch | Same secure baseline plus production environment separation, real URLs and operational verification | Live payment credentials/verified payouts if taking money; Resend domain if recovery offered; native signing/stores/push when shipping those features; durable media when offered. Excluded social/video/PartsTech/scanner/split features are not credential blockers |
+
+### Current service status summary
+
+- **Stripe — implemented, setup-dependent, not financially acceptance-tested:** current code has Checkout/manual capture/Connect/refund/payout handlers; requires correct connector mode, account readiness and signed webhook verification. Split payouts remain incomplete and are not included in this status.
+- **Resend — implemented but unconfigured at Phase 3 observation:** connector `not_setup`; password-reset delivery needs connector and domain. No signup email verification implementation is present.
+- **Anthropic — implemented and configured by prior metadata:** startup imports succeed; real generation was not acceptance-tested. Maintain billing/credits; do not replace providers.
+- **OpenAI images — implemented but unconfigured at prior observation:** proxy pair missing; BYO alias cannot substitute. Generated media persistence remains local.
+- **Expo/EAS — Expo web/Go tooling implemented; release configuration incomplete:** missing EAS project ID and placeholder release API domain/submission settings. EAS accounts themselves need not wait for LLC.
+- **Push — partially implemented:** guarded native registration and Expo sending exist; project/native credentials needed, ticket/receipt handling incomplete; entirely skipped by this app in Expo Go.
+- **NHTSA VIN decode — implemented, no key required:** public upstream untested in Phase 3; scan/OCR is placeholder, not a credential issue.
+- **Nominatim/geolocation — implemented foreground lookup/manual fallback, no key:** no live map/background tracking implementation; native permission and upstream policy validation remain.
+- **PartsTech — stub:** credentials only change readiness probe. Curated APS database catalog is implemented independently.
+- **Facebook/Instagram/TikTok/X — stubs:** no live publishing/OAuth callback/refresh logic, even if credential status says configured.
+- **AI video — stub; Runway/Pika/Veo/Sora planned:** no useful provider key to configure until an adapter is selected and implemented.
+- **Media storage — partially production-ready:** local generated files and public retrieval implemented, no cloud adapter; verify durability/privacy before a media beta.
+- **Analytics — implemented internally:** no external service credential; metrics' business assumptions are separate from API setup.
+- **Nexpart, WHI Solutions, Worldpac SpeedDial, Twilio — planned/reference-only:** no functional current API integration; do not obtain keys for this phase.
+- **Example-only direct Stripe/Resend env names — no longer needed as setup instructions for this architecture:** connector-backed code is authoritative. They remain documentation debt, not deleted functionality.
+
+### Uncertainty boundaries
+
+Country, intended individual-vs-organization store enrollment, provider account
+ownership, selected beta features, actual domain ownership, supplier entitlements,
+production settings and live verification state have not been established.
+Phase 3 credential-presence observations are dated evidence, not fresh key
+validation in Phase 4. Provider pricing/review policy can change. No physical
+device, payment, email or generation tests were rerun for this documentation
+phase; no value, account or external endpoint was changed.
