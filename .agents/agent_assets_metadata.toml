@@ -62,3 +62,17 @@ mtime_ms = 1789140017026
 storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:098396b5-f3fa-4e71-ae39-a5d9b7f5042e/42e8845d-41aa-4b98-b16d-89aa3492f0c1/2e15b3b2-f5cb-4b0b-a86a-5b4c6f57ec4b"
 storage_version_token = "1789140018223384"
 content_type = "text/html"
+
+[[outputs]]
+id = "JMCyLocNnl9PAAYeQ4wP6"
+uri = "file://docs/api-secret-requirements.md"
+type = "text"
+title = "APS API Secret Requirements and Beta Checklist"
+description = "Complete source-traced configuration inventory, provider and business prerequisites, beta test results, and remaining blockers. Contains no secret values."
+logical_id = "0e420fb6-4b31-4f35-a897-60a28f6d0593"
+content_hash = "sha256:0f82c93d0d1ddedc6ab3b92825a8d58698377ef73c8bedc65e1ddeac08bd273c"
+size = 62348
+mtime_ms = 1789159587336
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:098396b5-f3fa-4e71-ae39-a5d9b7f5042e/0e420fb6-4b31-4f35-a897-60a28f6d0593/4a53120f-be03-44ad-9402-f660d959570c"
+storage_version_token = "1789159606700161"
+content_type = "text/markdown"
