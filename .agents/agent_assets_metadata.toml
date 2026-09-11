@@ -47,3 +47,18 @@ id = "Uo1RnCk3FV0lo0oWJ38fG"
 uri = "file://STRIPE_SECURITY_AUDIT.md"
 type = "text"
 title = "Stripe Security Audit & Hardening"
+logical_id = "a1b7bdc6-3df4-474d-8d3a-02342c730e1b"
+
+[[outputs]]
+id = "rdBekZiOkKToFB-kB3kPs"
+uri = "file://reports/aps-audit-inventory.html"
+type = "text"
+title = "APS technical inventory and dependency findings"
+description = "Searchable appendix: endpoint declarations, mobile screens/components, database models, packages, environment names, and dependency advisories. No secret values."
+logical_id = "42e8845d-41aa-4b98-b16d-89aa3492f0c1"
+content_hash = "sha256:bbb0c4de3359b2eeba2db6653634362d79c45745eb04558677d162f0a1e1e850"
+size = 198245
+mtime_ms = 1789140017026
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:098396b5-f3fa-4e71-ae39-a5d9b7f5042e/42e8845d-41aa-4b98-b16d-89aa3492f0c1/2e15b3b2-f5cb-4b0b-a86a-5b4c6f57ec4b"
+storage_version_token = "1789140018223384"
+content_type = "text/html"
