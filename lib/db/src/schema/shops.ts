@@ -1,7 +1,17 @@
-import { pgTable, serial, integer, text, timestamp, doublePrecision, index } from "drizzle-orm/pg-core";
+import {
+  foreignKey,
+  pgTable,
+  serial,
+  integer,
+  text,
+  timestamp,
+  doublePrecision,
+  index,
+} from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
+import { partnerOrganizationsTable } from "./partnerOrganizations";
 
 // Fleet & Commercial Partners (formerly "Ghost Garage shops"). Owned by users
 // with role="shop_owner" (DB role name kept for zero-downtime; UI labels this
@@ -15,6 +25,9 @@ import { usersTable } from "./users";
 export const shopsTable = pgTable("shops", {
   id: serial("id").primaryKey(),
   ownerId: integer("owner_id").notNull().references(() => usersTable.id),
+  // Nullable by design: all existing locations remain unlinked until an
+  // owner explicitly links them to an organization.
+  organizationId: integer("organization_id"),
   partnerKind: text("partner_kind", { enum: ["independent_shop", "dealership", "fleet", "gsa"] })
     .notNull()
     .default("independent_shop"),
@@ -59,7 +72,13 @@ export const shopsTable = pgTable("shops", {
 
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
+  foreignKey({
+    name: "shops_organization_owner_fk",
+    columns: [t.organizationId, t.ownerId],
+    foreignColumns: [partnerOrganizationsTable.id, partnerOrganizationsTable.primaryOwnerId],
+  }),
   index("shops_owner_id_idx").on(t.ownerId),
+  index("shops_organization_id_idx").on(t.organizationId),
   index("shops_status_idx").on(t.status),
 ]);
 

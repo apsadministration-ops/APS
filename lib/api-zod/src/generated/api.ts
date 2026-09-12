@@ -2716,11 +2716,221 @@ export const CreateShopBody = zod.object({
 });
 
 /**
+ * @summary List organizations owned by the current shop_owner
+ */
+export const ListPartnerOrganizationsResponseItem = zod.object({
+  id: zod.number(),
+  primaryOwnerId: zod.number(),
+  name: zod.string(),
+  subtype: zod.enum(["shop", "dealership", "fleet", "commercial_business"]),
+  contactName: zod.string().nullable(),
+  phone: zod.string(),
+  email: zod.string().email(),
+  address: zod.string(),
+  city: zod.string(),
+  region: zod.string(),
+  zipCode: zod.string().nullable(),
+  status: zod.enum(["active", "inactive"]),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+export const ListPartnerOrganizationsResponse = zod.array(
+  ListPartnerOrganizationsResponseItem,
+);
+
+/**
+ * @summary Create an explicit partner organization
+ */
+
+export const CreatePartnerOrganizationBody = zod.object({
+  name: zod.string().min(1),
+  subtype: zod.enum(["shop", "dealership", "fleet", "commercial_business"]),
+  contactName: zod.string().optional(),
+  phone: zod.string().min(1),
+  email: zod.string().email(),
+  address: zod.string().min(1),
+  city: zod.string().min(1),
+  region: zod.string().min(1),
+  zipCode: zod.string().optional(),
+});
+
+/**
+ * @summary Get an owned partner organization
+ */
+export const GetPartnerOrganizationParams = zod.object({
+  organizationId: zod.coerce.number(),
+});
+
+export const GetPartnerOrganizationResponse = zod.object({
+  id: zod.number(),
+  primaryOwnerId: zod.number(),
+  name: zod.string(),
+  subtype: zod.enum(["shop", "dealership", "fleet", "commercial_business"]),
+  contactName: zod.string().nullable(),
+  phone: zod.string(),
+  email: zod.string().email(),
+  address: zod.string(),
+  city: zod.string(),
+  region: zod.string(),
+  zipCode: zod.string().nullable(),
+  status: zod.enum(["active", "inactive"]),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Update an owned partner organization
+ */
+export const UpdatePartnerOrganizationParams = zod.object({
+  organizationId: zod.coerce.number(),
+});
+
+export const UpdatePartnerOrganizationBody = zod.object({
+  name: zod.string().min(1).optional(),
+  subtype: zod
+    .enum(["shop", "dealership", "fleet", "commercial_business"])
+    .optional(),
+  contactName: zod.string().nullish(),
+  phone: zod.string().min(1).optional(),
+  email: zod.string().email().optional(),
+  address: zod.string().min(1).optional(),
+  city: zod.string().min(1).optional(),
+  region: zod.string().min(1).optional(),
+  zipCode: zod.string().nullish(),
+  status: zod.enum(["active", "inactive"]).optional(),
+});
+
+export const UpdatePartnerOrganizationResponse = zod.object({
+  id: zod.number(),
+  primaryOwnerId: zod.number(),
+  name: zod.string(),
+  subtype: zod.enum(["shop", "dealership", "fleet", "commercial_business"]),
+  contactName: zod.string().nullable(),
+  phone: zod.string(),
+  email: zod.string().email(),
+  address: zod.string(),
+  city: zod.string(),
+  region: zod.string(),
+  zipCode: zod.string().nullable(),
+  status: zod.enum(["active", "inactive"]),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary List owned shop locations linked to an organization
+ */
+export const ListPartnerOrganizationLocationsParams = zod.object({
+  organizationId: zod.coerce.number(),
+});
+
+export const ListPartnerOrganizationLocationsResponseItem = zod.object({
+  id: zod.number(),
+  ownerId: zod.number(),
+  organizationId: zod.number().nullable(),
+  partnerKind: zod
+    .enum(["independent_shop", "dealership", "fleet", "gsa"])
+    .describe(
+      "Discriminates the partner type. `independent_shop` uses the classic\nbay-rental marketplace. `dealership`, `fleet`, and `gsa` (Government \/\nGSA accounts) can additionally post overflow jobs at a reduced\ncommission.\n",
+    ),
+  name: zod.string(),
+  address: zod.string(),
+  city: zod.string(),
+  region: zod.string(),
+  zipCode: zod.string(),
+  lat: zod.number().nullish(),
+  lng: zod.number().nullish(),
+  phone: zod.string().nullish(),
+  federalEin: zod
+    .string()
+    .nullish()
+    .describe(
+      "Federal EIN \/ Tax ID — used to uniquely identify the partner business with the IRS.",
+    ),
+  businessLicense: zod
+    .string()
+    .nullish()
+    .describe("State or local business license number."),
+  insuranceCarrier: zod
+    .string()
+    .nullish()
+    .describe(
+      "DEPRECATED. Per-vehicle insurance now lives on `Vehicle.insuranceCarrier`.",
+    ),
+  insurancePolicyNumber: zod
+    .string()
+    .nullish()
+    .describe(
+      "DEPRECATED. Per-vehicle insurance now lives on `Vehicle.insurancePolicyNumber`.",
+    ),
+  status: zod.enum(["active", "inactive"]),
+  createdAt: zod.coerce.date(),
+});
+export const ListPartnerOrganizationLocationsResponse = zod.array(
+  ListPartnerOrganizationLocationsResponseItem,
+);
+
+/**
+ * @summary Link one existing owned shop location
+ */
+export const LinkPartnerOrganizationLocationParams = zod.object({
+  organizationId: zod.coerce.number(),
+});
+
+export const LinkPartnerOrganizationLocationBody = zod.object({
+  shopId: zod.number(),
+});
+
+export const LinkPartnerOrganizationLocationResponse = zod.object({
+  id: zod.number(),
+  ownerId: zod.number(),
+  organizationId: zod.number().nullable(),
+  partnerKind: zod
+    .enum(["independent_shop", "dealership", "fleet", "gsa"])
+    .describe(
+      "Discriminates the partner type. `independent_shop` uses the classic\nbay-rental marketplace. `dealership`, `fleet`, and `gsa` (Government \/\nGSA accounts) can additionally post overflow jobs at a reduced\ncommission.\n",
+    ),
+  name: zod.string(),
+  address: zod.string(),
+  city: zod.string(),
+  region: zod.string(),
+  zipCode: zod.string(),
+  lat: zod.number().nullish(),
+  lng: zod.number().nullish(),
+  phone: zod.string().nullish(),
+  federalEin: zod
+    .string()
+    .nullish()
+    .describe(
+      "Federal EIN \/ Tax ID — used to uniquely identify the partner business with the IRS.",
+    ),
+  businessLicense: zod
+    .string()
+    .nullish()
+    .describe("State or local business license number."),
+  insuranceCarrier: zod
+    .string()
+    .nullish()
+    .describe(
+      "DEPRECATED. Per-vehicle insurance now lives on `Vehicle.insuranceCarrier`.",
+    ),
+  insurancePolicyNumber: zod
+    .string()
+    .nullish()
+    .describe(
+      "DEPRECATED. Per-vehicle insurance now lives on `Vehicle.insurancePolicyNumber`.",
+    ),
+  status: zod.enum(["active", "inactive"]),
+  createdAt: zod.coerce.date(),
+});
+
+/**
  * @summary List shops owned by the current shop_owner
  */
 export const ListMyShopsResponseItem = zod.object({
   id: zod.number(),
   ownerId: zod.number(),
+  organizationId: zod.number().nullable(),
   partnerKind: zod
     .enum(["independent_shop", "dealership", "fleet", "gsa"])
     .describe(
@@ -2772,6 +2982,7 @@ export const GetShopResponse = zod
   .object({
     id: zod.number(),
     ownerId: zod.number(),
+    organizationId: zod.number().nullable(),
     partnerKind: zod
       .enum(["independent_shop", "dealership", "fleet", "gsa"])
       .describe(
@@ -2863,6 +3074,7 @@ export const UpdateShopBody = zod.object({
 export const UpdateShopResponse = zod.object({
   id: zod.number(),
   ownerId: zod.number(),
+  organizationId: zod.number().nullable(),
   partnerKind: zod
     .enum(["independent_shop", "dealership", "fleet", "gsa"])
     .describe(
@@ -3043,6 +3255,7 @@ export const ListAvailableBaysResponseItem = zod
       shop: zod.object({
         id: zod.number(),
         ownerId: zod.number(),
+        organizationId: zod.number().nullable(),
         partnerKind: zod
           .enum(["independent_shop", "dealership", "fleet", "gsa"])
           .describe(
@@ -3120,6 +3333,7 @@ export const GetBayResponse = zod
       shop: zod.object({
         id: zod.number(),
         ownerId: zod.number(),
+        organizationId: zod.number().nullable(),
         partnerKind: zod
           .enum(["independent_shop", "dealership", "fleet", "gsa"])
           .describe(

@@ -38,6 +38,7 @@ import partsRouter from "./parts";
 import mediaRouter from "./media";
 import integrationsRouter from "./integrations";
 import partnerJobsRouter from "./partnerJobs";
+import partnerOrganizationsRouter from "./partnerOrganizations";
 
 const router: IRouter = Router();
 
@@ -75,6 +76,7 @@ router.use(tipsRouter);
 router.use(disputesRouter);
 router.use(payoutsRouter);
 router.use(invoiceRouter);
+router.use(partnerOrganizationsRouter);
 router.use(adminFinanceRouter);
 router.use(partsRouter);
 router.use(mediaRouter);

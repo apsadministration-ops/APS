@@ -4,10 +4,12 @@ import { PARTNER_LAYER_LABEL } from "@/lib/partnerIdentity";
 import { useAuth } from "@/context/AuthContext";
 import { Feather } from "@expo/vector-icons";
 import { confirm } from "@/utils/confirm";
+import { useRouter } from "expo-router";
 
 export default function ShopOwnerProfileScreen() {
   const colors = useColors();
   const { user, logout } = useAuth();
+  const router = useRouter();
 
   const handleLogout = async () => {
     const ok = await confirm({
@@ -37,6 +39,28 @@ export default function ShopOwnerProfileScreen() {
         </View>
 
         <Pressable
+          testID="link-manage-organizations"
+          accessibilityRole="button"
+          onPress={() => router.push("/(shop-owner)/organizations" as any)}
+          style={[styles.row, { backgroundColor: colors.card, borderColor: colors.border }]}
+        >
+          <View style={[styles.rowIcon, { backgroundColor: colors.primary + "20" }]}>
+            <Feather name="briefcase" size={18} color={colors.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.rowLabel, { color: colors.foreground }]}>
+              Manage organizations
+            </Text>
+            <Text style={[styles.rowHint, { color: colors.mutedForeground }]}>
+              Create, edit, and explicitly link locations
+            </Text>
+          </View>
+          <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+        </Pressable>
+
+        <Pressable
+          testID="button-logout"
+          accessibilityRole="button"
           style={[styles.row, { backgroundColor: colors.card, borderColor: colors.border }]}
           onPress={handleLogout}
         >
@@ -65,4 +89,5 @@ const styles = StyleSheet.create({
   },
   rowIcon: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   rowLabel: { fontSize: 15, fontWeight: "600", flex: 1 },
+  rowHint: { fontSize: 12, marginTop: 3 },
 });

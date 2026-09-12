@@ -75,6 +75,10 @@ import type {
   MechanicProfile,
   MechanicSummary,
   OwnershipRecord,
+  PartnerOrganization,
+  PartnerOrganizationInput,
+  PartnerOrganizationLocationLink,
+  PartnerOrganizationUpdate,
   PartsCatalogEntryBody,
   PartsCatalogResponse,
   PartsRecommendations,
@@ -4241,6 +4245,557 @@ export const useCreateShop = <
   TContext
 > => {
   return useMutation(getCreateShopMutationOptions(options));
+};
+
+/**
+ * @summary List organizations owned by the current shop_owner
+ */
+export const getListPartnerOrganizationsUrl = () => {
+  return `/api/partner-organizations`;
+};
+
+export const listPartnerOrganizations = async (
+  options?: RequestInit,
+): Promise<PartnerOrganization[]> => {
+  return customFetch<PartnerOrganization[]>(getListPartnerOrganizationsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListPartnerOrganizationsQueryKey = () => {
+  return [`/api/partner-organizations`] as const;
+};
+
+export const getListPartnerOrganizationsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listPartnerOrganizations>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listPartnerOrganizations>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListPartnerOrganizationsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listPartnerOrganizations>>
+  > = ({ signal }) => listPartnerOrganizations({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listPartnerOrganizations>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListPartnerOrganizationsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listPartnerOrganizations>>
+>;
+export type ListPartnerOrganizationsQueryError = ErrorType<void>;
+
+/**
+ * @summary List organizations owned by the current shop_owner
+ */
+
+export function useListPartnerOrganizations<
+  TData = Awaited<ReturnType<typeof listPartnerOrganizations>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listPartnerOrganizations>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListPartnerOrganizationsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create an explicit partner organization
+ */
+export const getCreatePartnerOrganizationUrl = () => {
+  return `/api/partner-organizations`;
+};
+
+export const createPartnerOrganization = async (
+  partnerOrganizationInput: PartnerOrganizationInput,
+  options?: RequestInit,
+): Promise<PartnerOrganization> => {
+  return customFetch<PartnerOrganization>(getCreatePartnerOrganizationUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(partnerOrganizationInput),
+  });
+};
+
+export const getCreatePartnerOrganizationMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createPartnerOrganization>>,
+    TError,
+    { data: BodyType<PartnerOrganizationInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createPartnerOrganization>>,
+  TError,
+  { data: BodyType<PartnerOrganizationInput> },
+  TContext
+> => {
+  const mutationKey = ["createPartnerOrganization"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createPartnerOrganization>>,
+    { data: BodyType<PartnerOrganizationInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createPartnerOrganization(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreatePartnerOrganizationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createPartnerOrganization>>
+>;
+export type CreatePartnerOrganizationMutationBody =
+  BodyType<PartnerOrganizationInput>;
+export type CreatePartnerOrganizationMutationError = ErrorType<void>;
+
+/**
+ * @summary Create an explicit partner organization
+ */
+export const useCreatePartnerOrganization = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createPartnerOrganization>>,
+    TError,
+    { data: BodyType<PartnerOrganizationInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createPartnerOrganization>>,
+  TError,
+  { data: BodyType<PartnerOrganizationInput> },
+  TContext
+> => {
+  return useMutation(getCreatePartnerOrganizationMutationOptions(options));
+};
+
+/**
+ * @summary Get an owned partner organization
+ */
+export const getGetPartnerOrganizationUrl = (organizationId: number) => {
+  return `/api/partner-organizations/${organizationId}`;
+};
+
+export const getPartnerOrganization = async (
+  organizationId: number,
+  options?: RequestInit,
+): Promise<PartnerOrganization> => {
+  return customFetch<PartnerOrganization>(
+    getGetPartnerOrganizationUrl(organizationId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetPartnerOrganizationQueryKey = (organizationId: number) => {
+  return [`/api/partner-organizations/${organizationId}`] as const;
+};
+
+export const getGetPartnerOrganizationQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPartnerOrganization>>,
+  TError = ErrorType<void>,
+>(
+  organizationId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPartnerOrganization>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetPartnerOrganizationQueryKey(organizationId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getPartnerOrganization>>
+  > = ({ signal }) =>
+    getPartnerOrganization(organizationId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!organizationId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPartnerOrganization>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPartnerOrganizationQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPartnerOrganization>>
+>;
+export type GetPartnerOrganizationQueryError = ErrorType<void>;
+
+/**
+ * @summary Get an owned partner organization
+ */
+
+export function useGetPartnerOrganization<
+  TData = Awaited<ReturnType<typeof getPartnerOrganization>>,
+  TError = ErrorType<void>,
+>(
+  organizationId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPartnerOrganization>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPartnerOrganizationQueryOptions(
+    organizationId,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Update an owned partner organization
+ */
+export const getUpdatePartnerOrganizationUrl = (organizationId: number) => {
+  return `/api/partner-organizations/${organizationId}`;
+};
+
+export const updatePartnerOrganization = async (
+  organizationId: number,
+  partnerOrganizationUpdate: PartnerOrganizationUpdate,
+  options?: RequestInit,
+): Promise<PartnerOrganization> => {
+  return customFetch<PartnerOrganization>(
+    getUpdatePartnerOrganizationUrl(organizationId),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(partnerOrganizationUpdate),
+    },
+  );
+};
+
+export const getUpdatePartnerOrganizationMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updatePartnerOrganization>>,
+    TError,
+    { organizationId: number; data: BodyType<PartnerOrganizationUpdate> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updatePartnerOrganization>>,
+  TError,
+  { organizationId: number; data: BodyType<PartnerOrganizationUpdate> },
+  TContext
+> => {
+  const mutationKey = ["updatePartnerOrganization"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updatePartnerOrganization>>,
+    { organizationId: number; data: BodyType<PartnerOrganizationUpdate> }
+  > = (props) => {
+    const { organizationId, data } = props ?? {};
+
+    return updatePartnerOrganization(organizationId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdatePartnerOrganizationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updatePartnerOrganization>>
+>;
+export type UpdatePartnerOrganizationMutationBody =
+  BodyType<PartnerOrganizationUpdate>;
+export type UpdatePartnerOrganizationMutationError = ErrorType<void>;
+
+/**
+ * @summary Update an owned partner organization
+ */
+export const useUpdatePartnerOrganization = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updatePartnerOrganization>>,
+    TError,
+    { organizationId: number; data: BodyType<PartnerOrganizationUpdate> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updatePartnerOrganization>>,
+  TError,
+  { organizationId: number; data: BodyType<PartnerOrganizationUpdate> },
+  TContext
+> => {
+  return useMutation(getUpdatePartnerOrganizationMutationOptions(options));
+};
+
+/**
+ * @summary List owned shop locations linked to an organization
+ */
+export const getListPartnerOrganizationLocationsUrl = (
+  organizationId: number,
+) => {
+  return `/api/partner-organizations/${organizationId}/locations`;
+};
+
+export const listPartnerOrganizationLocations = async (
+  organizationId: number,
+  options?: RequestInit,
+): Promise<Shop[]> => {
+  return customFetch<Shop[]>(
+    getListPartnerOrganizationLocationsUrl(organizationId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getListPartnerOrganizationLocationsQueryKey = (
+  organizationId: number,
+) => {
+  return [`/api/partner-organizations/${organizationId}/locations`] as const;
+};
+
+export const getListPartnerOrganizationLocationsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listPartnerOrganizationLocations>>,
+  TError = ErrorType<void>,
+>(
+  organizationId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listPartnerOrganizationLocations>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getListPartnerOrganizationLocationsQueryKey(organizationId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listPartnerOrganizationLocations>>
+  > = ({ signal }) =>
+    listPartnerOrganizationLocations(organizationId, {
+      signal,
+      ...requestOptions,
+    });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!organizationId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listPartnerOrganizationLocations>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListPartnerOrganizationLocationsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listPartnerOrganizationLocations>>
+>;
+export type ListPartnerOrganizationLocationsQueryError = ErrorType<void>;
+
+/**
+ * @summary List owned shop locations linked to an organization
+ */
+
+export function useListPartnerOrganizationLocations<
+  TData = Awaited<ReturnType<typeof listPartnerOrganizationLocations>>,
+  TError = ErrorType<void>,
+>(
+  organizationId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listPartnerOrganizationLocations>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListPartnerOrganizationLocationsQueryOptions(
+    organizationId,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Link one existing owned shop location
+ */
+export const getLinkPartnerOrganizationLocationUrl = (
+  organizationId: number,
+) => {
+  return `/api/partner-organizations/${organizationId}/locations`;
+};
+
+export const linkPartnerOrganizationLocation = async (
+  organizationId: number,
+  partnerOrganizationLocationLink: PartnerOrganizationLocationLink,
+  options?: RequestInit,
+): Promise<Shop> => {
+  return customFetch<Shop>(
+    getLinkPartnerOrganizationLocationUrl(organizationId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(partnerOrganizationLocationLink),
+    },
+  );
+};
+
+export const getLinkPartnerOrganizationLocationMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof linkPartnerOrganizationLocation>>,
+    TError,
+    { organizationId: number; data: BodyType<PartnerOrganizationLocationLink> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof linkPartnerOrganizationLocation>>,
+  TError,
+  { organizationId: number; data: BodyType<PartnerOrganizationLocationLink> },
+  TContext
+> => {
+  const mutationKey = ["linkPartnerOrganizationLocation"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof linkPartnerOrganizationLocation>>,
+    { organizationId: number; data: BodyType<PartnerOrganizationLocationLink> }
+  > = (props) => {
+    const { organizationId, data } = props ?? {};
+
+    return linkPartnerOrganizationLocation(
+      organizationId,
+      data,
+      requestOptions,
+    );
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type LinkPartnerOrganizationLocationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof linkPartnerOrganizationLocation>>
+>;
+export type LinkPartnerOrganizationLocationMutationBody =
+  BodyType<PartnerOrganizationLocationLink>;
+export type LinkPartnerOrganizationLocationMutationError = ErrorType<void>;
+
+/**
+ * @summary Link one existing owned shop location
+ */
+export const useLinkPartnerOrganizationLocation = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof linkPartnerOrganizationLocation>>,
+    TError,
+    { organizationId: number; data: BodyType<PartnerOrganizationLocationLink> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof linkPartnerOrganizationLocation>>,
+  TError,
+  { organizationId: number; data: BodyType<PartnerOrganizationLocationLink> },
+  TContext
+> => {
+  return useMutation(
+    getLinkPartnerOrganizationLocationMutationOptions(options),
+  );
 };
 
 /**

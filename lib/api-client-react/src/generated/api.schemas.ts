@@ -874,6 +874,8 @@ export const ShopStatus = {
 export interface Shop {
   id: number;
   ownerId: number;
+  /** @nullable */
+  organizationId: number | null;
   /** Discriminates the partner type. `independent_shop` uses the classic
 bay-rental marketplace. `dealership`, `fleet`, and `gsa` (Government /
 GSA accounts) can additionally post overflow jobs at a reduced
@@ -904,6 +906,112 @@ commission.
   insurancePolicyNumber?: string | null;
   status: ShopStatus;
   createdAt: string;
+}
+
+export type PartnerOrganizationSubtype =
+  (typeof PartnerOrganizationSubtype)[keyof typeof PartnerOrganizationSubtype];
+
+export const PartnerOrganizationSubtype = {
+  shop: "shop",
+  dealership: "dealership",
+  fleet: "fleet",
+  commercial_business: "commercial_business",
+} as const;
+
+export type PartnerOrganizationStatus =
+  (typeof PartnerOrganizationStatus)[keyof typeof PartnerOrganizationStatus];
+
+export const PartnerOrganizationStatus = {
+  active: "active",
+  inactive: "inactive",
+} as const;
+
+export interface PartnerOrganization {
+  id: number;
+  primaryOwnerId: number;
+  name: string;
+  subtype: PartnerOrganizationSubtype;
+  /** @nullable */
+  contactName: string | null;
+  phone: string;
+  email: string;
+  address: string;
+  city: string;
+  region: string;
+  /** @nullable */
+  zipCode: string | null;
+  status: PartnerOrganizationStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type PartnerOrganizationInputSubtype =
+  (typeof PartnerOrganizationInputSubtype)[keyof typeof PartnerOrganizationInputSubtype];
+
+export const PartnerOrganizationInputSubtype = {
+  shop: "shop",
+  dealership: "dealership",
+  fleet: "fleet",
+  commercial_business: "commercial_business",
+} as const;
+
+export interface PartnerOrganizationInput {
+  /** @minLength 1 */
+  name: string;
+  subtype: PartnerOrganizationInputSubtype;
+  contactName?: string;
+  /** @minLength 1 */
+  phone: string;
+  email: string;
+  /** @minLength 1 */
+  address: string;
+  /** @minLength 1 */
+  city: string;
+  /** @minLength 1 */
+  region: string;
+  zipCode?: string;
+}
+
+export type PartnerOrganizationUpdateSubtype =
+  (typeof PartnerOrganizationUpdateSubtype)[keyof typeof PartnerOrganizationUpdateSubtype];
+
+export const PartnerOrganizationUpdateSubtype = {
+  shop: "shop",
+  dealership: "dealership",
+  fleet: "fleet",
+  commercial_business: "commercial_business",
+} as const;
+
+export type PartnerOrganizationUpdateStatus =
+  (typeof PartnerOrganizationUpdateStatus)[keyof typeof PartnerOrganizationUpdateStatus];
+
+export const PartnerOrganizationUpdateStatus = {
+  active: "active",
+  inactive: "inactive",
+} as const;
+
+export interface PartnerOrganizationUpdate {
+  /** @minLength 1 */
+  name?: string;
+  subtype?: PartnerOrganizationUpdateSubtype;
+  /** @nullable */
+  contactName?: string | null;
+  /** @minLength 1 */
+  phone?: string;
+  email?: string;
+  /** @minLength 1 */
+  address?: string;
+  /** @minLength 1 */
+  city?: string;
+  /** @minLength 1 */
+  region?: string;
+  /** @nullable */
+  zipCode?: string | null;
+  status?: PartnerOrganizationUpdateStatus;
+}
+
+export interface PartnerOrganizationLocationLink {
+  shopId: number;
 }
 
 export type CreateShopBodyPartnerKind =

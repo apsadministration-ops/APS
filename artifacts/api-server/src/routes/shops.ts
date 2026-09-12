@@ -9,6 +9,7 @@ const router: IRouter = Router();
 function formatShop(s: typeof shopsTable.$inferSelect) {
   return {
     id: s.id, ownerId: s.ownerId,
+    organizationId: s.organizationId ?? null,
     partnerKind: s.partnerKind,
     name: s.name,
     address: s.address, city: s.city, region: s.region, zipCode: s.zipCode,

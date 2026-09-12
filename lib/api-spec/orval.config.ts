@@ -58,6 +58,10 @@ export default defineConfig({
       indexFiles: false,
       override: {
         zod: {
+          // The workspace uses Zod 3. Keep generated validators compatible
+          // with that dependency even when Orval itself detects a newer
+          // default output style.
+          version: 3,
           coerce: {
             query: ['boolean', 'number', 'string'],
             param: ['boolean', 'number', 'string'],

@@ -11,6 +11,8 @@ import type { ShopStatus } from "./shopStatus";
 export interface Shop {
   id: number;
   ownerId: number;
+  /** @nullable */
+  organizationId: number | null;
   /** Discriminates the partner type. `independent_shop` uses the classic
 bay-rental marketplace. `dealership`, `fleet`, and `gsa` (Government /
 GSA accounts) can additionally post overflow jobs at a reduced

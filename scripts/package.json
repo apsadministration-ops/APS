@@ -6,6 +6,8 @@
   "scripts": {
     "hello": "tsx ./src/hello.ts",
     "ghost-garage-demo": "tsx ./src/ghostGarageDemo.ts",
+    "report:partner-organizations": "node ./src/report_partner_organizations.mjs",
+    "migrate:partner-organizations": "node ./src/migrate_partner_organizations.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {

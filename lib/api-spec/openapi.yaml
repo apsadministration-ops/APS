@@ -30,6 +30,8 @@ tags:
     description: AI Assistant for explaining repairs and parts
   - name: shops
     description: Ghost Garage shop management (shop owners list bays for rent)
+  - name: partner-organizations
+    description: Owner-only partner organization foundation
   - name: bays
     description: Rentable service bays inside a shop
   - name: bookings
@@ -1153,6 +1155,145 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Shop"
+
+  # ────────────── Partner organizations ──────────────
+  /partner-organizations:
+    get:
+      operationId: listPartnerOrganizations
+      tags: [partner-organizations]
+      summary: List organizations owned by the current shop_owner
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Organizations owned by the authenticated account
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PartnerOrganization"
+        "401": { description: Unauthorized }
+        "403": { description: Active shop_owner required }
+    post:
+      operationId: createPartnerOrganization
+      tags: [partner-organizations]
+      summary: Create an explicit partner organization
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PartnerOrganizationInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartnerOrganization"
+        "400": { description: Validation error }
+        "401": { description: Unauthorized }
+        "403": { description: Active shop_owner required }
+
+  /partner-organizations/{organizationId}:
+    parameters:
+      - name: organizationId
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      operationId: getPartnerOrganization
+      tags: [partner-organizations]
+      summary: Get an owned partner organization
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartnerOrganization"
+        "401": { description: Unauthorized }
+        "403": { description: Forbidden }
+        "404": { description: Organization not found }
+    patch:
+      operationId: updatePartnerOrganization
+      tags: [partner-organizations]
+      summary: Update an owned partner organization
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PartnerOrganizationUpdate"
+      responses:
+        "200":
+          description: Updated organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartnerOrganization"
+        "400": { description: Validation error }
+        "401": { description: Unauthorized }
+        "403": { description: Forbidden }
+        "404": { description: Organization not found }
+
+  /partner-organizations/{organizationId}/locations:
+    parameters:
+      - name: organizationId
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      operationId: listPartnerOrganizationLocations
+      tags: [partner-organizations]
+      summary: List owned shop locations linked to an organization
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Linked shop locations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Shop"
+        "401": { description: Unauthorized }
+        "403": { description: Forbidden }
+        "404": { description: Organization not found }
+    post:
+      operationId: linkPartnerOrganizationLocation
+      tags: [partner-organizations]
+      summary: Link one existing owned shop location
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PartnerOrganizationLocationLink"
+      responses:
+        "200":
+          description: Linked shop location
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Shop"
+        "400": { description: Validation error }
+        "401": { description: Unauthorized }
+        "403": { description: Forbidden }
+        "404": { description: Organization or shop not found }
+        "409": { description: Shop is already linked to an organization }
 
   /shops/mine:
     get:
@@ -3014,6 +3155,8 @@ components:
           type: integer
         ownerId:
           type: integer
+        organizationId:
+          type: ["integer", "null"]
         partnerKind:
           type: string
           enum: [independent_shop, dealership, fleet, gsa]
@@ -3065,7 +3208,118 @@ components:
         createdAt:
           type: string
           format: date-time
-      required: [id, ownerId, partnerKind, name, address, city, region, zipCode, status, createdAt]
+      required: [id, ownerId, organizationId, partnerKind, name, address, city, region, zipCode, status, createdAt]
+
+    PartnerOrganization:
+      type: object
+      properties:
+        id:
+          type: integer
+        primaryOwnerId:
+          type: integer
+        name:
+          type: string
+        subtype:
+          type: string
+          enum: [shop, dealership, fleet, commercial_business]
+        contactName:
+          type: ["string", "null"]
+        phone:
+          type: string
+        email:
+          type: string
+          format: email
+        address:
+          type: string
+        city:
+          type: string
+        region:
+          type: string
+        zipCode:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [active, inactive]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, primaryOwnerId, name, subtype, contactName, phone, email, address, city, region, zipCode, status, createdAt, updatedAt]
+
+    PartnerOrganizationInput:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+        subtype:
+          type: string
+          enum: [shop, dealership, fleet, commercial_business]
+        contactName:
+          type: string
+        phone:
+          type: string
+          minLength: 1
+        email:
+          type: string
+          format: email
+        address:
+          type: string
+          minLength: 1
+        city:
+          type: string
+          minLength: 1
+        region:
+          type: string
+          minLength: 1
+        zipCode:
+          type: string
+      required: [name, subtype, phone, email, address, city, region]
+
+    PartnerOrganizationUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 1
+        subtype:
+          type: string
+          enum: [shop, dealership, fleet, commercial_business]
+        contactName:
+          type: ["string", "null"]
+        phone:
+          type: string
+          minLength: 1
+        email:
+          type: string
+          format: email
+        address:
+          type: string
+          minLength: 1
+        city:
+          type: string
+          minLength: 1
+        region:
+          type: string
+          minLength: 1
+        zipCode:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [active, inactive]
+
+    PartnerOrganizationLocationLink:
+      type: object
+      additionalProperties: false
+      properties:
+        shopId:
+          type: integer
+      required: [shopId]
 
     CreateShopBody:
       type: object

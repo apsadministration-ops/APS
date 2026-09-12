@@ -4,7 +4,13 @@ import {
 } from "react-native";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
-import { useListMyShops, useCreateShop, getListMyShopsQueryKey } from "@workspace/api-client-react";
+import {
+  useListMyShops,
+  useCreateShop,
+  getListMyShopsQueryKey,
+  useListPartnerOrganizations,
+  getListPartnerOrganizationsQueryKey,
+} from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
@@ -12,6 +18,8 @@ import { useState } from "react";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { alertMessage } from "@/utils/confirm";
 import { PARTNER_LAYER_LABEL, PARTNER_LAYER_DESCRIPTION } from "@/lib/partnerIdentity";
+import { partnerOrganizationSubtypeLabel } from "@/lib/partnerOrganization";
+import { useSelectedPartnerOrganization } from "@/hooks/useSelectedPartnerOrganization";
 
 export default function ShopsListScreen() {
   const colors = useColors();
@@ -23,6 +31,10 @@ export default function ShopsListScreen() {
   const { data: shops, isLoading, refetch, isRefetching } = useListMyShops({
     query: { enabled, queryKey: getListMyShopsQueryKey() },
   });
+  const { data: organizations } = useListPartnerOrganizations({
+    query: { enabled, queryKey: getListPartnerOrganizationsQueryKey() },
+  });
+  const { selectedOrganization } = useSelectedPartnerOrganization(user?.id, organizations);
   const createMutation = useCreateShop();
 
   type PartnerKind = "independent_shop" | "dealership" | "fleet" | "gsa";
@@ -107,6 +119,38 @@ export default function ShopsListScreen() {
         <Text style={[styles.sub, { color: colors.mutedForeground }]}>
           {PARTNER_LAYER_DESCRIPTION} One owner, multiple locations.
         </Text>
+
+        {selectedOrganization ? (
+          <Pressable
+            testID="card-selected-organization-summary"
+            accessibilityRole="button"
+            onPress={() => router.push("/(shop-owner)/organizations" as any)}
+            style={[styles.organizationSummary, { backgroundColor: colors.card, borderColor: colors.border }]}
+          >
+            <View style={[styles.organizationSummaryIcon, { backgroundColor: colors.primary + "18" }]}>
+              <Feather name="briefcase" size={17} color={colors.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.organizationSummaryLabel, { color: colors.mutedForeground }]}>
+                SELECTED ORGANIZATION
+              </Text>
+              <Text
+                testID="text-selected-organization-name"
+                style={[styles.organizationSummaryName, { color: colors.foreground }]}
+                numberOfLines={1}
+              >
+                {selectedOrganization.name}
+              </Text>
+              <Text
+                testID="text-selected-organization-subtype"
+                style={[styles.organizationSummarySubtype, { color: colors.primary }]}
+              >
+                {partnerOrganizationSubtypeLabel(selectedOrganization.subtype)} · configuration label
+              </Text>
+            </View>
+            <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+          </Pressable>
+        ) : null}
 
         {(shops ?? []).length === 0 ? (
           <View style={[styles.empty, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -293,6 +337,19 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   heading: { fontSize: 22, fontWeight: "800" },
   sub: { fontSize: 13, marginTop: 4, marginBottom: 12, lineHeight: 18 },
+  organizationSummary: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    padding: 12,
+    borderRadius: 13,
+    borderWidth: 1,
+    marginBottom: 4,
+  },
+  organizationSummaryIcon: { width: 34, height: 34, borderRadius: 9, alignItems: "center", justifyContent: "center" },
+  organizationSummaryLabel: { fontSize: 10, fontWeight: "800", letterSpacing: 0.8 },
+  organizationSummaryName: { fontSize: 14, fontWeight: "700", marginTop: 2 },
+  organizationSummarySubtype: { fontSize: 11, fontWeight: "700", marginTop: 2 },
   empty: { padding: 28, alignItems: "center", borderWidth: 1, borderStyle: "dashed", borderRadius: 14, marginTop: 12 },
   emptyTitle: { fontSize: 16, fontWeight: "700", marginTop: 12 },
   emptyDesc: { fontSize: 13, marginTop: 4, textAlign: "center" },

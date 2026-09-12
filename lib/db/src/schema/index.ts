@@ -11,6 +11,7 @@ export * from "./referrals";
 export * from "./favorites";
 export * from "./flags";
 export * from "./shops";
+export * from "./partnerOrganizations";
 export * from "./bays";
 export * from "./bayBookings";
 export * from "./inspections";

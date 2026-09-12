@@ -20,6 +20,7 @@ function formatBay(b: typeof baysTable.$inferSelect) {
 function formatShop(s: typeof shopsTable.$inferSelect) {
   return {
     id: s.id, ownerId: s.ownerId, name: s.name,
+    organizationId: s.organizationId ?? null,
     address: s.address, city: s.city, region: s.region, zipCode: s.zipCode,
     lat: s.lat ?? null, lng: s.lng ?? null, phone: s.phone ?? null,
     insuranceCarrier: s.insuranceCarrier ?? null,

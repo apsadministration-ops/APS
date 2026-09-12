@@ -92,6 +92,16 @@ export default function ShopOwnerTabLayout() {
           tabBarIcon: ({ color }) => <Feather name="user" size={22} color={color} />,
         }}
       />
+      <Tabs.Screen
+        name="organizations"
+        options={{
+          title: "Organizations",
+          // Keep organization management reachable from Profile without adding
+          // another primary tab to the existing shop-owner workflow.
+          tabBarButton: () => null,
+          tabBarIcon: ({ color }) => <Feather name="briefcase" size={22} color={color} />,
+        }}
+      />
     </Tabs>
   );
 }
