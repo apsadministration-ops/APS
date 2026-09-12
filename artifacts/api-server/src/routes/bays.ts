@@ -3,6 +3,7 @@ import { eq, and, sql } from "drizzle-orm";
 import { db, baysTable, shopsTable, usersTable } from "@workspace/db";
 import { CreateBayBody, UpdateBayBody } from "@workspace/api-zod";
 import { authenticate, requireShopOwner, type AuthRequest } from "../middlewares/authenticate";
+import { parsePositiveSafeInteger } from "../lib/validation";
 
 const router: IRouter = Router();
 
@@ -30,8 +31,8 @@ function formatShop(s: typeof shopsTable.$inferSelect) {
 }
 
 router.post("/shops/:shopId/bays", authenticate, requireShopOwner, async (req: AuthRequest, res): Promise<void> => {
-  const shopId = parseInt(String(req.params.shopId), 10);
-  if (isNaN(shopId)) { res.status(400).json({ error: "Invalid shop ID" }); return; }
+  const shopId = parsePositiveSafeInteger(req.params.shopId);
+  if (shopId === null) { res.status(400).json({ error: "Invalid shop ID" }); return; }
   const [shop] = await db.select().from(shopsTable).where(eq(shopsTable.id, shopId));
   if (!shop) { res.status(404).json({ error: "Shop not found" }); return; }
   if (shop.ownerId !== req.userId) { res.status(403).json({ error: "Forbidden" }); return; }
@@ -49,8 +50,8 @@ router.post("/shops/:shopId/bays", authenticate, requireShopOwner, async (req: A
 });
 
 router.get("/shops/:shopId/bays", authenticate, async (req: AuthRequest, res): Promise<void> => {
-  const shopId = parseInt(String(req.params.shopId), 10);
-  if (isNaN(shopId)) { res.status(400).json({ error: "Invalid shop ID" }); return; }
+  const shopId = parsePositiveSafeInteger(req.params.shopId);
+  if (shopId === null) { res.status(400).json({ error: "Invalid shop ID" }); return; }
   // Same access policy as GET /shops/:shopId — bay configs aren't public.
   const [shop] = await db.select().from(shopsTable).where(eq(shopsTable.id, shopId));
   if (!shop) { res.status(404).json({ error: "Shop not found" }); return; }
@@ -99,8 +100,8 @@ router.get("/bays/available", authenticate, async (req: AuthRequest, res): Promi
 });
 
 router.get("/bays/:bayId", authenticate, async (req: AuthRequest, res): Promise<void> => {
-  const bayId = parseInt(String(req.params.bayId), 10);
-  if (isNaN(bayId)) { res.status(400).json({ error: "Invalid bay ID" }); return; }
+  const bayId = parsePositiveSafeInteger(req.params.bayId);
+  if (bayId === null) { res.status(400).json({ error: "Invalid bay ID" }); return; }
   const [row] = await db.select({ bay: baysTable, shop: shopsTable })
     .from(baysTable).innerJoin(shopsTable, eq(baysTable.shopId, shopsTable.id))
     .where(eq(baysTable.id, bayId));
@@ -115,8 +116,8 @@ router.get("/bays/:bayId", authenticate, async (req: AuthRequest, res): Promise<
 });
 
 router.patch("/bays/:bayId", authenticate, requireShopOwner, async (req: AuthRequest, res): Promise<void> => {
-  const bayId = parseInt(String(req.params.bayId), 10);
-  if (isNaN(bayId)) { res.status(400).json({ error: "Invalid bay ID" }); return; }
+  const bayId = parsePositiveSafeInteger(req.params.bayId);
+  if (bayId === null) { res.status(400).json({ error: "Invalid bay ID" }); return; }
   const [bay] = await db.select().from(baysTable).where(eq(baysTable.id, bayId));
   if (!bay) { res.status(404).json({ error: "Bay not found" }); return; }
   const [shop] = await db.select().from(shopsTable).where(eq(shopsTable.id, bay.shopId));

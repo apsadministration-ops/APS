@@ -14,7 +14,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { alertMessage } from "@/utils/confirm";
 import { PARTNER_LAYER_LABEL, PARTNER_LAYER_DESCRIPTION } from "@/lib/partnerIdentity";
@@ -36,6 +36,7 @@ export default function ShopsListScreen() {
   });
   const { selectedOrganization } = useSelectedPartnerOrganization(user?.id, organizations);
   const createMutation = useCreateShop();
+  const [locationFilter, setLocationFilter] = useState<"all" | "selected">("all");
 
   type PartnerKind = "independent_shop" | "dealership" | "fleet" | "gsa";
   const PARTNER_KINDS: { value: PartnerKind; label: string; icon: keyof typeof Feather.glyphMap; desc: string }[] = [
@@ -100,6 +101,14 @@ export default function ShopsListScreen() {
     k === "fleet" ? "truck" :
     k === "gsa" ? "shield" : "tool";
 
+  const selectedOrganizationLocations = useMemo(
+    () => (shops ?? []).filter((shop) => shop.organizationId === selectedOrganization?.id),
+    [selectedOrganization?.id, shops],
+  );
+  const visibleShops = locationFilter === "selected" && selectedOrganization
+    ? selectedOrganizationLocations
+    : (shops ?? []);
+
   if (isLoading) {
     return (
       <View style={[styles.center, { backgroundColor: colors.background }]}>
@@ -119,6 +128,23 @@ export default function ShopsListScreen() {
         <Text style={[styles.sub, { color: colors.mutedForeground }]}>
           {PARTNER_LAYER_DESCRIPTION} One owner, multiple locations.
         </Text>
+
+        <View style={[styles.modelNotice, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[styles.modelNoticeIcon, { backgroundColor: colors.primary + "18" }]}>
+            <Feather name="layers" size={18} color={colors.primary} />
+          </View>
+          <View style={{ flex: 1, gap: 3 }}>
+            <Text style={[styles.modelNoticeTitle, { color: colors.foreground }]}>
+              Keep the partner model clear
+            </Text>
+            <Text style={[styles.modelNoticeText, { color: colors.mutedForeground }]}>
+              Organization = business entity. Physical location = an address. Rentable workspace = a bay inside a location.
+            </Text>
+            <Text style={[styles.modelNoticeText, { color: colors.mutedForeground }]}>
+              Unlinked locations stay unlinked until you explicitly link them; no organization is inferred automatically.
+            </Text>
+          </View>
+        </View>
 
         {selectedOrganization ? (
           <Pressable
@@ -147,22 +173,74 @@ export default function ShopsListScreen() {
               >
                 {partnerOrganizationSubtypeLabel(selectedOrganization.subtype)} · configuration label
               </Text>
+              <Text style={[styles.organizationSummaryMeta, { color: colors.mutedForeground }]}>
+                {selectedOrganizationLocations.length} linked physical location{selectedOrganizationLocations.length === 1 ? "" : "s"}
+              </Text>
             </View>
             <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
           </Pressable>
         ) : null}
 
-        {(shops ?? []).length === 0 ? (
+        <View style={[styles.filterCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.filterTitle, { color: colors.foreground }]}>Location view</Text>
+            <Text style={[styles.filterDescription, { color: colors.mutedForeground }]}>
+              All locations is the legacy default. Optionally narrow to the selected organization.
+            </Text>
+          </View>
+          <View style={styles.filterButtons}>
+            <Pressable
+              testID="button-filter-all-locations"
+              accessibilityRole="button"
+              onPress={() => setLocationFilter("all")}
+              style={[
+                styles.filterButton,
+                {
+                  backgroundColor: locationFilter === "all" ? colors.primary : colors.background,
+                  borderColor: locationFilter === "all" ? colors.primary : colors.border,
+                },
+              ]}
+            >
+              <Text style={[styles.filterButtonText, { color: locationFilter === "all" ? "white" : colors.foreground }]}>
+                All
+              </Text>
+            </Pressable>
+            <Pressable
+              testID="button-filter-selected-organization"
+              accessibilityRole="button"
+              onPress={() => selectedOrganization && setLocationFilter("selected")}
+              disabled={!selectedOrganization}
+              style={[
+                styles.filterButton,
+                {
+                  backgroundColor: locationFilter === "selected" && selectedOrganization ? colors.primary : colors.background,
+                  borderColor: locationFilter === "selected" && selectedOrganization ? colors.primary : colors.border,
+                  opacity: selectedOrganization ? 1 : 0.5,
+                },
+              ]}
+            >
+              <Text style={[styles.filterButtonText, { color: locationFilter === "selected" && selectedOrganization ? "white" : colors.foreground }]}>
+                Selected org
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+
+        {visibleShops.length === 0 ? (
           <View style={[styles.empty, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Feather name="home" size={42} color={colors.mutedForeground} />
-            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No locations yet</Text>
+            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
+              {locationFilter === "selected" && selectedOrganization ? "No linked locations" : "No locations yet"}
+            </Text>
             <Text style={[styles.emptyDesc, { color: colors.mutedForeground }]}>
-              Add your first location — shop, dealership, or fleet — to get started.
+              {locationFilter === "selected" && selectedOrganization
+                ? "Link an existing physical location to this organization from Organizations."
+                : "Add your first location — shop, dealership, or fleet — to get started."}
             </Text>
           </View>
         ) : (
           <View style={{ gap: 10, marginTop: 8 }}>
-            {(shops ?? []).map((s) => {
+            {visibleShops.map((s) => {
               const k = (s as any).partnerKind as string | undefined;
               return (
                 <Pressable
@@ -178,6 +256,13 @@ export default function ShopsListScreen() {
                     <Text style={[styles.kindPill, { color: colors.primary }]}>{kindLabel(k)}</Text>
                     <Text style={[styles.cardSub, { color: colors.mutedForeground }]} numberOfLines={2}>
                       {s.address}, {s.city}, {s.region} {s.zipCode}
+                    </Text>
+                    <Text style={[styles.locationRelationship, { color: s.organizationId != null ? colors.primary : colors.mutedForeground }]}>
+                      {s.organizationId != null
+                        ? selectedOrganization?.id === s.organizationId && selectedOrganization
+                          ? `Organization: ${selectedOrganization.name}`
+                          : "Linked organization"
+                        : "Unlinked location"}
                     </Text>
                     <View style={styles.statusRow}>
                       <View style={[styles.statusDot, { backgroundColor: s.status === "active" ? "#22C55E" : "#F59E0B" }]} />
@@ -337,6 +422,13 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   heading: { fontSize: 22, fontWeight: "800" },
   sub: { fontSize: 13, marginTop: 4, marginBottom: 12, lineHeight: 18 },
+  modelNotice: {
+    flexDirection: "row", alignItems: "flex-start", gap: 10,
+    padding: 12, borderRadius: 13, borderWidth: 1, marginBottom: 10,
+  },
+  modelNoticeIcon: { width: 34, height: 34, borderRadius: 9, alignItems: "center", justifyContent: "center" },
+  modelNoticeTitle: { fontSize: 13, fontWeight: "800" },
+  modelNoticeText: { fontSize: 12, lineHeight: 17 },
   organizationSummary: {
     flexDirection: "row",
     alignItems: "center",
@@ -350,6 +442,16 @@ const styles = StyleSheet.create({
   organizationSummaryLabel: { fontSize: 10, fontWeight: "800", letterSpacing: 0.8 },
   organizationSummaryName: { fontSize: 14, fontWeight: "700", marginTop: 2 },
   organizationSummarySubtype: { fontSize: 11, fontWeight: "700", marginTop: 2 },
+  organizationSummaryMeta: { fontSize: 11, marginTop: 2 },
+  filterCard: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    padding: 12, borderRadius: 13, borderWidth: 1, marginTop: 10,
+  },
+  filterTitle: { fontSize: 13, fontWeight: "800" },
+  filterDescription: { fontSize: 11, lineHeight: 16, marginTop: 2 },
+  filterButtons: { gap: 6 },
+  filterButton: { borderRadius: 8, borderWidth: 1, paddingHorizontal: 9, paddingVertical: 7 },
+  filterButtonText: { fontSize: 11, fontWeight: "700" },
   empty: { padding: 28, alignItems: "center", borderWidth: 1, borderStyle: "dashed", borderRadius: 14, marginTop: 12 },
   emptyTitle: { fontSize: 16, fontWeight: "700", marginTop: 12 },
   emptyDesc: { fontSize: 13, marginTop: 4, textAlign: "center" },
@@ -359,6 +461,7 @@ const styles = StyleSheet.create({
   },
   cardTitle: { fontSize: 16, fontWeight: "700" },
   cardSub: { fontSize: 13, marginTop: 2 },
+  locationRelationship: { fontSize: 11, fontWeight: "700", marginTop: 4 },
   statusRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6 },
   statusDot: { width: 8, height: 8, borderRadius: 4 },
   statusText: { fontSize: 12, fontWeight: "600", textTransform: "capitalize" },

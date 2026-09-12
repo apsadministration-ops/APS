@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { db, shopsTable, baysTable } from "@workspace/db";
 import { CreateShopBody, UpdateShopBody } from "@workspace/api-zod";
 import { authenticate, requireShopOwner, type AuthRequest } from "../middlewares/authenticate";
+import { parsePositiveSafeInteger } from "../lib/validation";
 
 const router: IRouter = Router();
 
@@ -57,8 +58,8 @@ router.get("/shops/mine", authenticate, requireShopOwner, async (req: AuthReques
 });
 
 router.get("/shops/:shopId", authenticate, async (req: AuthRequest, res): Promise<void> => {
-  const shopId = parseInt(String(req.params.shopId), 10);
-  if (isNaN(shopId)) { res.status(400).json({ error: "Invalid shop ID" }); return; }
+  const shopId = parsePositiveSafeInteger(req.params.shopId);
+  if (shopId === null) { res.status(400).json({ error: "Invalid shop ID" }); return; }
   const [shop] = await db.select().from(shopsTable).where(eq(shopsTable.id, shopId));
   if (!shop) { res.status(404).json({ error: "Shop not found" }); return; }
   // Shop + bay configuration is sensitive (rate cards, equipment lists,
@@ -76,8 +77,8 @@ router.get("/shops/:shopId", authenticate, async (req: AuthRequest, res): Promis
 });
 
 router.patch("/shops/:shopId", authenticate, requireShopOwner, async (req: AuthRequest, res): Promise<void> => {
-  const shopId = parseInt(String(req.params.shopId), 10);
-  if (isNaN(shopId)) { res.status(400).json({ error: "Invalid shop ID" }); return; }
+  const shopId = parsePositiveSafeInteger(req.params.shopId);
+  if (shopId === null) { res.status(400).json({ error: "Invalid shop ID" }); return; }
   const [shop] = await db.select().from(shopsTable).where(eq(shopsTable.id, shopId));
   if (!shop) { res.status(404).json({ error: "Shop not found" }); return; }
   // IDOR guard: only the owning shop_owner can mutate.

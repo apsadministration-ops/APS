@@ -20,9 +20,12 @@ import {
   useListPartnerOrganizations,
   useUpdatePartnerOrganization,
   getGetPartnerOrganizationQueryKey,
+  getGetShopQueryKey,
   getListMyShopsQueryKey,
   getListPartnerOrganizationLocationsQueryKey,
   getListPartnerOrganizationsQueryKey,
+  getListAvailableBaysQueryKey,
+  getListMyBookingsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
@@ -291,6 +294,9 @@ export default function PartnerOrganizationsScreen() {
             queryKey: getListPartnerOrganizationLocationsQueryKey(selectedOrganization.id),
           });
           queryClient.invalidateQueries({ queryKey: getListMyShopsQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getGetShopQueryKey(shopId) });
+          queryClient.invalidateQueries({ queryKey: getListAvailableBaysQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getListMyBookingsQueryKey() });
           void alertMessage("Location linked", "This existing location now appears in the organization.");
         },
         onError: (error) =>
@@ -562,9 +568,12 @@ export default function PartnerOrganizationsScreen() {
             ) : linkedLocations && linkedLocations.length > 0 ? (
               <View style={styles.locationList}>
                 {linkedLocations.map((location) => (
-                  <View
+                  <Pressable
                     key={location.id}
                     testID={`card-linked-location-${location.id}`}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Open ${location.name}`}
+                    onPress={() => router.push(`/shop/${location.id}`)}
                     style={[styles.locationCard, { backgroundColor: colors.card, borderColor: colors.border }]}
                   >
                     <View style={[styles.locationIcon, { backgroundColor: colors.primary + "18" }]}>
@@ -581,7 +590,8 @@ export default function PartnerOrganizationsScreen() {
                       </Text>
                     </View>
                     <Text style={[styles.linkedLabel, { color: "#22C55E" }]}>Linked</Text>
-                  </View>
+                    <Feather name="chevron-right" size={17} color={colors.mutedForeground} />
+                  </Pressable>
                 ))}
               </View>
             ) : (
