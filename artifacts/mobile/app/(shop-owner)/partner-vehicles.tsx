@@ -16,7 +16,7 @@ import {
   useListPartnerOrganizations,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Stack, useRouter } from "expo-router";
+import { Stack, usePathname, useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -52,6 +52,10 @@ import {
   type PartnerSubtypeCapability,
 } from "@/lib/partnerSubtypeCapabilities";
 import { useSelectedPartnerOrganization } from "@/hooks/useSelectedPartnerOrganization";
+import {
+  isPartnerRouteActive,
+  partnerRouteAccessibilityProps,
+} from "@/lib/partnerRouteAccessibility";
 
 type FormMode = "create" | "edit" | "import";
 
@@ -69,6 +73,7 @@ function capabilityIcon(capability: PartnerSubtypeCapability): keyof typeof Feat
 
 export default function PartnerVehiclesScreen() {
   const colors = useColors();
+  const pathname = usePathname();
   const router = useRouter();
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -109,20 +114,11 @@ export default function PartnerVehiclesScreen() {
   } = useListVehicles({
     query: { enabled, staleTime: 30_000, queryKey: getListVehiclesQueryKey() },
   });
-  const { selectedId, selectedOrganization } = useSelectedPartnerOrganization(user?.id, organizations);
   const {
-    data: linkedLocations,
-    error: linkedLocationsError,
-    isLoading: linkedLocationsLoading,
-    refetch: refetchLinkedLocations,
-    isRefetching: linkedLocationsRefetching,
-  } = useListPartnerOrganizationLocations(selectedId ?? 0, {
-    query: {
-      enabled: enabled && selectedId != null,
-      queryKey: getListPartnerOrganizationLocationsQueryKey(selectedId ?? 0),
-    },
-  });
-
+    selectedId,
+    selectedOrganization,
+    isSelectionReady,
+  } = useSelectedPartnerOrganization(user?.id, organizations);
   const capability = partnerSubtypeCapability(selectedOrganization?.subtype);
   const ownerId = user?.id ?? null;
   const selectedSubtype = selectedOrganization?.subtype ?? null;
@@ -137,6 +133,18 @@ export default function PartnerVehiclesScreen() {
   currentContextKeyRef.current = contextKey;
   const contextReady = contextResetKey === contextKey;
   const {
+    data: linkedLocations,
+    error: linkedLocationsError,
+    isLoading: linkedLocationsLoading,
+    refetch: refetchLinkedLocations,
+    isRefetching: linkedLocationsRefetching,
+  } = useListPartnerOrganizationLocations(selectedId ?? 0, {
+    query: {
+      enabled: enabled && isSelectionReady && selectedId != null && contextReady,
+      queryKey: getListPartnerOrganizationLocationsQueryKey(selectedId ?? 0),
+    },
+  });
+  const {
     data: operations,
     error: operationsError,
     isLoading: operationsLoading,
@@ -144,7 +152,11 @@ export default function PartnerVehiclesScreen() {
     refetch: refetchOperations,
   } = useListPartnerVehicleOperations(selectedId ?? 0, {
     query: {
-      enabled: enabled && capability?.primaryArea.endsWith("-vehicles") === true,
+      enabled:
+        enabled &&
+        isSelectionReady &&
+        contextReady &&
+        capability?.primaryArea.endsWith("-vehicles") === true,
       queryKey: getListPartnerVehicleOperationsQueryKey(selectedId ?? 0),
     },
   });
@@ -205,7 +217,8 @@ export default function PartnerVehiclesScreen() {
       ),
     [linkedLocations],
   );
-  const isLoading = organizationsLoading || linkedLocationsLoading || operationsLoading;
+  const isLoading =
+    organizationsLoading || !isSelectionReady || linkedLocationsLoading || operationsLoading;
   const queryError =
     organizationsError ?? linkedLocationsError ?? operationsError ?? legacyVehiclesError;
   const hasVehicleOperations = capability?.primaryArea.endsWith("-vehicles") === true;
@@ -627,6 +640,16 @@ export default function PartnerVehiclesScreen() {
     if (hasVehicleOperations) void refetchOperations();
   };
 
+  const routeActive = isPartnerRouteActive(pathname, "partner-vehicles");
+  if (!routeActive) {
+    return (
+      <View
+        style={styles.container}
+        {...partnerRouteAccessibilityProps(false)}
+      />
+    );
+  }
+
   if (isLoading) {
     return (
       <View style={[styles.center, { backgroundColor: colors.background }]}>
@@ -680,6 +703,27 @@ export default function PartnerVehiclesScreen() {
     );
   }
 
+  if (!contextReady) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <Stack.Screen options={{ title: capability.label }} />
+        <View style={styles.contextGate}>
+          <Text
+            accessibilityRole="header"
+            accessibilityLabel={`Selected organization: ${selectedOrganization.name}`}
+            style={[styles.heading, { color: colors.foreground }]}
+          >
+            {selectedOrganization.name}
+          </Text>
+          <ActivityIndicator color={colors.primary} />
+          <Text style={[styles.loadingText, { color: colors.mutedForeground }]}>
+            Refreshing organization context…
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <Stack.Screen options={{ title: capability.label }} />
@@ -701,7 +745,13 @@ export default function PartnerVehiclesScreen() {
         <View style={styles.headingRow}>
           <View style={styles.headingCopy}>
             <Text style={[styles.eyebrow, { color: colors.primary }]}>SELECTED ORGANIZATION</Text>
-            <Text style={[styles.heading, { color: colors.foreground }]}>{selectedOrganization.name}</Text>
+            <Text
+              accessibilityRole="header"
+              accessibilityLabel={`Selected organization: ${selectedOrganization.name}`}
+              style={[styles.heading, { color: colors.foreground }]}
+            >
+              {selectedOrganization.name}
+            </Text>
             <Text style={[styles.subheading, { color: colors.mutedForeground }]}>
               {partnerOrganizationSubtypeLabel(selectedOrganization.subtype)} · scoped partner operations
             </Text>
@@ -932,6 +982,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { gap: 12, padding: 16, paddingBottom: 120 },
   center: { alignItems: "center", flex: 1, gap: 8, justifyContent: "center" },
+  contextGate: { alignItems: "center", flex: 1, gap: 8, justifyContent: "center", padding: 24 },
   loadingText: { fontSize: 13 },
   headingRow: { alignItems: "center", flexDirection: "row", gap: 12 },
   headingCopy: { flex: 1 },

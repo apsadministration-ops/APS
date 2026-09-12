@@ -40,14 +40,25 @@ export function PartnerLegacyVehiclePicker({
     <View style={[styles.container, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <View style={styles.headerRow}>
         <View style={styles.copy}>
-          <Text style={[styles.title, { color: colors.foreground }]}>Eligible legacy vehicle candidates</Text>
+          <Text
+            accessibilityRole="header"
+            accessibilityLabel="Eligible legacy vehicle candidates"
+            style={[styles.title, { color: colors.foreground }]}
+          >
+            Eligible legacy vehicle candidates
+          </Text>
           <Text style={[styles.hint, { color: colors.mutedForeground }]}>
             Candidates are limited to vehicles already registered to one of this organization’s
             linked locations. The server still verifies ownership history and existing operation
             state before linking.
           </Text>
         </View>
-        <Pressable accessibilityRole="button" onPress={onClose} style={styles.close}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Close legacy vehicle picker"
+          onPress={onClose}
+          style={styles.close}
+        >
           <Feather name="x" size={18} color={colors.mutedForeground} />
         </Pressable>
       </View>
@@ -56,6 +67,7 @@ export function PartnerLegacyVehiclePicker({
         <Pressable
           key={vehicle.id}
           accessibilityRole="button"
+          accessibilityLabel={`Choose legacy vehicle ${vehicle.year} ${vehicle.make} ${vehicle.model}, VIN ${vehicle.vin}`}
           onPress={() => onChoose(vehicle)}
           style={[styles.candidate, { backgroundColor: colors.background, borderColor: colors.border }]}
         >

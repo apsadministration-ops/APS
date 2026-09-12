@@ -34,6 +34,8 @@ export function PartnerVehicleFilters({
     <Pressable
       key={label}
       accessibilityRole="button"
+      accessibilityLabel={`${label} filter`}
+      accessibilityState={{ selected }}
       onPress={onPress}
       style={[
         styles.chip,
@@ -54,6 +56,7 @@ export function PartnerVehicleFilters({
       <Text style={[styles.filterLabel, { color: colors.mutedForeground }]}>FILTER RECORDS</Text>
       <TextInput
         value={search}
+        accessibilityLabel="Search partner vehicles"
         onChangeText={onSearchChange}
         placeholder="Search VIN, make, model, plate, unit"
         placeholderTextColor={colors.mutedForeground}
@@ -69,6 +72,7 @@ export function PartnerVehicleFilters({
         <>
           <TextInput
             value={groupFilter}
+            accessibilityLabel="Filter partner vehicles by group"
             onChangeText={onGroupFilterChange}
             placeholder="Filter by group"
             placeholderTextColor={colors.mutedForeground}

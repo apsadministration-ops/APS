@@ -96,6 +96,7 @@ function Field({
     <View style={styles.field}>
       <Text style={[styles.label, { color: colors.mutedForeground }]}>{label}</Text>
       <TextInput
+        accessibilityLabel={label.replace(" *", "")}
         style={[
           styles.input,
           { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground },
@@ -129,7 +130,19 @@ export function PartnerVehicleForm({
     <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <View style={styles.headerRow}>
         <View style={styles.headerCopy}>
-          <Text style={[styles.title, { color: colors.foreground }]}>
+          <Text
+            accessibilityRole="header"
+            accessibilityLabel={
+              mode === "edit"
+                ? "Edit vehicle operations"
+                : mode === "import"
+                  ? "Import legacy vehicle"
+                  : capability.subtype === "dealership"
+                    ? "Add dealership vehicle"
+                    : "Add fleet vehicle"
+            }
+            style={[styles.title, { color: colors.foreground }]}
+          >
             {mode === "edit"
               ? "Edit vehicle operations"
               : mode === "import"
@@ -224,7 +237,7 @@ export function PartnerVehicleForm({
                 key={location.id}
                 accessibilityRole="button"
                 accessibilityLabel={`${selected ? "Selected" : "Select"} ${location.name}${writeEligible ? "" : " (inactive)"}`}
-                accessibilityState={{ disabled: !writeEligible }}
+                accessibilityState={{ disabled: !writeEligible, selected }}
                 disabled={!writeEligible}
                 onPress={() => onChange("locationId", selected ? null : location.id)}
                 style={[
@@ -261,6 +274,8 @@ export function PartnerVehicleForm({
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Dealership operations</Text>
           <Pressable
             accessibilityRole="button"
+            accessibilityLabel={`Service needed${draft.serviceNeeded ? ", selected" : ""}`}
+            accessibilityState={{ selected: draft.serviceNeeded }}
             onPress={() => onChange("serviceNeeded", !draft.serviceNeeded)}
             style={[styles.toggleRow, { backgroundColor: colors.background, borderColor: colors.border }]}
           >
@@ -285,6 +300,8 @@ export function PartnerVehicleForm({
                 <Pressable
                   key={status}
                   accessibilityRole="button"
+                accessibilityLabel={`Inventory status: ${status.replace("_", " ")}`}
+                accessibilityState={{ selected }}
                   onPress={() => onChange("inventoryStatus", status)}
                   style={[
                     styles.chip,
@@ -337,6 +354,8 @@ export function PartnerVehicleForm({
                 <Pressable
                   key={status}
                   accessibilityRole="button"
+                  accessibilityLabel={`Operating status: ${status.replace(/_/g, " ")}`}
+                  accessibilityState={{ selected }}
                   onPress={() => onChange("operatingStatus", status)}
                   style={[
                     styles.chip,

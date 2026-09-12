@@ -29,7 +29,7 @@ import {
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { useRouter } from "expo-router";
+import { usePathname, useRouter } from "expo-router";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
@@ -39,6 +39,10 @@ import {
 } from "@/lib/partnerOrganization";
 import { useSelectedPartnerOrganization } from "@/hooks/useSelectedPartnerOrganization";
 import { alertMessage } from "@/utils/confirm";
+import {
+  isPartnerRouteActive,
+  partnerRouteAccessibilityProps,
+} from "@/lib/partnerRouteAccessibility";
 
 type FormMode = "create" | "edit" | null;
 
@@ -91,6 +95,7 @@ function displayAddress(organization: PartnerOrganization) {
 
 export default function PartnerOrganizationsScreen() {
   const colors = useColors();
+  const pathname = usePathname();
   const router = useRouter();
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -311,10 +316,19 @@ export default function PartnerOrganizationsScreen() {
     if (selectedId != null) void refetchLinkedLocations();
   };
 
-  const isLoading = organizationsLoading || shopsLoading;
+  const isLoading = organizationsLoading || shopsLoading || !isSelectionReady;
   const isSaving = createMutation.isPending || updateMutation.isPending;
   const queryError =
     organizationsError ?? shopsError ?? selectedOrganizationError ?? linkedLocationsError;
+
+  if (!isPartnerRouteActive(pathname, "organizations")) {
+    return (
+      <View
+        style={styles.container}
+        {...partnerRouteAccessibilityProps(false)}
+      />
+    );
+  }
 
   if (isLoading) {
     return (
@@ -342,7 +356,13 @@ export default function PartnerOrganizationsScreen() {
       >
         <View style={styles.headerRow}>
           <View style={styles.headerCopy}>
-            <Text style={[styles.heading, { color: colors.foreground }]}>Organizations</Text>
+            <Text
+              accessibilityRole="header"
+              accessibilityLabel="Organizations"
+              style={[styles.heading, { color: colors.foreground }]}
+            >
+              Organizations
+            </Text>
             <Text style={[styles.subheading, { color: colors.mutedForeground }]}>
               Manage your partner organizations separately from existing locations.
             </Text>
@@ -396,7 +416,8 @@ export default function PartnerOrganizationsScreen() {
                   key={organization.id}
                   testID={`card-organization-${organization.id}`}
                   accessibilityRole="button"
-                  accessibilityLabel={`Select ${organization.name}`}
+                  accessibilityLabel={`${selected ? "Selected" : "Select"} ${organization.name}, ${partnerOrganizationSubtypeLabel(organization.subtype)}, ${organization.status}`}
+                  accessibilityState={{ selected }}
                   onPress={() => {
                     setActionError("");
                     closeForm();
@@ -498,7 +519,11 @@ export default function PartnerOrganizationsScreen() {
           <View style={styles.detailSection}>
             <View style={styles.sectionHeadingRow}>
               <View style={styles.sectionHeadingCopy}>
-                <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
+                <Text
+                  accessibilityRole="header"
+                  accessibilityLabel={`Selected organization: ${selectedOrganization.name}`}
+                  style={[styles.sectionTitle, { color: colors.foreground }]}
+                >
                   {selectedOrganization.name}
                 </Text>
                 <Text style={[styles.sectionDescription, { color: colors.mutedForeground }]}>
@@ -633,6 +658,10 @@ export default function PartnerOrganizationsScreen() {
                       testID={`button-link-location-${location.id}`}
                       accessibilityRole="button"
                       accessibilityLabel={`Link ${location.name}`}
+                      accessibilityState={{
+                        disabled:
+                          selectedOrganization.status !== "active" || linkMutation.isPending,
+                      }}
                       onPress={() => linkLocation(location.id)}
                       disabled={
                         selectedOrganization.status !== "active" || linkMutation.isPending
@@ -726,6 +755,7 @@ function OrganizationFormCard({
         <Pressable
           testID="button-cancel-organization-form"
           accessibilityRole="button"
+              accessibilityLabel="Close organization form"
           onPress={onCancel}
           style={styles.closeButton}
         >
@@ -742,7 +772,8 @@ function OrganizationFormCard({
               key={option.value}
               testID={`button-subtype-${option.value}`}
               accessibilityRole="button"
-              accessibilityLabel={`Organization type ${option.label}`}
+              accessibilityLabel={`${selected ? "Selected" : "Select"} organization type ${option.label}`}
+              accessibilityState={{ selected }}
               onPress={() => onChange("subtype", option.value)}
               style={[
                 styles.subtypeOption,
@@ -865,6 +896,8 @@ function OrganizationFormCard({
                   key={status}
                   testID={`button-organization-status-${status}`}
                   accessibilityRole="button"
+                  accessibilityLabel={`${selected ? "Selected" : "Select"} organization status ${status}`}
+                  accessibilityState={{ selected }}
                   onPress={() => onChange("status", status)}
                   style={[
                     styles.statusOption,

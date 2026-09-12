@@ -19,8 +19,14 @@ import {
   type PartnerServiceRequestUrgency,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Stack,
+  useFocusEffect,
+  useLocalSearchParams,
+  usePathname,
+  useRouter,
+} from "expo-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import {
@@ -43,6 +49,10 @@ import {
   serviceRequestContextKey,
 } from "@/lib/partnerServiceRequest";
 import { partnerOrganizationSubtypeLabel } from "@/lib/partnerOrganization";
+import {
+  isPartnerServiceRequestDetailActive,
+  partnerRouteAccessibilityProps,
+} from "@/lib/partnerRouteAccessibility";
 
 function errorMessage(error: unknown, fallback: string) {
   if (error && typeof error === "object" && "message" in error) {
@@ -101,10 +111,26 @@ function requestSnapshotLines(request: PartnerServiceRequest) {
 
 export default function ServiceRequestDetailScreen() {
   const colors = useColors();
+  const pathname = usePathname();
   const router = useRouter();
   const queryClient = useQueryClient();
   const { id: idParam } = useLocalSearchParams<{ id?: string }>();
   const requestId = Number(idParam);
+  const routeFocusedRef = useRef(false);
+  const [isFocused, setIsFocused] = useState(false);
+  useFocusEffect(
+    useCallback(() => {
+      routeFocusedRef.current = true;
+      setIsFocused(true);
+      return () => {
+        routeFocusedRef.current = false;
+        setIsFocused(false);
+      };
+    }, []),
+  );
+  const routeActive = isPartnerServiceRequestDetailActive(pathname, requestId);
+  const routeFocused = routeActive && isFocused;
+  routeFocusedRef.current = routeFocused;
   const { user } = useAuth();
   const enabled = !!user && user.role === "shop_owner" && Number.isInteger(requestId) && requestId > 0;
   const [editing, setEditing] = useState(false);
@@ -113,6 +139,7 @@ export default function ServiceRequestDetailScreen() {
   const [actionError, setActionError] = useState("");
   const [contextResetKey, setContextResetKey] = useState("");
   const mutationContextRef = useRef("");
+  const originRequestIdRef = useRef<number | null>(null);
   const originOrganizationIdRef = useRef<number | null>(null);
 
   const organizationsQuery = useListPartnerOrganizations({
@@ -125,8 +152,13 @@ export default function ServiceRequestDetailScreen() {
   // A detail screen is bound to the organization that opened it. Capture it
   // once so switching organizations cannot reuse the same request id against
   // the new organization.
-  if (originOrganizationIdRef.current == null && isSelectionReady && selectedId != null) {
-    originOrganizationIdRef.current = selectedId;
+  if (routeFocused && isSelectionReady && selectedId != null) {
+    if (originRequestIdRef.current !== requestId) {
+      originRequestIdRef.current = requestId;
+      originOrganizationIdRef.current = selectedId;
+    } else if (originOrganizationIdRef.current == null) {
+      originOrganizationIdRef.current = selectedId;
+    }
   }
   const originOrganizationId = originOrganizationIdRef.current ?? selectedId ?? null;
   const organizationChanged =
@@ -135,11 +167,14 @@ export default function ServiceRequestDetailScreen() {
   const supported = selectedOrganization?.subtype === "dealership" || selectedOrganization?.subtype === "fleet";
   const contextKey = serviceRequestContextKey(user?.id, selectedId);
   const contextReady = contextResetKey === contextKey;
+  const contextKeyRef = useRef(contextKey);
+  contextKeyRef.current = contextKey;
   const detailQuery = useGetPartnerServiceRequest(requestOrganizationId, requestId, {
     query: {
       enabled:
         enabled &&
         isSelectionReady &&
+        routeFocused &&
         requestOrganizationId > 0 &&
         !organizationChanged &&
         supported &&
@@ -153,13 +188,27 @@ export default function ServiceRequestDetailScreen() {
   });
   const locationsQuery = useListPartnerOrganizationLocations(requestOrganizationId, {
     query: {
-      enabled: enabled && isSelectionReady && requestOrganizationId > 0 && !organizationChanged && supported,
+      enabled:
+        enabled &&
+        isSelectionReady &&
+        routeFocused &&
+        requestOrganizationId > 0 &&
+        !organizationChanged &&
+        supported &&
+        contextReady,
       queryKey: getListPartnerOrganizationLocationsQueryKey(requestOrganizationId),
     },
   });
   const operationsQuery = useListPartnerVehicleOperations(requestOrganizationId, {
     query: {
-      enabled: enabled && isSelectionReady && requestOrganizationId > 0 && !organizationChanged && supported,
+      enabled:
+        enabled &&
+        isSelectionReady &&
+        routeFocused &&
+        requestOrganizationId > 0 &&
+        !organizationChanged &&
+        supported &&
+        contextReady,
       queryKey: getListPartnerVehicleOperationsQueryKey(requestOrganizationId),
     },
   });
@@ -167,6 +216,10 @@ export default function ServiceRequestDetailScreen() {
   const transitionMutation = useTransitionPartnerServiceRequest();
 
   useEffect(() => {
+    if (!routeFocused) {
+      mutationContextRef.current = "";
+      return;
+    }
     if (organizationChanged) {
       setEditing(false);
       setNote("");
@@ -174,7 +227,7 @@ export default function ServiceRequestDetailScreen() {
       setActionError("");
       mutationContextRef.current = "";
       setContextResetKey("");
-      router.replace("/(shop-owner)/service-requests" as never);
+      router.dismissTo("/(shop-owner)/service-requests" as never);
       return;
     }
     setEditing(false);
@@ -183,7 +236,16 @@ export default function ServiceRequestDetailScreen() {
     setActionError("");
     mutationContextRef.current = "";
     setContextResetKey(contextKey);
-  }, [contextKey, organizationChanged, requestId, router]);
+  }, [contextKey, organizationChanged, requestId, routeFocused, router]);
+
+  if (!routeFocused) {
+    return (
+      <View
+        style={styles.container}
+        {...partnerRouteAccessibilityProps(false)}
+      />
+    );
+  }
 
   const detail = detailQuery.data;
   const request = detail?.request;
@@ -231,13 +293,25 @@ export default function ServiceRequestDetailScreen() {
       { organizationId: requestOrganizationId, requestId: request.id, data: payload },
       {
         onSuccess: () => {
-          if (mutationContextRef.current !== originalContextKey || contextKey !== originalContextKey) return;
+          if (
+            !routeFocusedRef.current ||
+            mutationContextRef.current !== originalContextKey ||
+            contextKeyRef.current !== originalContextKey
+          ) {
+            return;
+          }
           setEditing(false);
           setScreenNotice("Request changes saved.");
           invalidate();
         },
         onError: (error) => {
-          if (mutationContextRef.current !== originalContextKey || contextKey !== originalContextKey) return;
+          if (
+            !routeFocusedRef.current ||
+            mutationContextRef.current !== originalContextKey ||
+            contextKeyRef.current !== originalContextKey
+          ) {
+            return;
+          }
           if (isVersionConflict(error)) {
             setActionError("This request changed elsewhere. The latest version was fetched; review it before saving again.");
             void detailQuery.refetch();
@@ -267,7 +341,13 @@ export default function ServiceRequestDetailScreen() {
       { organizationId: requestOrganizationId, requestId: request.id, data: payload },
       {
         onSuccess: () => {
-          if (mutationContextRef.current !== originalContextKey || contextKey !== originalContextKey) return;
+          if (
+            !routeFocusedRef.current ||
+            mutationContextRef.current !== originalContextKey ||
+            contextKeyRef.current !== originalContextKey
+          ) {
+            return;
+          }
           setNote("");
           setScreenNotice(
             toStatus === "in_progress"
@@ -281,7 +361,13 @@ export default function ServiceRequestDetailScreen() {
           invalidate();
         },
         onError: (error) => {
-          if (mutationContextRef.current !== originalContextKey || contextKey !== originalContextKey) return;
+          if (
+            !routeFocusedRef.current ||
+            mutationContextRef.current !== originalContextKey ||
+            contextKeyRef.current !== originalContextKey
+          ) {
+            return;
+          }
           if (isVersionConflict(error)) {
             setActionError("This request changed elsewhere. The latest version was fetched; review it before trying the action again.");
             void detailQuery.refetch();
@@ -293,7 +379,13 @@ export default function ServiceRequestDetailScreen() {
     );
   };
 
-  if (organizationsQuery.isLoading || detailQuery.isLoading || locationsQuery.isLoading || operationsQuery.isLoading) {
+  if (
+    organizationsQuery.isLoading ||
+    !isSelectionReady ||
+    detailQuery.isLoading ||
+    locationsQuery.isLoading ||
+    operationsQuery.isLoading
+  ) {
     return (
       <View style={[styles.center, { backgroundColor: colors.background }]}>
         <ActivityIndicator color={colors.primary} />
@@ -360,7 +452,7 @@ export default function ServiceRequestDetailScreen() {
           {errorMessage(queryError, "This request could not be loaded for the selected organization.")}
         </Text>
         <Pressable
-          onPress={() => router.replace("/(shop-owner)/service-requests" as never)}
+          onPress={() => router.dismissTo("/(shop-owner)/service-requests" as never)}
           style={[styles.outlineButton, { borderColor: colors.primary }]}
         >
           <Text style={[styles.outlineButtonText, { color: colors.primary }]}>Back to requests</Text>
@@ -378,7 +470,13 @@ export default function ServiceRequestDetailScreen() {
         <View style={styles.headerRow}>
           <View style={styles.headerCopy}>
             <Text style={[styles.eyebrow, { color: colors.primary }]}>INTERNAL SERVICE REQUEST</Text>
-            <Text style={[styles.heading, { color: colors.foreground }]}>Request #{request.id}</Text>
+            <Text
+              accessibilityRole="header"
+              accessibilityLabel={`Service request ${request.id}`}
+              style={[styles.heading, { color: colors.foreground }]}
+            >
+              Request #{request.id}
+            </Text>
             <Text style={[styles.subheading, { color: colors.mutedForeground }]}>
               Version {request.version} · {partnerOrganizationSubtypeLabel(request.sourceSubtype)}
             </Text>
@@ -496,6 +594,7 @@ export default function ServiceRequestDetailScreen() {
             {requestCanEdit(request.status) && canWrite ? (
               <Pressable
                 accessibilityRole="button"
+                accessibilityLabel="Edit service request"
                 onPress={() => {
                   setActionError("");
                   setEditing(true);
@@ -528,6 +627,8 @@ export default function ServiceRequestDetailScreen() {
               <Pressable
                 key={option.toStatus}
                 accessibilityRole="button"
+                accessibilityLabel={option.label}
+                accessibilityState={{ disabled: !canWrite || transitionMutation.isPending }}
                 onPress={() => handleTransition(option.toStatus)}
                 disabled={!canWrite || transitionMutation.isPending}
                 style={[
@@ -584,7 +685,12 @@ export default function ServiceRequestDetailScreen() {
           <Text style={[styles.meta, { color: colors.mutedForeground }]}>Cancelled {formatDate(request.cancelledAt)}</Text>
           <Text style={[styles.meta, { color: colors.mutedForeground }]}>Updated {formatDate(request.updatedAt)}</Text>
         </View>
-        <Pressable onPress={() => router.replace("/(shop-owner)/service-requests" as never)} style={styles.backLink}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Back to service requests"
+          onPress={() => router.dismissTo("/(shop-owner)/service-requests" as never)}
+          style={styles.backLink}
+        >
           <Feather name="arrow-left" size={15} color={colors.primary} />
           <Text style={[styles.backText, { color: colors.primary }]}>Back to requests</Text>
         </Pressable>

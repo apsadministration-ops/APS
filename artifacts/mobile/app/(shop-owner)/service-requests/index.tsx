@@ -11,7 +11,7 @@ import {
   type PartnerServiceRequestStatus,
   type PartnerServiceRequestUrgency,
 } from "@workspace/api-client-react";
-import { useRouter, Stack } from "expo-router";
+import { usePathname, useRouter, Stack } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
@@ -29,6 +29,10 @@ import {
   serviceRequestContextKey,
 } from "@/lib/partnerServiceRequest";
 import { partnerOrganizationSubtypeLabel } from "@/lib/partnerOrganization";
+import {
+  isPartnerRouteActive,
+  partnerRouteAccessibilityProps,
+} from "@/lib/partnerRouteAccessibility";
 
 function errorMessage(error: unknown, fallback: string) {
   if (error && typeof error === "object" && "message" in error) {
@@ -46,6 +50,7 @@ function formatDate(value: string | null | undefined) {
 
 export default function ServiceRequestsListScreen() {
   const colors = useColors();
+  const pathname = usePathname();
   const router = useRouter();
   const { user } = useAuth();
   const enabled = !!user && user.role === "shop_owner";
@@ -69,13 +74,13 @@ export default function ServiceRequestsListScreen() {
 
   const locationsQuery = useListPartnerOrganizationLocations(selectedId ?? 0, {
     query: {
-      enabled: enabled && isSelectionReady && selectedId != null && supported,
+      enabled: enabled && isSelectionReady && selectedId != null && supported && contextReady,
       queryKey: getListPartnerOrganizationLocationsQueryKey(selectedId ?? 0),
     },
   });
   const operationsQuery = useListPartnerVehicleOperations(selectedId ?? 0, {
     query: {
-      enabled: enabled && isSelectionReady && selectedId != null && supported,
+      enabled: enabled && isSelectionReady && selectedId != null && supported && contextReady,
       queryKey: getListPartnerVehicleOperationsQueryKey(selectedId ?? 0),
     },
   });
@@ -132,7 +137,18 @@ export default function ServiceRequestsListScreen() {
     organizationsQuery.error ?? locationsQuery.error ?? operationsQuery.error ?? requestsQuery.error;
   const isLoading =
     organizationsQuery.isLoading ||
+    !isSelectionReady ||
     (supported && (locationsQuery.isLoading || operationsQuery.isLoading || requestsQuery.isLoading));
+
+  const routeActive = isPartnerRouteActive(pathname, "service-requests");
+  if (!routeActive) {
+    return (
+      <View
+        style={styles.container}
+        {...partnerRouteAccessibilityProps(false)}
+      />
+    );
+  }
 
   if (isLoading) {
     return (
@@ -181,6 +197,27 @@ export default function ServiceRequestsListScreen() {
     );
   }
 
+  if (!contextReady) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <Stack.Screen options={{ title: "Service requests" }} />
+        <View style={styles.contextGate}>
+          <Text
+            accessibilityRole="header"
+            accessibilityLabel={`Selected organization: ${selectedOrganization.name}`}
+            style={[styles.heading, { color: colors.foreground }]}
+          >
+            {selectedOrganization.name}
+          </Text>
+          <ActivityIndicator color={colors.primary} />
+          <Text style={[styles.muted, { color: colors.mutedForeground }]}>
+            Refreshing organization context…
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <Stack.Screen options={{ title: "Service requests" }} />
@@ -202,7 +239,13 @@ export default function ServiceRequestsListScreen() {
         <View style={styles.headerRow}>
           <View style={styles.headerCopy}>
             <Text style={[styles.eyebrow, { color: colors.primary }]}>SELECTED ORGANIZATION</Text>
-            <Text style={[styles.heading, { color: colors.foreground }]}>{selectedOrganization.name}</Text>
+            <Text
+              accessibilityRole="header"
+              accessibilityLabel={`Selected organization: ${selectedOrganization.name}`}
+              style={[styles.heading, { color: colors.foreground }]}
+            >
+              {selectedOrganization.name}
+            </Text>
             <Text style={[styles.subheading, { color: colors.mutedForeground }]}>
               {partnerOrganizationSubtypeLabel(selectedOrganization.subtype)} · owner-managed internal work tracking
             </Text>
@@ -210,6 +253,12 @@ export default function ServiceRequestsListScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Create service request"
+            accessibilityState={{
+              disabled:
+                selectedOrganization.status !== "active" ||
+                !contextReady ||
+                locations.every((location) => location.status === "inactive"),
+            }}
             onPress={() => router.push("/(shop-owner)/service-requests/new" as never)}
             disabled={selectedOrganization.status !== "active" || !contextReady || locations.every((location) => location.status === "inactive")}
             style={[
@@ -265,6 +314,8 @@ export default function ServiceRequestsListScreen() {
                 <Pressable
                   key={value}
                   accessibilityRole="button"
+                  accessibilityLabel={`Status filter: ${value === "all" ? "All" : REQUEST_STATUS_LABELS[value]}`}
+                  accessibilityState={{ selected }}
                   onPress={() => setStatus(value)}
                   style={[styles.filterChip, { backgroundColor: selected ? colors.primary : colors.card, borderColor: selected ? colors.primary : colors.border }]}
                 >
@@ -283,6 +334,8 @@ export default function ServiceRequestsListScreen() {
                 <Pressable
                   key={value}
                   accessibilityRole="button"
+                  accessibilityLabel={`Urgency filter: ${value === "all" ? "All" : REQUEST_URGENCY_LABELS[value]}`}
+                  accessibilityState={{ selected }}
                   onPress={() => setUrgency(value)}
                   style={[styles.filterChip, { backgroundColor: selected ? colors.primary : colors.card, borderColor: selected ? colors.primary : colors.border }]}
                 >
@@ -297,6 +350,8 @@ export default function ServiceRequestsListScreen() {
           <View style={styles.chipRow}>
             <Pressable
               accessibilityRole="button"
+              accessibilityLabel="Vehicle filter: All vehicles"
+              accessibilityState={{ selected: vehicleId == null }}
               onPress={() => setVehicleId(null)}
               style={[styles.filterChip, { backgroundColor: vehicleId == null ? colors.primary : colors.card, borderColor: vehicleId == null ? colors.primary : colors.border }]}
             >
@@ -308,6 +363,8 @@ export default function ServiceRequestsListScreen() {
                 <Pressable
                   key={operation.id}
                   accessibilityRole="button"
+                  accessibilityLabel={`Vehicle filter: ${operation.year} ${operation.make} ${operation.model}`}
+                  accessibilityState={{ selected }}
                   onPress={() => setVehicleId(selected ? null : operation.vehicleId)}
                   style={[styles.filterChip, { backgroundColor: selected ? colors.primary : colors.card, borderColor: selected ? colors.primary : colors.border }]}
                 >
@@ -322,6 +379,8 @@ export default function ServiceRequestsListScreen() {
           <View style={styles.chipRow}>
             <Pressable
               accessibilityRole="button"
+              accessibilityLabel="Location filter: All locations"
+              accessibilityState={{ selected: locationId == null }}
               onPress={() => setLocationId(null)}
               style={[styles.filterChip, { backgroundColor: locationId == null ? colors.primary : colors.card, borderColor: locationId == null ? colors.primary : colors.border }]}
             >
@@ -333,6 +392,8 @@ export default function ServiceRequestsListScreen() {
                 <Pressable
                   key={location.id}
                   accessibilityRole="button"
+                  accessibilityLabel={`Location filter: ${location.name}`}
+                  accessibilityState={{ selected }}
                   onPress={() => setLocationId(selected ? null : location.id)}
                   style={[styles.filterChip, { backgroundColor: selected ? colors.primary : colors.card, borderColor: selected ? colors.primary : colors.border }]}
                 >
@@ -418,6 +479,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { gap: 12, padding: 16, paddingBottom: 120 },
   center: { alignItems: "center", flex: 1, gap: 8, justifyContent: "center" },
+  contextGate: { alignItems: "center", flex: 1, gap: 8, justifyContent: "center", padding: 24 },
   muted: { fontSize: 13 },
   gate: { alignItems: "center", flex: 1, justifyContent: "center", padding: 25 },
   emptyTitle: { fontSize: 17, fontWeight: "800", marginTop: 12, textAlign: "center" },

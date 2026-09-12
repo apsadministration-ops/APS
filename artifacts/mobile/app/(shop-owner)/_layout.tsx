@@ -1,9 +1,9 @@
 import { BlurView } from "expo-blur";
 import { Redirect, Tabs } from "expo-router";
 import { Feather } from "@expo/vector-icons";
-import React from "react";
 import { Platform, StyleSheet, View, useColorScheme } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { PartnerFocusedScreenBoundary } from "@/components/partner/PartnerFocusedScreenBoundary";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { getRoleDestination } from "@/lib/roleDestination";
@@ -25,6 +25,9 @@ export default function ShopOwnerTabLayout() {
 
   return (
     <Tabs
+      screenLayout={({ children }) => (
+        <PartnerFocusedScreenBoundary>{children}</PartnerFocusedScreenBoundary>
+      )}
       screenOptions={{
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.mutedForeground,

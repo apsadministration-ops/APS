@@ -7,8 +7,14 @@ import {
   useListPartnerOrganizations,
   useListPartnerVehicleOperations,
 } from "@workspace/api-client-react";
-import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useRef, useState } from "react";
+import {
+  Stack,
+  useFocusEffect,
+  useLocalSearchParams,
+  usePathname,
+  useRouter,
+} from "expo-router";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import {
@@ -23,6 +29,10 @@ import {
   serviceRequestContextKey,
 } from "@/lib/partnerServiceRequest";
 import { partnerOrganizationSubtypeLabel } from "@/lib/partnerOrganization";
+import {
+  isPartnerRouteActive,
+  partnerRouteAccessibilityProps,
+} from "@/lib/partnerRouteAccessibility";
 
 function errorMessage(error: unknown, fallback: string) {
   if (error && typeof error === "object" && "message" in error) {
@@ -34,7 +44,23 @@ function errorMessage(error: unknown, fallback: string) {
 
 export default function NewServiceRequestScreen() {
   const colors = useColors();
+  const pathname = usePathname();
   const router = useRouter();
+  const routeActive = isPartnerRouteActive(pathname, "service-request-new");
+  const routeFocusedRef = useRef(false);
+  const [isFocused, setIsFocused] = useState(false);
+  useFocusEffect(
+    useCallback(() => {
+      routeFocusedRef.current = true;
+      setIsFocused(true);
+      return () => {
+        routeFocusedRef.current = false;
+        setIsFocused(false);
+      };
+    }, []),
+  );
+  const routeFocused = routeActive && isFocused;
+  routeFocusedRef.current = routeFocused;
   const { operationId: operationIdParam } = useLocalSearchParams<{ operationId?: string }>();
   const { user } = useAuth();
   const enabled = !!user && user.role === "shop_owner";
@@ -51,7 +77,9 @@ export default function NewServiceRequestScreen() {
     user?.id,
     organizationsQuery.data,
   );
-  if (originOrganizationIdRef.current == null && isSelectionReady && selectedId != null) {
+  if (!routeActive) {
+    originOrganizationIdRef.current = null;
+  } else if (routeFocused && originOrganizationIdRef.current == null && isSelectionReady && selectedId != null) {
     originOrganizationIdRef.current = selectedId;
   }
   const originOrganizationId = originOrganizationIdRef.current ?? selectedId ?? null;
@@ -61,35 +89,66 @@ export default function NewServiceRequestScreen() {
   const supported = selectedOrganization?.subtype === "dealership" || selectedOrganization?.subtype === "fleet";
   const contextKey = serviceRequestContextKey(user?.id, selectedId);
   const contextReady = contextResetKey === contextKey;
+  const contextKeyRef = useRef(contextKey);
+  contextKeyRef.current = contextKey;
   const locationsQuery = useListPartnerOrganizationLocations(requestOrganizationId, {
     query: {
-      enabled: enabled && isSelectionReady && requestOrganizationId > 0 && !organizationChanged && supported,
+      enabled:
+        enabled &&
+        isSelectionReady &&
+        routeFocused &&
+        requestOrganizationId > 0 &&
+        !organizationChanged &&
+        supported &&
+        contextReady,
       queryKey: getListPartnerOrganizationLocationsQueryKey(requestOrganizationId),
     },
   });
   const operationsQuery = useListPartnerVehicleOperations(requestOrganizationId, {
     query: {
-      enabled: enabled && isSelectionReady && requestOrganizationId > 0 && !organizationChanged && supported,
+      enabled:
+        enabled &&
+        isSelectionReady &&
+        routeFocused &&
+        requestOrganizationId > 0 &&
+        !organizationChanged &&
+        supported &&
+        contextReady,
       queryKey: getListPartnerVehicleOperationsQueryKey(requestOrganizationId),
     },
   });
   const createMutation = useCreatePartnerServiceRequest();
 
   useEffect(() => {
+    if (!routeFocused) {
+      originOrganizationIdRef.current = null;
+      requestIds.current.clear();
+      mutationContextRef.current = "";
+      return;
+    }
     setFormError("");
     requestIds.current.clear();
     mutationContextRef.current = "";
     if (organizationChanged) {
       setContextResetKey("");
-      router.replace("/(shop-owner)/service-requests" as never);
+      router.dismissTo("/(shop-owner)/service-requests" as never);
       return;
     }
     setContextResetKey(contextKey);
-  }, [contextKey, organizationChanged, router]);
+  }, [contextKey, organizationChanged, routeFocused, router]);
+
+  if (!routeFocused) {
+    return (
+      <View
+        style={styles.container}
+        {...partnerRouteAccessibilityProps(false)}
+      />
+    );
+  }
 
   const submit = (draft: PartnerServiceRequestDraft) => {
     setFormError("");
-    if (!requestOrganizationId || !selectedOrganization || !supported || organizationChanged) {
+    if (!routeFocused || !requestOrganizationId || !selectedOrganization || !supported || organizationChanged) {
       setFormError("Select a dealership or fleet organization before creating a request.");
       return;
     }
@@ -135,11 +194,23 @@ export default function NewServiceRequestScreen() {
       },
       {
         onSuccess: (request) => {
-          if (mutationContextRef.current !== originalContextKey || contextKey !== originalContextKey) return;
+          if (
+            !routeFocusedRef.current ||
+            mutationContextRef.current !== originalContextKey ||
+            contextKeyRef.current !== originalContextKey
+          ) {
+            return;
+          }
           router.replace(`/(shop-owner)/service-requests/${request.id}` as never);
         },
         onError: (error) => {
-          if (mutationContextRef.current !== originalContextKey || contextKey !== originalContextKey) return;
+          if (
+            !routeFocusedRef.current ||
+            mutationContextRef.current !== originalContextKey ||
+            contextKeyRef.current !== originalContextKey
+          ) {
+            return;
+          }
           setFormError(
             `${errorMessage(error, "Unable to create the service request.")} Your retry keeps the same client request ID to prevent duplicates.`,
           );
@@ -148,7 +219,12 @@ export default function NewServiceRequestScreen() {
     );
   };
 
-  if (organizationsQuery.isLoading || locationsQuery.isLoading || operationsQuery.isLoading) {
+  if (
+    organizationsQuery.isLoading ||
+    !isSelectionReady ||
+    locationsQuery.isLoading ||
+    operationsQuery.isLoading
+  ) {
     return (
       <View style={[styles.center, { backgroundColor: colors.background }]}>
         <ActivityIndicator color={colors.primary} />
@@ -225,7 +301,7 @@ export default function NewServiceRequestScreen() {
             initialOperationId={Number.isInteger(initialOperationId) ? initialOperationId : null}
             isSaving={createMutation.isPending && mutationContextRef.current === contextKey}
             error={formError}
-            onCancel={() => router.replace("/(shop-owner)/service-requests" as never)}
+          onCancel={() => router.dismissTo("/(shop-owner)/service-requests" as never)}
             onSubmit={submit}
           />
         ) : (

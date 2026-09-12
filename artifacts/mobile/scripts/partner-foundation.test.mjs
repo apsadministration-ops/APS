@@ -7,6 +7,10 @@ import {
   partnerOrganizationSelectionStorageKey,
   partnerOrganizationSubtypeLabel,
 } from "../lib/partnerOrganization.ts";
+import {
+  isPartnerRouteActive,
+  isPartnerServiceRequestDetailActive,
+} from "../lib/partnerRouteAccessibility.ts";
 
 assert.equal(PARTNER_LAYER_LABEL, "Dealer / Fleet / Shop");
 assert.match(PARTNER_LAYER_DESCRIPTION, /Ghost Garages/);
@@ -26,6 +30,15 @@ assert.deepEqual(
 assert.equal(partnerOrganizationSubtypeLabel("commercial_business"), "Commercial business");
 assert.equal(partnerOrganizationSubtypeLabel("unknown"), "Organization");
 assert.equal(partnerOrganizationSelectionStorageKey(42), "partner-organization-selection:42");
+assert.equal(isPartnerRouteActive("/(shop-owner)/service-requests", "service-requests"), true);
+assert.equal(isPartnerRouteActive("/service-requests/42", "service-request-detail"), true);
+assert.equal(isPartnerRouteActive("/service-requests/42", "service-requests"), false);
+assert.equal(isPartnerRouteActive("/service-requests/new", "service-request-detail"), false);
+assert.equal(isPartnerServiceRequestDetailActive("/service-requests/42", 42), true);
+assert.equal(isPartnerServiceRequestDetailActive("/service-requests/42", 43), false);
+assert.equal(isPartnerServiceRequestDetailActive("/service-requests/new", 42), false);
+assert.equal(isPartnerRouteActive("/partner-vehicles", "partner-vehicles"), true);
+assert.equal(isPartnerRouteActive("/organizations", "organizations"), true);
 const screen = (name) => readFileSync(new URL(`../app/${name}.tsx`, import.meta.url), "utf8");
 const registration = screen("(auth)/register");
 assert.match(registration, /setRole\("shop_owner"\)/);

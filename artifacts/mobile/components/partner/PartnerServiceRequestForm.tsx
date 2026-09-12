@@ -175,7 +175,11 @@ export function PartnerServiceRequestForm({
     <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <View style={styles.headerRow}>
         <View style={styles.headerCopy}>
-          <Text style={[styles.title, { color: colors.foreground }]}>
+          <Text
+            accessibilityRole="header"
+            accessibilityLabel={mode === "create" ? "New service request" : "Edit service request"}
+            style={[styles.title, { color: colors.foreground }]}
+          >
             {mode === "create" ? "New service request" : "Edit service request"}
           </Text>
           <Text style={[styles.hint, { color: colors.mutedForeground }]}>
@@ -200,6 +204,7 @@ export function PartnerServiceRequestForm({
                   key={operation.id}
                   accessibilityRole="button"
                   accessibilityLabel={`${selected ? "Selected" : "Select"} ${operation.year} ${operation.make} ${operation.model}`}
+                  accessibilityState={{ selected }}
                   onPress={() =>
                     setDraft((current) => ({
                       ...current,
@@ -288,6 +293,7 @@ export function PartnerServiceRequestForm({
               key={location.id}
               accessibilityRole="button"
               accessibilityLabel={`${selected ? "Selected" : "Select"} ${location.name}`}
+              accessibilityState={{ selected }}
               onPress={() => setField("locationId", location.id)}
               style={[
                 styles.locationOption,
@@ -330,6 +336,8 @@ export function PartnerServiceRequestForm({
             <Pressable
               key={category}
               accessibilityRole="button"
+              accessibilityLabel={`Category: ${REQUEST_CATEGORY_LABELS[category]}`}
+              accessibilityState={{ selected }}
               onPress={() => setField("category", category)}
               style={[
                 styles.chip,
@@ -355,6 +363,8 @@ export function PartnerServiceRequestForm({
             <Pressable
               key={urgency}
               accessibilityRole="button"
+              accessibilityLabel={`Urgency: ${REQUEST_URGENCY_LABELS[urgency]}`}
+              accessibilityState={{ selected }}
               onPress={() => setField("urgency", urgency)}
               style={[
                 styles.chip,

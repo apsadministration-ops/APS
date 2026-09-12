@@ -217,7 +217,7 @@ export default function ShopsListScreen() {
           <Pressable
             testID="link-service-requests"
             accessibilityRole="button"
-            onPress={() => router.push("/(shop-owner)/service-requests" as any)}
+            onPress={() => router.dismissTo("/(shop-owner)/service-requests" as any)}
             style={[styles.operationsLink, { backgroundColor: colors.primary + "12", borderColor: colors.primary }]}
           >
             <Feather name="clipboard" size={16} color={colors.primary} />
