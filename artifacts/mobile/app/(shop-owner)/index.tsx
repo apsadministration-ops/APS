@@ -11,6 +11,7 @@ import { Feather } from "@expo/vector-icons";
 import { useState } from "react";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { alertMessage } from "@/utils/confirm";
+import { PARTNER_LAYER_LABEL, PARTNER_LAYER_DESCRIPTION } from "@/lib/partnerIdentity";
 
 export default function ShopsListScreen() {
   const colors = useColors();
@@ -102,9 +103,9 @@ export default function ShopsListScreen() {
         bottomOffset={20}
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.primary} />}
       >
-        <Text style={[styles.heading, { color: colors.foreground }]}>Fleet & Commercial Partners</Text>
+        <Text style={[styles.heading, { color: colors.foreground }]}>{PARTNER_LAYER_LABEL}</Text>
         <Text style={[styles.sub, { color: colors.mutedForeground }]}>
-          Manage your independent shops, dealership service departments, and fleets. One owner, multiple locations.
+          {PARTNER_LAYER_DESCRIPTION} One owner, multiple locations.
         </Text>
 
         {(shops ?? []).length === 0 ? (

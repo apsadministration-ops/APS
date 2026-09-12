@@ -8,6 +8,7 @@ import { useColors } from "@/hooks/useColors";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { alertMessage } from "@/utils/confirm";
 import { Feather } from "@expo/vector-icons";
+import { PARTNER_LAYER_LABEL, PARTNER_LAYER_DESCRIPTION } from "@/lib/partnerIdentity";
 
 const RADIUS_OPTIONS = [5, 10, 25, 50, 100];
 
@@ -196,9 +197,12 @@ export default function RegisterScreen() {
               style={[styles.roleButton, { backgroundColor: role === "shop_owner" ? colors.primary : colors.card, borderColor: colors.border }]}
               onPress={() => setRole("shop_owner")}
             >
-              <Text style={[styles.roleText, { color: role === "shop_owner" ? colors.primaryForeground : colors.foreground }]}>Partner</Text>
+              <Text style={[styles.roleText, { textAlign: "center", color: role === "shop_owner" ? colors.primaryForeground : colors.foreground }]}>{PARTNER_LAYER_LABEL}</Text>
             </Pressable>
           </View>
+          {role === "shop_owner" && (
+            <Text style={{ color: colors.mutedForeground }}>{PARTNER_LAYER_DESCRIPTION}</Text>
+          )}
 
           <Text style={[styles.label, { color: colors.foreground }]}>Full Name</Text>
           <TextInput

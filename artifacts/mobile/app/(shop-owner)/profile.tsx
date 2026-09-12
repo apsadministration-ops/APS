@@ -1,5 +1,6 @@
 import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
 import { useColors } from "@/hooks/useColors";
+import { PARTNER_LAYER_LABEL } from "@/lib/partnerIdentity";
 import { useAuth } from "@/context/AuthContext";
 import { Feather } from "@expo/vector-icons";
 import { confirm } from "@/utils/confirm";
@@ -31,7 +32,7 @@ export default function ShopOwnerProfileScreen() {
           <Text style={[styles.name, { color: colors.foreground }]}>{user?.name}</Text>
           <Text style={[styles.email, { color: colors.mutedForeground }]}>{user?.email}</Text>
           <View style={[styles.roleBadge, { backgroundColor: colors.primary + "20" }]}>
-            <Text style={[styles.roleBadgeText, { color: colors.primary }]}>Shop Owner</Text>
+            <Text style={[styles.roleBadgeText, { color: colors.primary }]}>{PARTNER_LAYER_LABEL}</Text>
           </View>
         </View>
 
