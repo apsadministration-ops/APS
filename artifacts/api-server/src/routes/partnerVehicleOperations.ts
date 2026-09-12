@@ -171,10 +171,9 @@ function validateSubtypeFields(
       }
       if (
         Object.prototype.hasOwnProperty.call(value, "serviceNeeded") &&
-        typeof value.serviceNeeded !== "boolean" &&
-        value.serviceNeeded !== null
+        typeof value.serviceNeeded !== "boolean"
       ) {
-        return "serviceNeeded must be a boolean or null";
+        return "serviceNeeded must be a boolean";
       }
     }
     if (subtype === "fleet") {
@@ -217,9 +216,57 @@ function validateSubtypeFields(
   return null;
 }
 
+const CALENDAR_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const INTEGER_OPERATION_FIELDS = [
+  "year",
+  "mileage",
+  "odometer",
+  "maintenanceDueMileage",
+] as const;
+
+function isValidCalendarDate(value: unknown): value is string {
+  if (typeof value !== "string" || !CALENDAR_DATE_RE.test(value)) return false;
+  const [year, month, day] = value.split("-").map(Number);
+  if (month < 1 || month > 12 || day < 1) return false;
+  const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const daysInMonth = [
+    31,
+    leapYear ? 29 : 28,
+    31,
+    30,
+    31,
+    30,
+    31,
+    31,
+    30,
+    31,
+    30,
+    31,
+  ];
+  return day <= daysInMonth[month - 1];
+}
+
+function validateOperationScalarFields(value: OperationInput): string | null {
+  for (const field of INTEGER_OPERATION_FIELDS) {
+    if (!Object.prototype.hasOwnProperty.call(value, field)) continue;
+    const fieldValue = value[field];
+    if (fieldValue === null && field !== "year" && field !== "mileage") continue;
+    if (!Number.isSafeInteger(fieldValue)) {
+      return `${field} must be an integer`;
+    }
+  }
+  if (
+    Object.prototype.hasOwnProperty.call(value, "maintenanceDueDate") &&
+    value.maintenanceDueDate !== null &&
+    !isValidCalendarDate(value.maintenanceDueDate)
+  ) {
+    return "maintenanceDueDate must be a valid YYYY-MM-DD calendar date";
+  }
+  return null;
+}
+
 function asCalendarDate(value: unknown): string | null {
   if (value === null || value === undefined) return null;
-  if (value instanceof Date) return value.toISOString().slice(0, 10);
   return typeof value === "string" ? value : null;
 }
 
@@ -262,9 +309,7 @@ function formatOperation(
     operatingStatus: operation.operatingStatus ?? null,
     odometer: operation.odometer ?? null,
     usageHours: operation.usageHours ?? null,
-    maintenanceDueDate: operation.maintenanceDueDate
-      ? new Date(`${operation.maintenanceDueDate}T00:00:00.000Z`)
-      : null,
+    maintenanceDueDate: asCalendarDate(operation.maintenanceDueDate),
     maintenanceDueMileage: operation.maintenanceDueMileage ?? null,
     downtimeSince: operation.downtimeSince ?? null,
     notes: operation.notes ?? null,
@@ -409,6 +454,11 @@ router.post(
       return;
     }
     const value = parsed.data as OperationInput;
+    const scalarError = validateOperationScalarFields(value);
+    if (scalarError) {
+      res.status(400).json({ error: scalarError });
+      return;
+    }
     try {
       const organization = await loadWritableOrganization(organizationId, req.userId!);
       const subtype = organization.subtype as OperationSubtype;
@@ -529,6 +579,11 @@ router.post(
       return;
     }
     const value = parsed.data as OperationInput;
+    const scalarError = validateOperationScalarFields(value);
+    if (scalarError) {
+      res.status(400).json({ error: scalarError });
+      return;
+    }
     try {
       const organization = await loadWritableOrganization(organizationId, req.userId!);
       const subtype = organization.subtype as OperationSubtype;
@@ -697,6 +752,11 @@ router.patch(
       return;
     }
     const value = parsed.data as OperationInput;
+    const scalarError = validateOperationScalarFields(value);
+    if (scalarError) {
+      res.status(400).json({ error: scalarError });
+      return;
+    }
     try {
       const organization = await loadWritableOrganization(organizationId, req.userId!);
       const subtype = organization.subtype as OperationSubtype;

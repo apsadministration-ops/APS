@@ -7,6 +7,7 @@ import { useColors } from "@/hooks/useColors";
 type LinkedLocation = {
   id: number;
   name: string;
+  status?: "active" | "inactive";
 };
 
 type Props = {
@@ -29,7 +30,10 @@ export function PartnerLegacyVehiclePicker({
   const colors = useColors();
   const candidates = vehicles.filter(
     (vehicle) =>
-      vehicle.ownerShopId != null && locations.some((location) => location.id === vehicle.ownerShopId),
+      vehicle.ownerShopId != null &&
+      locations.some(
+        (location) => location.id === vehicle.ownerShopId && location.status !== "inactive",
+      ),
   );
 
   return (

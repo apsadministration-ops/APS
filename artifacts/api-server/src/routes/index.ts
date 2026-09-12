@@ -40,6 +40,7 @@ import integrationsRouter from "./integrations";
 import partnerJobsRouter from "./partnerJobs";
 import partnerOrganizationsRouter from "./partnerOrganizations";
 import partnerVehicleOperationsRouter from "./partnerVehicleOperations";
+import partnerServiceRequestsRouter from "./partnerServiceRequests";
 
 const router: IRouter = Router();
 
@@ -79,6 +80,7 @@ router.use(payoutsRouter);
 router.use(invoiceRouter);
 router.use(partnerOrganizationsRouter);
 router.use(partnerVehicleOperationsRouter);
+router.use(partnerServiceRequestsRouter);
 router.use(adminFinanceRouter);
 router.use(partsRouter);
 router.use(mediaRouter);

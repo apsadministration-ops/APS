@@ -389,7 +389,11 @@ test(
     );
     assert.equal(irrelevantFleetField.response.status, 400);
 
-    const fleetOperation = await api<{ id: number; vehicleId: number }>(
+    const fleetOperation = await api<{
+      id: number;
+      vehicleId: number;
+      maintenanceDueDate: string | null;
+    }>(
       `/api/partner-organizations/${fleet.id}/vehicle-operations`,
       {
         method: "POST",
@@ -401,8 +405,88 @@ test(
         },
       },
     );
-    assert.equal(fleetOperation.response.status, 201);
+    assert.equal(fleetOperation.response.status, 201, JSON.stringify(fleetOperation.body));
+    assert.equal(fleetOperation.body.maintenanceDueDate, "2027-03-01");
     fixture.vehicleIds.push(fleetOperation.body.vehicleId);
+
+    const reloadedFleetOperation = await api<{ maintenanceDueDate: string | null }>(
+      `/api/partner-organizations/${fleet.id}/vehicle-operations/${fleetOperation.body.id}`,
+      { token: ownerA.token },
+    );
+    assert.equal(reloadedFleetOperation.response.status, 200);
+    assert.equal(reloadedFleetOperation.body.maintenanceDueDate, "2027-03-01");
+    const clearedMaintenanceDate = await api<{ maintenanceDueDate: string | null }>(
+      `/api/partner-organizations/${fleet.id}/vehicle-operations/${fleetOperation.body.id}`,
+      {
+        method: "PATCH",
+        token: ownerA.token,
+        body: { maintenanceDueDate: null },
+      },
+    );
+    assert.equal(clearedMaintenanceDate.response.status, 200);
+    assert.equal(clearedMaintenanceDate.body.maintenanceDueDate, null);
+    const reloadedClearedDate = await api<{ maintenanceDueDate: string | null }>(
+      `/api/partner-organizations/${fleet.id}/vehicle-operations/${fleetOperation.body.id}`,
+      { token: ownerA.token },
+    );
+    assert.equal(reloadedClearedDate.response.status, 200);
+    assert.equal(reloadedClearedDate.body.maintenanceDueDate, null);
+
+    const fractionalYear = await api(
+      `/api/partner-organizations/${dealership.id}/vehicle-operations`,
+      {
+        method: "POST",
+        token: ownerA.token,
+        body: {
+          ...canonicalFields("1HGCM82633A004366"),
+          year: 2023.5,
+          linkedShopId: dealerLocation.id,
+          ...dealershipFields(),
+        },
+      },
+    );
+    assert.equal(fractionalYear.response.status, 400);
+    const fractionalMileage = await api(
+      `/api/partner-organizations/${dealership.id}/vehicle-operations`,
+      {
+        method: "POST",
+        token: ownerA.token,
+        body: {
+          ...canonicalFields("1HGCM82633A004367"),
+          mileage: 1200.5,
+          linkedShopId: dealerLocation.id,
+          ...dealershipFields(),
+        },
+      },
+    );
+    assert.equal(fractionalMileage.response.status, 400);
+    const fractionalOdometer = await api(
+      `/api/partner-organizations/${fleet.id}/vehicle-operations/${fleetOperation.body.id}`,
+      {
+        method: "PATCH",
+        token: ownerA.token,
+        body: { odometer: 12000.5 },
+      },
+    );
+    assert.equal(fractionalOdometer.response.status, 400);
+    const fractionalMaintenanceMileage = await api(
+      `/api/partner-organizations/${fleet.id}/vehicle-operations/${fleetOperation.body.id}`,
+      {
+        method: "PATCH",
+        token: ownerA.token,
+        body: { maintenanceDueMileage: 15000.5 },
+      },
+    );
+    assert.equal(fractionalMaintenanceMileage.response.status, 400);
+    const invalidCalendarDate = await api(
+      `/api/partner-organizations/${fleet.id}/vehicle-operations/${fleetOperation.body.id}`,
+      {
+        method: "PATCH",
+        token: ownerA.token,
+        body: { maintenanceDueDate: "2027-02-30" },
+      },
+    );
+    assert.equal(invalidCalendarDate.response.status, 400);
 
     const irrelevantDealerField = await api(
       `/api/partner-organizations/${fleet.id}/vehicle-operations`,
@@ -430,6 +514,16 @@ test(
     assert.equal(moved.response.status, 200);
     assert.equal(moved.body.linkedShopId, secondLocation.id);
     assert.equal(moved.body.ownerShopId, secondLocation.id);
+
+    const nullServiceNeeded = await api(
+      `/api/partner-organizations/${dealership.id}/vehicle-operations/${dealer.body.id}`,
+      {
+        method: "PATCH",
+        token: ownerA.token,
+        body: { serviceNeeded: null },
+      },
+    );
+    assert.equal(nullServiceNeeded.response.status, 400);
 
     const fleetEdited = await api<{ operatingStatus: string }>(
       `/api/partner-organizations/${fleet.id}/vehicle-operations/${fleetOperation.body.id}`,
@@ -542,6 +636,11 @@ test(
     );
     assert.equal(partnerClaim.response.status, 201);
     fixture.vehicleIds.push((partnerClaim.body as { vehicleId: number }).vehicleId);
+    const blockedUnownedPartnerRemove = await api(
+      `/api/vehicles/${(partnerClaim.body as { vehicleId: number }).vehicleId}`,
+      { method: "DELETE", token: ownerA.token },
+    );
+    assert.equal(blockedUnownedPartnerRemove.response.status, 409);
     const legacyClaim = await api(
       "/api/vehicles",
       {
@@ -617,6 +716,18 @@ test(
         .where(eq(ownershipTable.vehicleId, legacyVehicleId)),
       legacyOwnershipBefore,
     );
+    const blockedPartnerRemove = await api(
+      `/api/vehicles/${legacyVehicleId}`,
+      { method: "DELETE", token: ownerA.token },
+    );
+    assert.equal(blockedPartnerRemove.response.status, 409);
+    assert.deepEqual(
+      await fixture.db
+        .select()
+        .from(ownershipTable)
+        .where(eq(ownershipTable.vehicleId, legacyVehicleId)),
+      legacyOwnershipBefore,
+    );
 
     // A customer-owned vehicle with ownerShopId null is not importable even
     // when the same shop_owner is the authenticated caller.
@@ -662,6 +773,17 @@ test(
         .where(eq(ownershipTable.vehicleId, sameUserCustomerVehicle.body.id)),
       sameUserOwnershipBefore,
     );
+    const ordinaryRemove = await api(
+      `/api/vehicles/${sameUserCustomerVehicle.body.id}`,
+      { method: "DELETE", token: ownerA.token },
+    );
+    assert.equal(ordinaryRemove.response.status, 200);
+    const removedOwnership = await fixture.db
+      .select()
+      .from(ownershipTable)
+      .where(eq(ownershipTable.vehicleId, sameUserCustomerVehicle.body.id));
+    assert.equal(removedOwnership.length, 1);
+    assert.ok(removedOwnership[0].endDate);
     const sameUserOwnership = sameUserOwnershipBefore[0];
     if (sameUserOwnership) fixture.ownershipIds.push(sameUserOwnership.id);
 
@@ -807,6 +929,63 @@ test(
       .where(eq(fixture.ownershipTable.vehicleId, legacyPost.body.id));
     fixture.ownershipIds.push(
       ...afterTransferRaceOwnership.map((ownership: { id: number }) => ownership.id),
+    );
+
+    const removeRaceVehicle = await api<{ id: number }>(
+      "/api/vehicles",
+      {
+        method: "POST",
+        token: ownerA.token,
+        body: {
+          ...canonicalFields("1HGCM82633A004371"),
+          ownerShopId: location.id,
+        },
+      },
+    );
+    assert.equal(removeRaceVehicle.response.status, 201, JSON.stringify(removeRaceVehicle.body));
+    fixture.vehicleIds.push(removeRaceVehicle.body.id);
+    const removeRaceOwnershipBefore = await fixture.db
+      .select()
+      .from(fixture.ownershipTable)
+      .where(eq(fixture.ownershipTable.vehicleId, removeRaceVehicle.body.id));
+    fixture.ownershipIds.push(
+      ...removeRaceOwnershipBefore.map((ownership: { id: number }) => ownership.id),
+    );
+    const [importRemoveRace, removeRace] = await Promise.all([
+      api(
+        `/api/partner-organizations/${dealership.id}/vehicle-operations/link`,
+        {
+          method: "POST",
+          token: ownerA.token,
+          body: {
+            vehicleId: removeRaceVehicle.body.id,
+            linkedShopId: location.id,
+            ...dealershipFields(),
+          },
+        },
+      ),
+      api(
+        `/api/vehicles/${removeRaceVehicle.body.id}`,
+        { method: "DELETE", token: ownerA.token },
+      ),
+    ]);
+    assert.equal(importRemoveRace.response.status, 201, JSON.stringify(importRemoveRace.body));
+    assert.ok(
+      removeRace.response.status === 200 || removeRace.response.status === 409,
+      JSON.stringify(removeRace.body),
+    );
+    const removeRaceOwnershipAfter = await fixture.db
+      .select()
+      .from(fixture.ownershipTable)
+      .where(eq(fixture.ownershipTable.vehicleId, removeRaceVehicle.body.id));
+    assert.equal(removeRaceOwnershipAfter.length, 1);
+    if (removeRace.response.status === 409) {
+      assert.equal(removeRaceOwnershipAfter[0].endDate, null);
+    } else {
+      assert.ok(removeRaceOwnershipAfter[0].endDate);
+    }
+    fixture.ownershipIds.push(
+      ...removeRaceOwnershipAfter.map((ownership: { id: number }) => ownership.id),
     );
   },
 );

@@ -1082,7 +1082,10 @@ export interface PartnerVehicleOperation {
   odometer: number | null;
   /** @nullable */
   usageHours: number | null;
-  /** @nullable */
+  /**
+   * @nullable
+   * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+   */
   maintenanceDueDate: string | null;
   /** @nullable */
   maintenanceDueMileage: number | null;
@@ -1150,6 +1153,7 @@ export interface PartnerVehicleOperationInput {
   odometer?: number;
   /** @minimum 0 */
   usageHours?: number;
+  /** @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ */
   maintenanceDueDate?: string;
   /** @minimum 0 */
   maintenanceDueMileage?: number;
@@ -1197,6 +1201,7 @@ export interface PartnerVehicleOperationLink {
   odometer?: number;
   /** @minimum 0 */
   usageHours?: number;
+  /** @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ */
   maintenanceDueDate?: string;
   /** @minimum 0 */
   maintenanceDueMileage?: number;
@@ -1242,8 +1247,7 @@ export interface PartnerVehicleOperationUpdate {
   stockNumber?: string | null;
   /** @nullable */
   inventoryStatus?: PartnerVehicleOperationUpdateInventoryStatus;
-  /** @nullable */
-  serviceNeeded?: boolean | null;
+  serviceNeeded?: boolean;
   /** @nullable */
   serviceNotes?: string | null;
   /**
@@ -1268,7 +1272,10 @@ export interface PartnerVehicleOperationUpdate {
    * @nullable
    */
   usageHours?: number | null;
-  /** @nullable */
+  /**
+   * @nullable
+   * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+   */
   maintenanceDueDate?: string | null;
   /**
    * @minimum 0
@@ -1279,6 +1286,238 @@ export interface PartnerVehicleOperationUpdate {
   downtimeSince?: string | null;
   /** @nullable */
   notes?: string | null;
+}
+
+export type PartnerServiceRequestStatus =
+  (typeof PartnerServiceRequestStatus)[keyof typeof PartnerServiceRequestStatus];
+
+export const PartnerServiceRequestStatus = {
+  draft: "draft",
+  submitted: "submitted",
+  in_progress: "in_progress",
+  completed: "completed",
+  cancelled: "cancelled",
+} as const;
+
+export type PartnerServiceRequestCategory =
+  (typeof PartnerServiceRequestCategory)[keyof typeof PartnerServiceRequestCategory];
+
+export const PartnerServiceRequestCategory = {
+  inspection: "inspection",
+  diagnostics: "diagnostics",
+  maintenance: "maintenance",
+  repair: "repair",
+  recall: "recall",
+  other: "other",
+} as const;
+
+export type PartnerServiceRequestUrgency =
+  (typeof PartnerServiceRequestUrgency)[keyof typeof PartnerServiceRequestUrgency];
+
+export const PartnerServiceRequestUrgency = {
+  low: "low",
+  normal: "normal",
+  high: "high",
+  urgent: "urgent",
+} as const;
+
+export interface PartnerServiceRequestVehicleContext {
+  vin: string;
+  /** @nullable */
+  plateNumber: string | null;
+  make: string;
+  model: string;
+  year: number;
+  /** @nullable */
+  trim: string | null;
+  /** @nullable */
+  color: string | null;
+  mileage: number;
+}
+
+/**
+ * @nullable
+ */
+export type PartnerServiceRequestDealershipContextOperationInventoryStatus =
+  | (typeof PartnerServiceRequestDealershipContextOperationInventoryStatus)[keyof typeof PartnerServiceRequestDealershipContextOperationInventoryStatus]
+  | null;
+
+export const PartnerServiceRequestDealershipContextOperationInventoryStatus = {
+  in_stock: "in_stock",
+  preparing: "preparing",
+  ready: "ready",
+  sold: "sold",
+} as const;
+
+export type PartnerServiceRequestDealershipContextOperation = {
+  /** @nullable */
+  stockNumber: string | null;
+  /** @nullable */
+  inventoryStatus: PartnerServiceRequestDealershipContextOperationInventoryStatus;
+  /** @nullable */
+  serviceNeeded: boolean | null;
+  /** @nullable */
+  serviceNotes: string | null;
+};
+
+export interface PartnerServiceRequestDealershipContext {
+  capturedAt: string;
+  vehicle: PartnerServiceRequestVehicleContext;
+  operation: PartnerServiceRequestDealershipContextOperation;
+}
+
+/**
+ * @nullable
+ */
+export type PartnerServiceRequestFleetContextOperationOperatingStatus =
+  | (typeof PartnerServiceRequestFleetContextOperationOperatingStatus)[keyof typeof PartnerServiceRequestFleetContextOperationOperatingStatus]
+  | null;
+
+export const PartnerServiceRequestFleetContextOperationOperatingStatus = {
+  active: "active",
+  maintenance: "maintenance",
+  out_of_service: "out_of_service",
+  retired: "retired",
+} as const;
+
+export type PartnerServiceRequestFleetContextOperation = {
+  /** @nullable */
+  unitNumber: string | null;
+  /** @nullable */
+  groupName: string | null;
+  /** @nullable */
+  operatingStatus: PartnerServiceRequestFleetContextOperationOperatingStatus;
+  /** @nullable */
+  odometer: number | null;
+  /** @nullable */
+  usageHours: number | null;
+  /**
+   * @nullable
+   * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+   */
+  maintenanceDueDate: string | null;
+  /** @nullable */
+  maintenanceDueMileage: number | null;
+  /** @nullable */
+  downtimeSince: string | null;
+  /** @nullable */
+  notes: string | null;
+};
+
+export interface PartnerServiceRequestFleetContext {
+  capturedAt: string;
+  vehicle: PartnerServiceRequestVehicleContext;
+  operation: PartnerServiceRequestFleetContextOperation;
+}
+
+export interface PartnerServiceRequestCreateInput {
+  /** @minimum 1 */
+  operationId: number;
+  /** @minimum 1 */
+  locationId: number;
+  category: PartnerServiceRequestCategory;
+  urgency: PartnerServiceRequestUrgency;
+  /** @minLength 1 */
+  requestedWork: string;
+  /** @nullable */
+  serviceNotes?: string | null;
+  /**
+   * @minLength 1
+   * @maxLength 200
+   */
+  clientRequestId: string;
+}
+
+export interface PartnerServiceRequestUpdateInput {
+  /** @minimum 0 */
+  expectedVersion: number;
+  category?: PartnerServiceRequestCategory;
+  urgency?: PartnerServiceRequestUrgency;
+  /** @minLength 1 */
+  requestedWork?: string;
+  /** @nullable */
+  serviceNotes?: string | null;
+  /** @minimum 1 */
+  locationId?: number;
+}
+
+export interface PartnerServiceRequestTransitionInput {
+  /** @minimum 0 */
+  expectedVersion: number;
+  toStatus: PartnerServiceRequestStatus;
+  /** @nullable */
+  note?: string | null;
+}
+
+export type PartnerServiceRequestSourceSubtype =
+  (typeof PartnerServiceRequestSourceSubtype)[keyof typeof PartnerServiceRequestSourceSubtype];
+
+export const PartnerServiceRequestSourceSubtype = {
+  dealership: "dealership",
+  fleet: "fleet",
+} as const;
+
+export interface PartnerServiceRequest {
+  id: number;
+  organizationId: number;
+  operationId: number;
+  vehicleId: number;
+  sourceSubtype: PartnerServiceRequestSourceSubtype;
+  locationId: number;
+  status: PartnerServiceRequestStatus;
+  category: PartnerServiceRequestCategory;
+  urgency: PartnerServiceRequestUrgency;
+  requestedWork: string;
+  /** @nullable */
+  serviceNotes: string | null;
+  creationContext:
+    | PartnerServiceRequestDealershipContext
+    | PartnerServiceRequestFleetContext;
+  /** @minimum 0 */
+  version: number;
+  clientRequestId: string;
+  createdAt: string;
+  /** @nullable */
+  submittedAt: string | null;
+  /** @nullable */
+  startedAt: string | null;
+  /** @nullable */
+  completedAt: string | null;
+  /** @nullable */
+  cancelledAt: string | null;
+  updatedAt: string;
+}
+
+/**
+ * @nullable
+ */
+export type PartnerServiceRequestStatusHistoryFromStatus =
+  | (typeof PartnerServiceRequestStatusHistoryFromStatus)[keyof typeof PartnerServiceRequestStatusHistoryFromStatus]
+  | null;
+
+export const PartnerServiceRequestStatusHistoryFromStatus = {
+  draft: "draft",
+  submitted: "submitted",
+  in_progress: "in_progress",
+  completed: "completed",
+  cancelled: "cancelled",
+} as const;
+
+export interface PartnerServiceRequestStatusHistory {
+  id: number;
+  requestId: number;
+  actorUserId: number;
+  /** @nullable */
+  fromStatus: PartnerServiceRequestStatusHistoryFromStatus;
+  toStatus: PartnerServiceRequestStatus;
+  /** @nullable */
+  note: string | null;
+  createdAt: string;
+}
+
+export interface PartnerServiceRequestDetail {
+  request: PartnerServiceRequest;
+  statusHistory: PartnerServiceRequestStatusHistory[];
 }
 
 export type CreateShopBodyPartnerKind =
@@ -2240,6 +2479,25 @@ export const ListMechanicsJobType = {
 
 export type RemoveFavorite200 = {
   ok: boolean;
+};
+
+export type ListPartnerServiceRequestsParams = {
+  status?: PartnerServiceRequestStatus;
+  urgency?: PartnerServiceRequestUrgency;
+  /**
+   * @minimum 1
+   */
+  vehicleId?: number;
+  /**
+   * @minimum 1
+   */
+  locationId?: number;
+  q?: string;
+  /**
+   * @minimum 1
+   * @maximum 100
+   */
+  limit?: number;
 };
 
 export type ListShopVehicles200Item = Vehicle & {

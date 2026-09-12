@@ -51,6 +51,15 @@ class VehicleTransferError extends Error {
   }
 }
 
+class VehicleRemovalError extends Error {
+  constructor(
+    readonly status: number,
+    readonly response: string,
+  ) {
+    super(response);
+  }
+}
+
 function formatVehicle(
   vehicle: typeof vehiclesTable.$inferSelect,
   ownership: typeof ownershipTable.$inferSelect | null,
@@ -296,18 +305,70 @@ router.delete("/vehicles/:vehicleId", authenticate, async (req: AuthRequest, res
   const vehicleId = parseInt(String(req.params.vehicleId), 10);
   if (isNaN(vehicleId)) { res.status(400).json({ error: "Invalid vehicle ID" }); return; }
 
-  const [ownership] = await db
-    .select()
-    .from(ownershipTable)
-    .where(and(eq(ownershipTable.vehicleId, vehicleId), eq(ownershipTable.userId, req.userId!), isNull(ownershipTable.endDate)));
+  try {
+    await db.transaction(async (tx) => {
+      const identityRows = await tx.execute(sql`
+        SELECT vin
+        FROM vehicles
+        WHERE id = ${vehicleId}
+      `);
+      const identity = identityRows.rows[0] as { vin: string } | undefined;
+      if (!identity) throw new VehicleRemovalError(404, "You do not own this vehicle");
+      await tx.execute(sql`
+        SELECT pg_advisory_xact_lock(
+          hashtextextended(lower(${identity.vin}), 0)
+        )
+      `);
+      const lockedRows = await tx.execute(sql`
+        SELECT id
+        FROM vehicles
+        WHERE id = ${vehicleId}
+        FOR UPDATE
+      `);
+      if (!lockedRows.rows[0]) {
+        throw new VehicleRemovalError(404, "You do not own this vehicle");
+      }
 
-  if (!ownership) {
-    res.status(404).json({ error: "You do not own this vehicle" });
-    return;
+      const [registeredPartnerVehicle] = await tx
+        .select({ id: partnerVehicleOperationsTable.id })
+        .from(partnerVehicleOperationsTable)
+        .where(eq(partnerVehicleOperationsTable.vehicleId, vehicleId));
+      if (registeredPartnerVehicle) {
+        throw new VehicleRemovalError(
+          409,
+          "This VIN is registered to a commercial partner vehicle",
+        );
+      }
+
+      const [ownership] = await tx
+        .select()
+        .from(ownershipTable)
+        .where(
+          and(
+            eq(ownershipTable.vehicleId, vehicleId),
+            eq(ownershipTable.userId, req.userId!),
+            isNull(ownershipTable.endDate),
+          ),
+        );
+      if (!ownership) {
+        throw new VehicleRemovalError(404, "You do not own this vehicle");
+      }
+
+      const [endedOwnership] = await tx
+        .update(ownershipTable)
+        .set({ endDate: new Date() })
+        .where(eq(ownershipTable.id, ownership.id))
+        .returning();
+      if (!endedOwnership) throw new Error("Vehicle ownership removal did not return a row");
+    });
+    res.json({ message: "Vehicle removed from your account" });
+  } catch (error) {
+    if (error instanceof VehicleRemovalError) {
+      res.status(error.status).json({ error: error.response });
+      return;
+    }
+    throw error;
   }
-
-  await db.update(ownershipTable).set({ endDate: new Date() }).where(eq(ownershipTable.id, ownership.id));
-  res.json({ message: "Vehicle removed from your account" });
 });
 
 router.get("/vehicles/vin/:vin", authenticate, async (req: AuthRequest, res): Promise<void> => {

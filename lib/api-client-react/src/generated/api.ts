@@ -63,6 +63,7 @@ import type {
   ListJobPartsOrders200,
   ListJobsParams,
   ListMechanicsParams,
+  ListPartnerServiceRequestsParams,
   ListPartsCatalog200,
   ListRecommendedPartsParams,
   ListShopVehicles200Item,
@@ -79,6 +80,11 @@ import type {
   PartnerOrganizationInput,
   PartnerOrganizationLocationLink,
   PartnerOrganizationUpdate,
+  PartnerServiceRequest,
+  PartnerServiceRequestCreateInput,
+  PartnerServiceRequestDetail,
+  PartnerServiceRequestTransitionInput,
+  PartnerServiceRequestUpdateInput,
   PartnerVehicleOperation,
   PartnerVehicleOperationInput,
   PartnerVehicleOperationLink,
@@ -5333,6 +5339,599 @@ export const useUpdatePartnerVehicleOperation = <
   TContext
 > => {
   return useMutation(getUpdatePartnerVehicleOperationMutationOptions(options));
+};
+
+/**
+ * Lists requests belonging to the authenticated owner's dealership or
+fleet organization. Inactive organizations remain readable. Unknown
+query keys and malformed filters are rejected.
+
+ * @summary List owner-managed service requests
+ */
+export const getListPartnerServiceRequestsUrl = (
+  organizationId: number,
+  params?: ListPartnerServiceRequestsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/partner-organizations/${organizationId}/service-requests?${stringifiedParams}`
+    : `/api/partner-organizations/${organizationId}/service-requests`;
+};
+
+export const listPartnerServiceRequests = async (
+  organizationId: number,
+  params?: ListPartnerServiceRequestsParams,
+  options?: RequestInit,
+): Promise<PartnerServiceRequest[]> => {
+  return customFetch<PartnerServiceRequest[]>(
+    getListPartnerServiceRequestsUrl(organizationId, params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getListPartnerServiceRequestsQueryKey = (
+  organizationId: number,
+  params?: ListPartnerServiceRequestsParams,
+) => {
+  return [
+    `/api/partner-organizations/${organizationId}/service-requests`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getListPartnerServiceRequestsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listPartnerServiceRequests>>,
+  TError = ErrorType<void>,
+>(
+  organizationId: number,
+  params?: ListPartnerServiceRequestsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listPartnerServiceRequests>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getListPartnerServiceRequestsQueryKey(organizationId, params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listPartnerServiceRequests>>
+  > = ({ signal }) =>
+    listPartnerServiceRequests(organizationId, params, {
+      signal,
+      ...requestOptions,
+    });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!organizationId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listPartnerServiceRequests>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListPartnerServiceRequestsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listPartnerServiceRequests>>
+>;
+export type ListPartnerServiceRequestsQueryError = ErrorType<void>;
+
+/**
+ * @summary List owner-managed service requests
+ */
+
+export function useListPartnerServiceRequests<
+  TData = Awaited<ReturnType<typeof listPartnerServiceRequests>>,
+  TError = ErrorType<void>,
+>(
+  organizationId: number,
+  params?: ListPartnerServiceRequestsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listPartnerServiceRequests>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListPartnerServiceRequestsQueryOptions(
+    organizationId,
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Creates an owner-managed draft from an existing operation. The server
+derives vehicle, subtype, location association, and creationContext
+from the operation; clients cannot submit VIN, stock/unit, subtype, or
+arbitrary context fields. Matching clientRequestId retries return the
+existing request.
+
+ * @summary Create a draft service request
+ */
+export const getCreatePartnerServiceRequestUrl = (organizationId: number) => {
+  return `/api/partner-organizations/${organizationId}/service-requests`;
+};
+
+export const createPartnerServiceRequest = async (
+  organizationId: number,
+  partnerServiceRequestCreateInput: PartnerServiceRequestCreateInput,
+  options?: RequestInit,
+): Promise<PartnerServiceRequest> => {
+  return customFetch<PartnerServiceRequest>(
+    getCreatePartnerServiceRequestUrl(organizationId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(partnerServiceRequestCreateInput),
+    },
+  );
+};
+
+export const getCreatePartnerServiceRequestMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createPartnerServiceRequest>>,
+    TError,
+    {
+      organizationId: number;
+      data: BodyType<PartnerServiceRequestCreateInput>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createPartnerServiceRequest>>,
+  TError,
+  { organizationId: number; data: BodyType<PartnerServiceRequestCreateInput> },
+  TContext
+> => {
+  const mutationKey = ["createPartnerServiceRequest"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createPartnerServiceRequest>>,
+    { organizationId: number; data: BodyType<PartnerServiceRequestCreateInput> }
+  > = (props) => {
+    const { organizationId, data } = props ?? {};
+
+    return createPartnerServiceRequest(organizationId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreatePartnerServiceRequestMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createPartnerServiceRequest>>
+>;
+export type CreatePartnerServiceRequestMutationBody =
+  BodyType<PartnerServiceRequestCreateInput>;
+export type CreatePartnerServiceRequestMutationError = ErrorType<void>;
+
+/**
+ * @summary Create a draft service request
+ */
+export const useCreatePartnerServiceRequest = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createPartnerServiceRequest>>,
+    TError,
+    {
+      organizationId: number;
+      data: BodyType<PartnerServiceRequestCreateInput>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createPartnerServiceRequest>>,
+  TError,
+  { organizationId: number; data: BodyType<PartnerServiceRequestCreateInput> },
+  TContext
+> => {
+  return useMutation(getCreatePartnerServiceRequestMutationOptions(options));
+};
+
+/**
+ * @summary Get one service request and status history
+ */
+export const getGetPartnerServiceRequestUrl = (
+  organizationId: number,
+  requestId: number,
+) => {
+  return `/api/partner-organizations/${organizationId}/service-requests/${requestId}`;
+};
+
+export const getPartnerServiceRequest = async (
+  organizationId: number,
+  requestId: number,
+  options?: RequestInit,
+): Promise<PartnerServiceRequestDetail> => {
+  return customFetch<PartnerServiceRequestDetail>(
+    getGetPartnerServiceRequestUrl(organizationId, requestId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetPartnerServiceRequestQueryKey = (
+  organizationId: number,
+  requestId: number,
+) => {
+  return [
+    `/api/partner-organizations/${organizationId}/service-requests/${requestId}`,
+  ] as const;
+};
+
+export const getGetPartnerServiceRequestQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPartnerServiceRequest>>,
+  TError = ErrorType<void>,
+>(
+  organizationId: number,
+  requestId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPartnerServiceRequest>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getGetPartnerServiceRequestQueryKey(organizationId, requestId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getPartnerServiceRequest>>
+  > = ({ signal }) =>
+    getPartnerServiceRequest(organizationId, requestId, {
+      signal,
+      ...requestOptions,
+    });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!(organizationId && requestId),
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPartnerServiceRequest>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPartnerServiceRequestQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPartnerServiceRequest>>
+>;
+export type GetPartnerServiceRequestQueryError = ErrorType<void>;
+
+/**
+ * @summary Get one service request and status history
+ */
+
+export function useGetPartnerServiceRequest<
+  TData = Awaited<ReturnType<typeof getPartnerServiceRequest>>,
+  TError = ErrorType<void>,
+>(
+  organizationId: number,
+  requestId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPartnerServiceRequest>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPartnerServiceRequestQueryOptions(
+    organizationId,
+    requestId,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Content-only edit. `expectedVersion` is required. Status, operation,
+vehicle, organization, subtype, clientRequestId, and creationContext
+are immutable.
+
+ * @summary Edit draft or submitted request content
+ */
+export const getUpdatePartnerServiceRequestUrl = (
+  organizationId: number,
+  requestId: number,
+) => {
+  return `/api/partner-organizations/${organizationId}/service-requests/${requestId}`;
+};
+
+export const updatePartnerServiceRequest = async (
+  organizationId: number,
+  requestId: number,
+  partnerServiceRequestUpdateInput: PartnerServiceRequestUpdateInput,
+  options?: RequestInit,
+): Promise<PartnerServiceRequest> => {
+  return customFetch<PartnerServiceRequest>(
+    getUpdatePartnerServiceRequestUrl(organizationId, requestId),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(partnerServiceRequestUpdateInput),
+    },
+  );
+};
+
+export const getUpdatePartnerServiceRequestMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updatePartnerServiceRequest>>,
+    TError,
+    {
+      organizationId: number;
+      requestId: number;
+      data: BodyType<PartnerServiceRequestUpdateInput>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updatePartnerServiceRequest>>,
+  TError,
+  {
+    organizationId: number;
+    requestId: number;
+    data: BodyType<PartnerServiceRequestUpdateInput>;
+  },
+  TContext
+> => {
+  const mutationKey = ["updatePartnerServiceRequest"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updatePartnerServiceRequest>>,
+    {
+      organizationId: number;
+      requestId: number;
+      data: BodyType<PartnerServiceRequestUpdateInput>;
+    }
+  > = (props) => {
+    const { organizationId, requestId, data } = props ?? {};
+
+    return updatePartnerServiceRequest(
+      organizationId,
+      requestId,
+      data,
+      requestOptions,
+    );
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdatePartnerServiceRequestMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updatePartnerServiceRequest>>
+>;
+export type UpdatePartnerServiceRequestMutationBody =
+  BodyType<PartnerServiceRequestUpdateInput>;
+export type UpdatePartnerServiceRequestMutationError = ErrorType<void>;
+
+/**
+ * @summary Edit draft or submitted request content
+ */
+export const useUpdatePartnerServiceRequest = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updatePartnerServiceRequest>>,
+    TError,
+    {
+      organizationId: number;
+      requestId: number;
+      data: BodyType<PartnerServiceRequestUpdateInput>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updatePartnerServiceRequest>>,
+  TError,
+  {
+    organizationId: number;
+    requestId: number;
+    data: BodyType<PartnerServiceRequestUpdateInput>;
+  },
+  TContext
+> => {
+  return useMutation(getUpdatePartnerServiceRequestMutationOptions(options));
+};
+
+/**
+ * Valid transitions are draft→submitted, submitted→in_progress,
+in_progress→completed, and draft/submitted/in_progress→cancelled.
+Completed and cancelled are terminal. No provider acceptance,
+rejection, scheduling, dispatch, or APS job is involved.
+
+ * @summary Apply one explicit service-request status transition
+ */
+export const getTransitionPartnerServiceRequestUrl = (
+  organizationId: number,
+  requestId: number,
+) => {
+  return `/api/partner-organizations/${organizationId}/service-requests/${requestId}/transition`;
+};
+
+export const transitionPartnerServiceRequest = async (
+  organizationId: number,
+  requestId: number,
+  partnerServiceRequestTransitionInput: PartnerServiceRequestTransitionInput,
+  options?: RequestInit,
+): Promise<PartnerServiceRequest> => {
+  return customFetch<PartnerServiceRequest>(
+    getTransitionPartnerServiceRequestUrl(organizationId, requestId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(partnerServiceRequestTransitionInput),
+    },
+  );
+};
+
+export const getTransitionPartnerServiceRequestMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof transitionPartnerServiceRequest>>,
+    TError,
+    {
+      organizationId: number;
+      requestId: number;
+      data: BodyType<PartnerServiceRequestTransitionInput>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof transitionPartnerServiceRequest>>,
+  TError,
+  {
+    organizationId: number;
+    requestId: number;
+    data: BodyType<PartnerServiceRequestTransitionInput>;
+  },
+  TContext
+> => {
+  const mutationKey = ["transitionPartnerServiceRequest"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof transitionPartnerServiceRequest>>,
+    {
+      organizationId: number;
+      requestId: number;
+      data: BodyType<PartnerServiceRequestTransitionInput>;
+    }
+  > = (props) => {
+    const { organizationId, requestId, data } = props ?? {};
+
+    return transitionPartnerServiceRequest(
+      organizationId,
+      requestId,
+      data,
+      requestOptions,
+    );
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type TransitionPartnerServiceRequestMutationResult = NonNullable<
+  Awaited<ReturnType<typeof transitionPartnerServiceRequest>>
+>;
+export type TransitionPartnerServiceRequestMutationBody =
+  BodyType<PartnerServiceRequestTransitionInput>;
+export type TransitionPartnerServiceRequestMutationError = ErrorType<void>;
+
+/**
+ * @summary Apply one explicit service-request status transition
+ */
+export const useTransitionPartnerServiceRequest = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof transitionPartnerServiceRequest>>,
+    TError,
+    {
+      organizationId: number;
+      requestId: number;
+      data: BodyType<PartnerServiceRequestTransitionInput>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof transitionPartnerServiceRequest>>,
+  TError,
+  {
+    organizationId: number;
+    requestId: number;
+    data: BodyType<PartnerServiceRequestTransitionInput>;
+  },
+  TContext
+> => {
+  return useMutation(
+    getTransitionPartnerServiceRequestMutationOptions(options),
+  );
 };
 
 /**

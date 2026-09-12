@@ -10,6 +10,8 @@
     "migrate:partner-organizations": "node ./src/migrate_partner_organizations.mjs",
     "report:partner-part4-vehicle-operations": "node ./src/report_partner_part4_vehicle_operations.mjs",
     "migrate:partner-part4-vehicle-operations": "node ./src/migrate_partner_part4_vehicle_operations.mjs",
+    "report:partner-part5-service-requests": "node ./src/report_partner_part5_service_requests.mjs",
+    "migrate:partner-part5-service-requests": "node ./src/migrate_partner_part5_service_requests.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {

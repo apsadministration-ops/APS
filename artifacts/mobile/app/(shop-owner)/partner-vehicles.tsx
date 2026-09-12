@@ -42,6 +42,7 @@ import {
 import { PartnerLegacyVehiclePicker } from "@/components/partner/PartnerLegacyVehiclePicker";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
+import { partnerVehicleContextKey } from "@/lib/partnerVehicleContext";
 import { buildPartnerVehicleIdentityPayload } from "@/lib/partnerVehicleOperationPayload";
 import {
   partnerOrganizationSubtypeLabel,
@@ -125,7 +126,13 @@ export default function PartnerVehiclesScreen() {
   const capability = partnerSubtypeCapability(selectedOrganization?.subtype);
   const ownerId = user?.id ?? null;
   const selectedSubtype = selectedOrganization?.subtype ?? null;
-  const contextKey = `${ownerId ?? "none"}:${selectedId ?? "none"}:${selectedSubtype ?? "none"}`;
+  const selectedOrganizationStatus = selectedOrganization?.status ?? null;
+  const contextKey = partnerVehicleContextKey({
+    ownerId,
+    selectedId,
+    subtype: selectedSubtype,
+    organizationStatus: selectedOrganizationStatus,
+  });
   const currentContextKeyRef = useRef(contextKey);
   currentContextKeyRef.current = contextKey;
   const contextReady = contextResetKey === contextKey;
@@ -189,13 +196,37 @@ export default function PartnerVehiclesScreen() {
   }, [capability?.subtype, contextReady, fleetStatusFilter, groupFilter, search, serviceFilter, vehicles]);
 
   const locationNameById = useMemo(
-    () => new Map((linkedLocations ?? []).map((location) => [location.id, location.name])),
+    () =>
+      new Map(
+        (linkedLocations ?? []).map((location) => [
+          location.id,
+          `${location.name}${location.status === "inactive" ? " (inactive)" : ""}`,
+        ]),
+      ),
     [linkedLocations],
   );
   const isLoading = organizationsLoading || linkedLocationsLoading || operationsLoading;
   const queryError =
     organizationsError ?? linkedLocationsError ?? operationsError ?? legacyVehiclesError;
   const hasVehicleOperations = capability?.primaryArea.endsWith("-vehicles") === true;
+  const writesEnabled =
+    contextReady && selectedOrganizationStatus === "active" && hasVehicleOperations;
+  const activeLinkedLocations = useMemo(
+    () => (linkedLocations ?? []).filter((location) => location.status === "active"),
+    [linkedLocations],
+  );
+  const formLocations = useMemo(() => {
+    if (formMode !== "edit" || draft.locationId == null) return activeLinkedLocations;
+    const currentLocation = (linkedLocations ?? []).find((location) => location.id === draft.locationId);
+    if (currentLocation && currentLocation.status !== "active") {
+      return [
+        currentLocation,
+        ...activeLinkedLocations.filter((location) => location.id !== currentLocation.id),
+      ];
+    }
+    return activeLinkedLocations;
+  }, [activeLinkedLocations, draft.locationId, formMode, linkedLocations]);
+  const canWriteOperation = writesEnabled && activeLinkedLocations.length > 0;
 
   useEffect(() => {
     setShowForm(false);
@@ -213,7 +244,7 @@ export default function PartnerVehiclesScreen() {
     pendingMutationRef.current = null;
     setPendingMutationToken(null);
     setContextResetKey(contextKey);
-  }, [contextKey, ownerId, selectedId, selectedSubtype]);
+  }, [contextKey, ownerId, selectedId, selectedSubtype, selectedOrganizationStatus]);
 
   const beginMutation = () => {
     const token = `${contextKey}:${++mutationSequenceRef.current}`;
@@ -298,6 +329,21 @@ export default function PartnerVehiclesScreen() {
 
     if (!selectedId || !capability || !hasVehicleOperations) {
       setFormError("Vehicle operations are not authorized for this organization subtype.");
+      return;
+    }
+    if (!writesEnabled) {
+      setFormError(
+        selectedOrganizationStatus === "inactive"
+          ? "This organization is inactive. Existing operations are read-only until it is reactivated."
+          : "Vehicle operations are read-only until an active organization is selected.",
+      );
+      return;
+    }
+    const destinationLocation = (linkedLocations ?? []).find(
+      (location) => location.id === draft.locationId,
+    );
+    if (!destinationLocation || destinationLocation.status !== "active") {
+      setFormError("Select an active linked location as the destination for this write.");
       return;
     }
 
@@ -688,6 +734,24 @@ export default function PartnerVehiclesScreen() {
             {(linkedLocations?.length ?? 0) === 1 ? "" : "s"}.
           </Text>
         </View>
+        {!writesEnabled && hasVehicleOperations && selectedOrganizationStatus === "inactive" ? (
+          <View style={[styles.notice, { backgroundColor: colors.mutedForeground + "12", borderColor: colors.border }]}>
+            <Feather name="lock" size={16} color={colors.mutedForeground} />
+            <Text style={[styles.noticeText, { color: colors.foreground }]}>
+              This organization is inactive. Existing vehicle operations remain readable, but
+              create, legacy import, and edit are disabled until the organization is reactivated.
+            </Text>
+          </View>
+        ) : null}
+        {writesEnabled && hasVehicleOperations && activeLinkedLocations.length === 0 ? (
+          <View style={[styles.notice, { backgroundColor: colors.mutedForeground + "12", borderColor: colors.border }]}>
+            <Feather name="map-pin" size={16} color={colors.mutedForeground} />
+            <Text style={[styles.noticeText, { color: colors.foreground }]}>
+              No active linked locations are available for writes. Existing operations remain
+              readable; reactivate or link a location before creating, importing, or editing.
+            </Text>
+          </View>
+        ) : null}
 
         {capability.subtype === "shop" ? (
           <View style={[styles.actionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -749,7 +813,9 @@ export default function PartnerVehiclesScreen() {
               <Pressable
                 accessibilityRole="button"
                 onPress={openCreate}
-                style={[styles.addButton, { backgroundColor: colors.primary }]}
+                disabled={!canWriteOperation}
+                accessibilityState={{ disabled: !canWriteOperation }}
+                style={[styles.addButton, { backgroundColor: colors.primary, opacity: canWriteOperation ? 1 : 0.45 }]}
               >
                 <Feather name="plus" size={15} color={colors.primaryForeground} />
                 <Text style={[styles.addButtonText, { color: colors.primaryForeground }]}>Add vehicle</Text>
@@ -771,7 +837,7 @@ export default function PartnerVehiclesScreen() {
             {contextReady && showForm ? (
               <PartnerVehicleForm
                 capability={capability}
-                locations={linkedLocations ?? []}
+                locations={formLocations}
                 draft={draft}
                 mode={formMode}
                 error={formError}
@@ -786,14 +852,14 @@ export default function PartnerVehiclesScreen() {
                   setFormError("");
                 }}
                 onSubmit={saveVehicle}
-                onImportLegacy={formMode === "edit" ? undefined : importLegacyVehicle}
+                onImportLegacy={canWriteOperation && formMode !== "edit" ? importLegacyVehicle : undefined}
               />
             ) : null}
 
             {contextReady && showLegacyPicker ? (
               <PartnerLegacyVehiclePicker
                 vehicles={legacyVehicles ?? []}
-                locations={linkedLocations ?? []}
+                locations={activeLinkedLocations}
                 isLoading={legacyVehiclesLoading}
                 locationNameById={locationNameById}
                 onChoose={chooseLegacyVehicle}
@@ -825,7 +891,15 @@ export default function PartnerVehiclesScreen() {
                         ? [locationNameById.get(vehicle.linkedShopId) as string]
                         : []
                     }
-                    onEdit={() => openEdit(vehicle)}
+                    onEdit={canWriteOperation ? () => openEdit(vehicle) : undefined}
+                    onRequestService={
+                      canWriteOperation
+                        ? () =>
+                            router.push(
+                              `/(shop-owner)/service-requests/new?operationId=${vehicle.id}` as never,
+                            )
+                        : undefined
+                    }
                   />
                 ))}
               </View>

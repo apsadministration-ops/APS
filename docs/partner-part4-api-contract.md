@@ -66,7 +66,7 @@ type PartnerVehicleOperation = {
   operatingStatus: "active" | "maintenance" | "out_of_service" | "retired" | null;
   odometer: number | null;
   usageHours: number | null;
-  maintenanceDueDate: string | null; // YYYY-MM-DD
+  maintenanceDueDate: string | null; // exact valid YYYY-MM-DD
   maintenanceDueMileage: number | null;
   downtimeSince: string | null; // ISO date-time
   notes: string | null;
@@ -172,6 +172,11 @@ wins. The legacy ownership-transfer endpoint rejects any vehicle already
 registered by a partner with HTTP 409; it does not end or append ownership
 history for that vehicle.
 
+The legacy `DELETE /vehicles/{vehicleId}` path uses the same VIN advisory lock
+and canonical vehicle row lock. It returns HTTP 409 without ending ownership
+history when the vehicle is already registered by a partner; ordinary customer
+vehicle removal remains unchanged.
+
 ### `GET /partner-organizations/{organizationId}/vehicle-operations/{operationId}`
 
 Returns one owner-scoped operation. The operation must belong to the path
@@ -208,3 +213,19 @@ destinations are rejected.
   logs, mechanic responses, jobs, or customer responses.
 - Existing data is not backfilled or automatically linked. The additive
   migration is reviewed and applied separately.
+
+## Part 4 audit hardening
+
+- `maintenanceDueDate` is an exact valid calendar string (`YYYY-MM-DD`) in
+  requests and responses. It is not coerced to a JavaScript `Date` or emitted
+  as an ISO timestamp.
+- `year`, `mileage`, `odometer`, and `maintenanceDueMileage` reject fractional
+  values with HTTP 400 before any database write. A dealership update also
+  rejects `serviceNeeded: null`.
+- Legacy removal serializes with partner import on the normalized VIN and
+  canonical vehicle row. Registered partner vehicles return HTTP 409 and
+  preserve their ownership history.
+- The real-DB Part 4 suite covers date-only response/reload, null and
+  fractional validation, ordinary ownership removal, partner-removal denial,
+  concurrent import-versus-remove, and existing claim/transfer/subtype races.
+  Fixture cleanup is dependency-ordered and runs in a `finally` path.

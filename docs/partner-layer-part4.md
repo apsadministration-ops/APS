@@ -1,5 +1,27 @@
 # Commercial Partner expansion — Part 4
 
+## Final implementation audit before Part 5
+
+The actual routes, schema, generated contracts, forms, and implementation
+documentation were reviewed against the original Part 4 scope. Four genuine
+gaps were fixed before Part 5 implementation began:
+
+- Legacy vehicle removal now uses the same transactional VIN/vehicle locks
+  as claim, import, and transfer, and cannot end ownership of a registered
+  commercial vehicle.
+- Maintenance due dates remain validated calendar-date strings (`YYYY-MM-DD`)
+  through API responses and reloads, rather than becoming timestamps.
+- Integer-valued fields reject fractions; dealership service-needed flags
+  cannot be cleared to null.
+- Inactive organizations are read-only, and forms offer only active linked
+  locations as writable destinations.
+
+The three expanded real-database integration scenarios passed, including
+removal/import races, ordinary customer removal compatibility, date response
+shape, invalid numbers, and required-field checks. Mobile capability/payload
+and context-switch helper checks passed. No extra Part 4 features were added;
+service requests remained deferred until this audit was finalized.
+
 ## Scope
 
 Distinct Shop/Ghost Garage, Dealership, and Fleet operations within the shared

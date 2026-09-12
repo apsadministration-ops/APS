@@ -9,6 +9,7 @@
     "serve": "node server/serve.js",
     "test:phase2": "node --experimental-strip-types scripts/phase2-regression.mjs",
     "test:partner-vehicles": "node --experimental-strip-types scripts/partner-vehicle-operations.test.mjs",
+    "test:partner-service-requests": "node --experimental-strip-types scripts/partner-service-requests.test.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {

@@ -2937,6 +2937,16 @@ export const ListPartnerVehicleOperationsParams = zod.object({
   organizationId: zod.coerce.number().min(1),
 });
 
+export const listPartnerVehicleOperationsResponseYearMultipleOf = 1;
+
+export const listPartnerVehicleOperationsResponseMileageMultipleOf = 1;
+
+export const listPartnerVehicleOperationsResponseOdometerMultipleOf = 1;
+
+export const listPartnerVehicleOperationsResponseMaintenanceDueDateRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const listPartnerVehicleOperationsResponseMaintenanceDueMileageMultipleOf = 1;
+
 export const ListPartnerVehicleOperationsResponseItem = zod.object({
   id: zod.number(),
   organizationId: zod.number(),
@@ -2946,10 +2956,14 @@ export const ListPartnerVehicleOperationsResponseItem = zod.object({
   plateNumber: zod.string().nullable(),
   make: zod.string(),
   model: zod.string(),
-  year: zod.number(),
+  year: zod
+    .number()
+    .multipleOf(listPartnerVehicleOperationsResponseYearMultipleOf),
   trim: zod.string().nullable(),
   color: zod.string().nullable(),
-  mileage: zod.number(),
+  mileage: zod
+    .number()
+    .multipleOf(listPartnerVehicleOperationsResponseMileageMultipleOf),
   insuranceCarrier: zod.string().nullable(),
   insurancePolicyNumber: zod.string().nullable(),
   ownerShopId: zod.number().nullable(),
@@ -2976,10 +2990,21 @@ export const ListPartnerVehicleOperationsResponseItem = zod.object({
       zod.literal(null),
     ])
     .nullable(),
-  odometer: zod.number().nullable(),
+  odometer: zod
+    .number()
+    .multipleOf(listPartnerVehicleOperationsResponseOdometerMultipleOf)
+    .nullable(),
   usageHours: zod.number().nullable(),
-  maintenanceDueDate: zod.coerce.date().nullable(),
-  maintenanceDueMileage: zod.number().nullable(),
+  maintenanceDueDate: zod
+    .string()
+    .regex(listPartnerVehicleOperationsResponseMaintenanceDueDateRegExp)
+    .nullable(),
+  maintenanceDueMileage: zod
+    .number()
+    .multipleOf(
+      listPartnerVehicleOperationsResponseMaintenanceDueMileageMultipleOf,
+    )
+    .nullable(),
   downtimeSince: zod.coerce.date().nullable(),
   notes: zod.string().nullable(),
   createdAt: zod.coerce.date(),
@@ -3005,14 +3030,20 @@ export const createPartnerVehicleOperationBodyVinMin = 17;
 export const createPartnerVehicleOperationBodyVinMax = 17;
 
 export const createPartnerVehicleOperationBodyYearMin = 1886;
+export const createPartnerVehicleOperationBodyYearMultipleOf = 1;
 
 export const createPartnerVehicleOperationBodyMileageMin = 0;
+export const createPartnerVehicleOperationBodyMileageMultipleOf = 1;
 
 export const createPartnerVehicleOperationBodyOdometerMin = 0;
+export const createPartnerVehicleOperationBodyOdometerMultipleOf = 1;
 
 export const createPartnerVehicleOperationBodyUsageHoursMin = 0;
 
+export const createPartnerVehicleOperationBodyMaintenanceDueDateRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
 export const createPartnerVehicleOperationBodyMaintenanceDueMileageMin = 0;
+export const createPartnerVehicleOperationBodyMaintenanceDueMileageMultipleOf = 1;
 
 export const CreatePartnerVehicleOperationBody = zod.object({
   linkedShopId: zod.number().min(1),
@@ -3023,10 +3054,16 @@ export const CreatePartnerVehicleOperationBody = zod.object({
   plateNumber: zod.string().optional(),
   make: zod.string().min(1),
   model: zod.string().min(1),
-  year: zod.number().min(createPartnerVehicleOperationBodyYearMin),
+  year: zod
+    .number()
+    .min(createPartnerVehicleOperationBodyYearMin)
+    .multipleOf(createPartnerVehicleOperationBodyYearMultipleOf),
   trim: zod.string().optional(),
   color: zod.string().optional(),
-  mileage: zod.number().min(createPartnerVehicleOperationBodyMileageMin),
+  mileage: zod
+    .number()
+    .min(createPartnerVehicleOperationBodyMileageMin)
+    .multipleOf(createPartnerVehicleOperationBodyMileageMultipleOf),
   insuranceCarrier: zod.string().optional(),
   insurancePolicyNumber: zod.string().optional(),
   stockNumber: zod.string().min(1).optional(),
@@ -3043,15 +3080,22 @@ export const CreatePartnerVehicleOperationBody = zod.object({
   odometer: zod
     .number()
     .min(createPartnerVehicleOperationBodyOdometerMin)
+    .multipleOf(createPartnerVehicleOperationBodyOdometerMultipleOf)
     .optional(),
   usageHours: zod
     .number()
     .min(createPartnerVehicleOperationBodyUsageHoursMin)
     .optional(),
-  maintenanceDueDate: zod.coerce.date().optional(),
+  maintenanceDueDate: zod
+    .string()
+    .regex(createPartnerVehicleOperationBodyMaintenanceDueDateRegExp)
+    .optional(),
   maintenanceDueMileage: zod
     .number()
     .min(createPartnerVehicleOperationBodyMaintenanceDueMileageMin)
+    .multipleOf(
+      createPartnerVehicleOperationBodyMaintenanceDueMileageMultipleOf,
+    )
     .optional(),
   downtimeSince: zod.coerce.date().optional(),
   notes: zod.string().optional(),
@@ -3073,10 +3117,14 @@ export const LinkPartnerVehicleOperationParams = zod.object({
 });
 
 export const linkPartnerVehicleOperationBodyOdometerMin = 0;
+export const linkPartnerVehicleOperationBodyOdometerMultipleOf = 1;
 
 export const linkPartnerVehicleOperationBodyUsageHoursMin = 0;
 
+export const linkPartnerVehicleOperationBodyMaintenanceDueDateRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
 export const linkPartnerVehicleOperationBodyMaintenanceDueMileageMin = 0;
+export const linkPartnerVehicleOperationBodyMaintenanceDueMileageMultipleOf = 1;
 
 export const LinkPartnerVehicleOperationBody = zod.object({
   vehicleId: zod.number().min(1),
@@ -3095,15 +3143,20 @@ export const LinkPartnerVehicleOperationBody = zod.object({
   odometer: zod
     .number()
     .min(linkPartnerVehicleOperationBodyOdometerMin)
+    .multipleOf(linkPartnerVehicleOperationBodyOdometerMultipleOf)
     .optional(),
   usageHours: zod
     .number()
     .min(linkPartnerVehicleOperationBodyUsageHoursMin)
     .optional(),
-  maintenanceDueDate: zod.coerce.date().optional(),
+  maintenanceDueDate: zod
+    .string()
+    .regex(linkPartnerVehicleOperationBodyMaintenanceDueDateRegExp)
+    .optional(),
   maintenanceDueMileage: zod
     .number()
     .min(linkPartnerVehicleOperationBodyMaintenanceDueMileageMin)
+    .multipleOf(linkPartnerVehicleOperationBodyMaintenanceDueMileageMultipleOf)
     .optional(),
   downtimeSince: zod.coerce.date().optional(),
   notes: zod.string().optional(),
@@ -3118,6 +3171,16 @@ export const GetPartnerVehicleOperationParams = zod.object({
   operationId: zod.coerce.number().min(1),
 });
 
+export const getPartnerVehicleOperationResponseYearMultipleOf = 1;
+
+export const getPartnerVehicleOperationResponseMileageMultipleOf = 1;
+
+export const getPartnerVehicleOperationResponseOdometerMultipleOf = 1;
+
+export const getPartnerVehicleOperationResponseMaintenanceDueDateRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const getPartnerVehicleOperationResponseMaintenanceDueMileageMultipleOf = 1;
+
 export const GetPartnerVehicleOperationResponse = zod.object({
   id: zod.number(),
   organizationId: zod.number(),
@@ -3127,10 +3190,14 @@ export const GetPartnerVehicleOperationResponse = zod.object({
   plateNumber: zod.string().nullable(),
   make: zod.string(),
   model: zod.string(),
-  year: zod.number(),
+  year: zod
+    .number()
+    .multipleOf(getPartnerVehicleOperationResponseYearMultipleOf),
   trim: zod.string().nullable(),
   color: zod.string().nullable(),
-  mileage: zod.number(),
+  mileage: zod
+    .number()
+    .multipleOf(getPartnerVehicleOperationResponseMileageMultipleOf),
   insuranceCarrier: zod.string().nullable(),
   insurancePolicyNumber: zod.string().nullable(),
   ownerShopId: zod.number().nullable(),
@@ -3157,10 +3224,21 @@ export const GetPartnerVehicleOperationResponse = zod.object({
       zod.literal(null),
     ])
     .nullable(),
-  odometer: zod.number().nullable(),
+  odometer: zod
+    .number()
+    .multipleOf(getPartnerVehicleOperationResponseOdometerMultipleOf)
+    .nullable(),
   usageHours: zod.number().nullable(),
-  maintenanceDueDate: zod.coerce.date().nullable(),
-  maintenanceDueMileage: zod.number().nullable(),
+  maintenanceDueDate: zod
+    .string()
+    .regex(getPartnerVehicleOperationResponseMaintenanceDueDateRegExp)
+    .nullable(),
+  maintenanceDueMileage: zod
+    .number()
+    .multipleOf(
+      getPartnerVehicleOperationResponseMaintenanceDueMileageMultipleOf,
+    )
+    .nullable(),
   downtimeSince: zod.coerce.date().nullable(),
   notes: zod.string().nullable(),
   createdAt: zod.coerce.date(),
@@ -3181,10 +3259,14 @@ export const UpdatePartnerVehicleOperationParams = zod.object({
 });
 
 export const updatePartnerVehicleOperationBodyOdometerMin = 0;
+export const updatePartnerVehicleOperationBodyOdometerMultipleOf = 1;
 
 export const updatePartnerVehicleOperationBodyUsageHoursMin = 0;
 
+export const updatePartnerVehicleOperationBodyMaintenanceDueDateRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
 export const updatePartnerVehicleOperationBodyMaintenanceDueMileageMin = 0;
+export const updatePartnerVehicleOperationBodyMaintenanceDueMileageMultipleOf = 1;
 
 export const UpdatePartnerVehicleOperationBody = zod.object({
   linkedShopId: zod.number().min(1).optional(),
@@ -3198,7 +3280,7 @@ export const UpdatePartnerVehicleOperationBody = zod.object({
       zod.literal(null),
     ])
     .nullish(),
-  serviceNeeded: zod.boolean().nullish(),
+  serviceNeeded: zod.boolean().optional(),
   serviceNotes: zod.string().nullish(),
   unitNumber: zod.string().min(1).nullish(),
   groupName: zod.string().min(1).nullish(),
@@ -3214,19 +3296,36 @@ export const UpdatePartnerVehicleOperationBody = zod.object({
   odometer: zod
     .number()
     .min(updatePartnerVehicleOperationBodyOdometerMin)
+    .multipleOf(updatePartnerVehicleOperationBodyOdometerMultipleOf)
     .nullish(),
   usageHours: zod
     .number()
     .min(updatePartnerVehicleOperationBodyUsageHoursMin)
     .nullish(),
-  maintenanceDueDate: zod.coerce.date().nullish(),
+  maintenanceDueDate: zod
+    .string()
+    .regex(updatePartnerVehicleOperationBodyMaintenanceDueDateRegExp)
+    .nullish(),
   maintenanceDueMileage: zod
     .number()
     .min(updatePartnerVehicleOperationBodyMaintenanceDueMileageMin)
+    .multipleOf(
+      updatePartnerVehicleOperationBodyMaintenanceDueMileageMultipleOf,
+    )
     .nullish(),
   downtimeSince: zod.coerce.date().nullish(),
   notes: zod.string().nullish(),
 });
+
+export const updatePartnerVehicleOperationResponseYearMultipleOf = 1;
+
+export const updatePartnerVehicleOperationResponseMileageMultipleOf = 1;
+
+export const updatePartnerVehicleOperationResponseOdometerMultipleOf = 1;
+
+export const updatePartnerVehicleOperationResponseMaintenanceDueDateRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const updatePartnerVehicleOperationResponseMaintenanceDueMileageMultipleOf = 1;
 
 export const UpdatePartnerVehicleOperationResponse = zod.object({
   id: zod.number(),
@@ -3237,10 +3336,14 @@ export const UpdatePartnerVehicleOperationResponse = zod.object({
   plateNumber: zod.string().nullable(),
   make: zod.string(),
   model: zod.string(),
-  year: zod.number(),
+  year: zod
+    .number()
+    .multipleOf(updatePartnerVehicleOperationResponseYearMultipleOf),
   trim: zod.string().nullable(),
   color: zod.string().nullable(),
-  mileage: zod.number(),
+  mileage: zod
+    .number()
+    .multipleOf(updatePartnerVehicleOperationResponseMileageMultipleOf),
   insuranceCarrier: zod.string().nullable(),
   insurancePolicyNumber: zod.string().nullable(),
   ownerShopId: zod.number().nullable(),
@@ -3267,13 +3370,915 @@ export const UpdatePartnerVehicleOperationResponse = zod.object({
       zod.literal(null),
     ])
     .nullable(),
-  odometer: zod.number().nullable(),
+  odometer: zod
+    .number()
+    .multipleOf(updatePartnerVehicleOperationResponseOdometerMultipleOf)
+    .nullable(),
   usageHours: zod.number().nullable(),
-  maintenanceDueDate: zod.coerce.date().nullable(),
-  maintenanceDueMileage: zod.number().nullable(),
+  maintenanceDueDate: zod
+    .string()
+    .regex(updatePartnerVehicleOperationResponseMaintenanceDueDateRegExp)
+    .nullable(),
+  maintenanceDueMileage: zod
+    .number()
+    .multipleOf(
+      updatePartnerVehicleOperationResponseMaintenanceDueMileageMultipleOf,
+    )
+    .nullable(),
   downtimeSince: zod.coerce.date().nullable(),
   notes: zod.string().nullable(),
   createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * Lists requests belonging to the authenticated owner's dealership or
+fleet organization. Inactive organizations remain readable. Unknown
+query keys and malformed filters are rejected.
+
+ * @summary List owner-managed service requests
+ */
+
+export const ListPartnerServiceRequestsParams = zod.object({
+  organizationId: zod.coerce.number().min(1),
+});
+
+export const listPartnerServiceRequestsQueryLimitMax = 100;
+
+export const ListPartnerServiceRequestsQueryParams = zod.object({
+  status: zod
+    .enum(["draft", "submitted", "in_progress", "completed", "cancelled"])
+    .optional(),
+  urgency: zod.enum(["low", "normal", "high", "urgent"]).optional(),
+  vehicleId: zod.coerce.number().min(1).optional(),
+  locationId: zod.coerce.number().min(1).optional(),
+  q: zod.coerce.string().optional(),
+  limit: zod.coerce
+    .number()
+    .min(1)
+    .max(listPartnerServiceRequestsQueryLimitMax)
+    .optional(),
+});
+
+export const listPartnerServiceRequestsResponseCreationContextOneVehicleYearMultipleOf = 1;
+
+export const listPartnerServiceRequestsResponseCreationContextOneVehicleMileageMultipleOf = 1;
+
+export const listPartnerServiceRequestsResponseCreationContextTwoVehicleYearMultipleOf = 1;
+
+export const listPartnerServiceRequestsResponseCreationContextTwoVehicleMileageMultipleOf = 1;
+
+export const listPartnerServiceRequestsResponseCreationContextTwoOperationOdometerMultipleOf = 1;
+
+export const listPartnerServiceRequestsResponseCreationContextTwoOperationMaintenanceDueDateRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const listPartnerServiceRequestsResponseCreationContextTwoOperationMaintenanceDueMileageMultipleOf = 1;
+
+export const listPartnerServiceRequestsResponseVersionMin = 0;
+
+export const ListPartnerServiceRequestsResponseItem = zod.object({
+  id: zod.number(),
+  organizationId: zod.number(),
+  operationId: zod.number(),
+  vehicleId: zod.number(),
+  sourceSubtype: zod.enum(["dealership", "fleet"]),
+  locationId: zod.number(),
+  status: zod.enum([
+    "draft",
+    "submitted",
+    "in_progress",
+    "completed",
+    "cancelled",
+  ]),
+  category: zod.enum([
+    "inspection",
+    "diagnostics",
+    "maintenance",
+    "repair",
+    "recall",
+    "other",
+  ]),
+  urgency: zod.enum(["low", "normal", "high", "urgent"]),
+  requestedWork: zod.string(),
+  serviceNotes: zod.string().nullable(),
+  creationContext: zod.union([
+    zod.object({
+      capturedAt: zod.coerce.date(),
+      vehicle: zod.object({
+        vin: zod.string(),
+        plateNumber: zod.string().nullable(),
+        make: zod.string(),
+        model: zod.string(),
+        year: zod
+          .number()
+          .multipleOf(
+            listPartnerServiceRequestsResponseCreationContextOneVehicleYearMultipleOf,
+          ),
+        trim: zod.string().nullable(),
+        color: zod.string().nullable(),
+        mileage: zod
+          .number()
+          .multipleOf(
+            listPartnerServiceRequestsResponseCreationContextOneVehicleMileageMultipleOf,
+          ),
+      }),
+      operation: zod.object({
+        stockNumber: zod.string().nullable(),
+        inventoryStatus: zod
+          .union([
+            zod.literal("in_stock"),
+            zod.literal("preparing"),
+            zod.literal("ready"),
+            zod.literal("sold"),
+            zod.literal(null),
+          ])
+          .nullable(),
+        serviceNeeded: zod.boolean().nullable(),
+        serviceNotes: zod.string().nullable(),
+      }),
+    }),
+    zod.object({
+      capturedAt: zod.coerce.date(),
+      vehicle: zod.object({
+        vin: zod.string(),
+        plateNumber: zod.string().nullable(),
+        make: zod.string(),
+        model: zod.string(),
+        year: zod
+          .number()
+          .multipleOf(
+            listPartnerServiceRequestsResponseCreationContextTwoVehicleYearMultipleOf,
+          ),
+        trim: zod.string().nullable(),
+        color: zod.string().nullable(),
+        mileage: zod
+          .number()
+          .multipleOf(
+            listPartnerServiceRequestsResponseCreationContextTwoVehicleMileageMultipleOf,
+          ),
+      }),
+      operation: zod.object({
+        unitNumber: zod.string().nullable(),
+        groupName: zod.string().nullable(),
+        operatingStatus: zod
+          .union([
+            zod.literal("active"),
+            zod.literal("maintenance"),
+            zod.literal("out_of_service"),
+            zod.literal("retired"),
+            zod.literal(null),
+          ])
+          .nullable(),
+        odometer: zod
+          .number()
+          .multipleOf(
+            listPartnerServiceRequestsResponseCreationContextTwoOperationOdometerMultipleOf,
+          )
+          .nullable(),
+        usageHours: zod.number().nullable(),
+        maintenanceDueDate: zod
+          .string()
+          .regex(
+            listPartnerServiceRequestsResponseCreationContextTwoOperationMaintenanceDueDateRegExp,
+          )
+          .nullable(),
+        maintenanceDueMileage: zod
+          .number()
+          .multipleOf(
+            listPartnerServiceRequestsResponseCreationContextTwoOperationMaintenanceDueMileageMultipleOf,
+          )
+          .nullable(),
+        downtimeSince: zod.coerce.date().nullable(),
+        notes: zod.string().nullable(),
+      }),
+    }),
+  ]),
+  version: zod.number().min(listPartnerServiceRequestsResponseVersionMin),
+  clientRequestId: zod.string(),
+  createdAt: zod.coerce.date(),
+  submittedAt: zod.coerce.date().nullable(),
+  startedAt: zod.coerce.date().nullable(),
+  completedAt: zod.coerce.date().nullable(),
+  cancelledAt: zod.coerce.date().nullable(),
+  updatedAt: zod.coerce.date(),
+});
+export const ListPartnerServiceRequestsResponse = zod.array(
+  ListPartnerServiceRequestsResponseItem,
+);
+
+/**
+ * Creates an owner-managed draft from an existing operation. The server
+derives vehicle, subtype, location association, and creationContext
+from the operation; clients cannot submit VIN, stock/unit, subtype, or
+arbitrary context fields. Matching clientRequestId retries return the
+existing request.
+
+ * @summary Create a draft service request
+ */
+
+export const CreatePartnerServiceRequestParams = zod.object({
+  organizationId: zod.coerce.number().min(1),
+});
+
+export const createPartnerServiceRequestBodyClientRequestIdMax = 200;
+
+export const CreatePartnerServiceRequestBody = zod.object({
+  operationId: zod.number().min(1),
+  locationId: zod.number().min(1),
+  category: zod.enum([
+    "inspection",
+    "diagnostics",
+    "maintenance",
+    "repair",
+    "recall",
+    "other",
+  ]),
+  urgency: zod.enum(["low", "normal", "high", "urgent"]),
+  requestedWork: zod.string().min(1),
+  serviceNotes: zod.string().nullish(),
+  clientRequestId: zod
+    .string()
+    .min(1)
+    .max(createPartnerServiceRequestBodyClientRequestIdMax),
+});
+
+export const createPartnerServiceRequestResponseCreationContextOneVehicleYearMultipleOf = 1;
+
+export const createPartnerServiceRequestResponseCreationContextOneVehicleMileageMultipleOf = 1;
+
+export const createPartnerServiceRequestResponseCreationContextTwoVehicleYearMultipleOf = 1;
+
+export const createPartnerServiceRequestResponseCreationContextTwoVehicleMileageMultipleOf = 1;
+
+export const createPartnerServiceRequestResponseCreationContextTwoOperationOdometerMultipleOf = 1;
+
+export const createPartnerServiceRequestResponseCreationContextTwoOperationMaintenanceDueDateRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const createPartnerServiceRequestResponseCreationContextTwoOperationMaintenanceDueMileageMultipleOf = 1;
+
+export const createPartnerServiceRequestResponseVersionMin = 0;
+
+export const CreatePartnerServiceRequestResponse = zod.object({
+  id: zod.number(),
+  organizationId: zod.number(),
+  operationId: zod.number(),
+  vehicleId: zod.number(),
+  sourceSubtype: zod.enum(["dealership", "fleet"]),
+  locationId: zod.number(),
+  status: zod.enum([
+    "draft",
+    "submitted",
+    "in_progress",
+    "completed",
+    "cancelled",
+  ]),
+  category: zod.enum([
+    "inspection",
+    "diagnostics",
+    "maintenance",
+    "repair",
+    "recall",
+    "other",
+  ]),
+  urgency: zod.enum(["low", "normal", "high", "urgent"]),
+  requestedWork: zod.string(),
+  serviceNotes: zod.string().nullable(),
+  creationContext: zod.union([
+    zod.object({
+      capturedAt: zod.coerce.date(),
+      vehicle: zod.object({
+        vin: zod.string(),
+        plateNumber: zod.string().nullable(),
+        make: zod.string(),
+        model: zod.string(),
+        year: zod
+          .number()
+          .multipleOf(
+            createPartnerServiceRequestResponseCreationContextOneVehicleYearMultipleOf,
+          ),
+        trim: zod.string().nullable(),
+        color: zod.string().nullable(),
+        mileage: zod
+          .number()
+          .multipleOf(
+            createPartnerServiceRequestResponseCreationContextOneVehicleMileageMultipleOf,
+          ),
+      }),
+      operation: zod.object({
+        stockNumber: zod.string().nullable(),
+        inventoryStatus: zod
+          .union([
+            zod.literal("in_stock"),
+            zod.literal("preparing"),
+            zod.literal("ready"),
+            zod.literal("sold"),
+            zod.literal(null),
+          ])
+          .nullable(),
+        serviceNeeded: zod.boolean().nullable(),
+        serviceNotes: zod.string().nullable(),
+      }),
+    }),
+    zod.object({
+      capturedAt: zod.coerce.date(),
+      vehicle: zod.object({
+        vin: zod.string(),
+        plateNumber: zod.string().nullable(),
+        make: zod.string(),
+        model: zod.string(),
+        year: zod
+          .number()
+          .multipleOf(
+            createPartnerServiceRequestResponseCreationContextTwoVehicleYearMultipleOf,
+          ),
+        trim: zod.string().nullable(),
+        color: zod.string().nullable(),
+        mileage: zod
+          .number()
+          .multipleOf(
+            createPartnerServiceRequestResponseCreationContextTwoVehicleMileageMultipleOf,
+          ),
+      }),
+      operation: zod.object({
+        unitNumber: zod.string().nullable(),
+        groupName: zod.string().nullable(),
+        operatingStatus: zod
+          .union([
+            zod.literal("active"),
+            zod.literal("maintenance"),
+            zod.literal("out_of_service"),
+            zod.literal("retired"),
+            zod.literal(null),
+          ])
+          .nullable(),
+        odometer: zod
+          .number()
+          .multipleOf(
+            createPartnerServiceRequestResponseCreationContextTwoOperationOdometerMultipleOf,
+          )
+          .nullable(),
+        usageHours: zod.number().nullable(),
+        maintenanceDueDate: zod
+          .string()
+          .regex(
+            createPartnerServiceRequestResponseCreationContextTwoOperationMaintenanceDueDateRegExp,
+          )
+          .nullable(),
+        maintenanceDueMileage: zod
+          .number()
+          .multipleOf(
+            createPartnerServiceRequestResponseCreationContextTwoOperationMaintenanceDueMileageMultipleOf,
+          )
+          .nullable(),
+        downtimeSince: zod.coerce.date().nullable(),
+        notes: zod.string().nullable(),
+      }),
+    }),
+  ]),
+  version: zod.number().min(createPartnerServiceRequestResponseVersionMin),
+  clientRequestId: zod.string(),
+  createdAt: zod.coerce.date(),
+  submittedAt: zod.coerce.date().nullable(),
+  startedAt: zod.coerce.date().nullable(),
+  completedAt: zod.coerce.date().nullable(),
+  cancelledAt: zod.coerce.date().nullable(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Get one service request and status history
+ */
+
+export const GetPartnerServiceRequestParams = zod.object({
+  organizationId: zod.coerce.number().min(1),
+  requestId: zod.coerce.number().min(1),
+});
+
+export const getPartnerServiceRequestResponseRequestCreationContextOneVehicleYearMultipleOf = 1;
+
+export const getPartnerServiceRequestResponseRequestCreationContextOneVehicleMileageMultipleOf = 1;
+
+export const getPartnerServiceRequestResponseRequestCreationContextTwoVehicleYearMultipleOf = 1;
+
+export const getPartnerServiceRequestResponseRequestCreationContextTwoVehicleMileageMultipleOf = 1;
+
+export const getPartnerServiceRequestResponseRequestCreationContextTwoOperationOdometerMultipleOf = 1;
+
+export const getPartnerServiceRequestResponseRequestCreationContextTwoOperationMaintenanceDueDateRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const getPartnerServiceRequestResponseRequestCreationContextTwoOperationMaintenanceDueMileageMultipleOf = 1;
+
+export const getPartnerServiceRequestResponseRequestVersionMin = 0;
+
+export const GetPartnerServiceRequestResponse = zod.object({
+  request: zod.object({
+    id: zod.number(),
+    organizationId: zod.number(),
+    operationId: zod.number(),
+    vehicleId: zod.number(),
+    sourceSubtype: zod.enum(["dealership", "fleet"]),
+    locationId: zod.number(),
+    status: zod.enum([
+      "draft",
+      "submitted",
+      "in_progress",
+      "completed",
+      "cancelled",
+    ]),
+    category: zod.enum([
+      "inspection",
+      "diagnostics",
+      "maintenance",
+      "repair",
+      "recall",
+      "other",
+    ]),
+    urgency: zod.enum(["low", "normal", "high", "urgent"]),
+    requestedWork: zod.string(),
+    serviceNotes: zod.string().nullable(),
+    creationContext: zod.union([
+      zod.object({
+        capturedAt: zod.coerce.date(),
+        vehicle: zod.object({
+          vin: zod.string(),
+          plateNumber: zod.string().nullable(),
+          make: zod.string(),
+          model: zod.string(),
+          year: zod
+            .number()
+            .multipleOf(
+              getPartnerServiceRequestResponseRequestCreationContextOneVehicleYearMultipleOf,
+            ),
+          trim: zod.string().nullable(),
+          color: zod.string().nullable(),
+          mileage: zod
+            .number()
+            .multipleOf(
+              getPartnerServiceRequestResponseRequestCreationContextOneVehicleMileageMultipleOf,
+            ),
+        }),
+        operation: zod.object({
+          stockNumber: zod.string().nullable(),
+          inventoryStatus: zod
+            .union([
+              zod.literal("in_stock"),
+              zod.literal("preparing"),
+              zod.literal("ready"),
+              zod.literal("sold"),
+              zod.literal(null),
+            ])
+            .nullable(),
+          serviceNeeded: zod.boolean().nullable(),
+          serviceNotes: zod.string().nullable(),
+        }),
+      }),
+      zod.object({
+        capturedAt: zod.coerce.date(),
+        vehicle: zod.object({
+          vin: zod.string(),
+          plateNumber: zod.string().nullable(),
+          make: zod.string(),
+          model: zod.string(),
+          year: zod
+            .number()
+            .multipleOf(
+              getPartnerServiceRequestResponseRequestCreationContextTwoVehicleYearMultipleOf,
+            ),
+          trim: zod.string().nullable(),
+          color: zod.string().nullable(),
+          mileage: zod
+            .number()
+            .multipleOf(
+              getPartnerServiceRequestResponseRequestCreationContextTwoVehicleMileageMultipleOf,
+            ),
+        }),
+        operation: zod.object({
+          unitNumber: zod.string().nullable(),
+          groupName: zod.string().nullable(),
+          operatingStatus: zod
+            .union([
+              zod.literal("active"),
+              zod.literal("maintenance"),
+              zod.literal("out_of_service"),
+              zod.literal("retired"),
+              zod.literal(null),
+            ])
+            .nullable(),
+          odometer: zod
+            .number()
+            .multipleOf(
+              getPartnerServiceRequestResponseRequestCreationContextTwoOperationOdometerMultipleOf,
+            )
+            .nullable(),
+          usageHours: zod.number().nullable(),
+          maintenanceDueDate: zod
+            .string()
+            .regex(
+              getPartnerServiceRequestResponseRequestCreationContextTwoOperationMaintenanceDueDateRegExp,
+            )
+            .nullable(),
+          maintenanceDueMileage: zod
+            .number()
+            .multipleOf(
+              getPartnerServiceRequestResponseRequestCreationContextTwoOperationMaintenanceDueMileageMultipleOf,
+            )
+            .nullable(),
+          downtimeSince: zod.coerce.date().nullable(),
+          notes: zod.string().nullable(),
+        }),
+      }),
+    ]),
+    version: zod
+      .number()
+      .min(getPartnerServiceRequestResponseRequestVersionMin),
+    clientRequestId: zod.string(),
+    createdAt: zod.coerce.date(),
+    submittedAt: zod.coerce.date().nullable(),
+    startedAt: zod.coerce.date().nullable(),
+    completedAt: zod.coerce.date().nullable(),
+    cancelledAt: zod.coerce.date().nullable(),
+    updatedAt: zod.coerce.date(),
+  }),
+  statusHistory: zod.array(
+    zod.object({
+      id: zod.number(),
+      requestId: zod.number(),
+      actorUserId: zod.number(),
+      fromStatus: zod
+        .union([
+          zod.literal("draft"),
+          zod.literal("submitted"),
+          zod.literal("in_progress"),
+          zod.literal("completed"),
+          zod.literal("cancelled"),
+          zod.literal(null),
+        ])
+        .nullable(),
+      toStatus: zod.enum([
+        "draft",
+        "submitted",
+        "in_progress",
+        "completed",
+        "cancelled",
+      ]),
+      note: zod.string().nullable(),
+      createdAt: zod.coerce.date(),
+    }),
+  ),
+});
+
+/**
+ * Content-only edit. `expectedVersion` is required. Status, operation,
+vehicle, organization, subtype, clientRequestId, and creationContext
+are immutable.
+
+ * @summary Edit draft or submitted request content
+ */
+
+export const UpdatePartnerServiceRequestParams = zod.object({
+  organizationId: zod.coerce.number().min(1),
+  requestId: zod.coerce.number().min(1),
+});
+
+export const updatePartnerServiceRequestBodyExpectedVersionMin = 0;
+export const updatePartnerServiceRequestBodyExpectedVersionMultipleOf = 1;
+
+export const UpdatePartnerServiceRequestBody = zod.object({
+  expectedVersion: zod
+    .number()
+    .min(updatePartnerServiceRequestBodyExpectedVersionMin)
+    .multipleOf(updatePartnerServiceRequestBodyExpectedVersionMultipleOf),
+  category: zod
+    .enum([
+      "inspection",
+      "diagnostics",
+      "maintenance",
+      "repair",
+      "recall",
+      "other",
+    ])
+    .optional(),
+  urgency: zod.enum(["low", "normal", "high", "urgent"]).optional(),
+  requestedWork: zod.string().min(1).optional(),
+  serviceNotes: zod.string().nullish(),
+  locationId: zod.number().min(1).optional(),
+});
+
+export const updatePartnerServiceRequestResponseCreationContextOneVehicleYearMultipleOf = 1;
+
+export const updatePartnerServiceRequestResponseCreationContextOneVehicleMileageMultipleOf = 1;
+
+export const updatePartnerServiceRequestResponseCreationContextTwoVehicleYearMultipleOf = 1;
+
+export const updatePartnerServiceRequestResponseCreationContextTwoVehicleMileageMultipleOf = 1;
+
+export const updatePartnerServiceRequestResponseCreationContextTwoOperationOdometerMultipleOf = 1;
+
+export const updatePartnerServiceRequestResponseCreationContextTwoOperationMaintenanceDueDateRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const updatePartnerServiceRequestResponseCreationContextTwoOperationMaintenanceDueMileageMultipleOf = 1;
+
+export const updatePartnerServiceRequestResponseVersionMin = 0;
+
+export const UpdatePartnerServiceRequestResponse = zod.object({
+  id: zod.number(),
+  organizationId: zod.number(),
+  operationId: zod.number(),
+  vehicleId: zod.number(),
+  sourceSubtype: zod.enum(["dealership", "fleet"]),
+  locationId: zod.number(),
+  status: zod.enum([
+    "draft",
+    "submitted",
+    "in_progress",
+    "completed",
+    "cancelled",
+  ]),
+  category: zod.enum([
+    "inspection",
+    "diagnostics",
+    "maintenance",
+    "repair",
+    "recall",
+    "other",
+  ]),
+  urgency: zod.enum(["low", "normal", "high", "urgent"]),
+  requestedWork: zod.string(),
+  serviceNotes: zod.string().nullable(),
+  creationContext: zod.union([
+    zod.object({
+      capturedAt: zod.coerce.date(),
+      vehicle: zod.object({
+        vin: zod.string(),
+        plateNumber: zod.string().nullable(),
+        make: zod.string(),
+        model: zod.string(),
+        year: zod
+          .number()
+          .multipleOf(
+            updatePartnerServiceRequestResponseCreationContextOneVehicleYearMultipleOf,
+          ),
+        trim: zod.string().nullable(),
+        color: zod.string().nullable(),
+        mileage: zod
+          .number()
+          .multipleOf(
+            updatePartnerServiceRequestResponseCreationContextOneVehicleMileageMultipleOf,
+          ),
+      }),
+      operation: zod.object({
+        stockNumber: zod.string().nullable(),
+        inventoryStatus: zod
+          .union([
+            zod.literal("in_stock"),
+            zod.literal("preparing"),
+            zod.literal("ready"),
+            zod.literal("sold"),
+            zod.literal(null),
+          ])
+          .nullable(),
+        serviceNeeded: zod.boolean().nullable(),
+        serviceNotes: zod.string().nullable(),
+      }),
+    }),
+    zod.object({
+      capturedAt: zod.coerce.date(),
+      vehicle: zod.object({
+        vin: zod.string(),
+        plateNumber: zod.string().nullable(),
+        make: zod.string(),
+        model: zod.string(),
+        year: zod
+          .number()
+          .multipleOf(
+            updatePartnerServiceRequestResponseCreationContextTwoVehicleYearMultipleOf,
+          ),
+        trim: zod.string().nullable(),
+        color: zod.string().nullable(),
+        mileage: zod
+          .number()
+          .multipleOf(
+            updatePartnerServiceRequestResponseCreationContextTwoVehicleMileageMultipleOf,
+          ),
+      }),
+      operation: zod.object({
+        unitNumber: zod.string().nullable(),
+        groupName: zod.string().nullable(),
+        operatingStatus: zod
+          .union([
+            zod.literal("active"),
+            zod.literal("maintenance"),
+            zod.literal("out_of_service"),
+            zod.literal("retired"),
+            zod.literal(null),
+          ])
+          .nullable(),
+        odometer: zod
+          .number()
+          .multipleOf(
+            updatePartnerServiceRequestResponseCreationContextTwoOperationOdometerMultipleOf,
+          )
+          .nullable(),
+        usageHours: zod.number().nullable(),
+        maintenanceDueDate: zod
+          .string()
+          .regex(
+            updatePartnerServiceRequestResponseCreationContextTwoOperationMaintenanceDueDateRegExp,
+          )
+          .nullable(),
+        maintenanceDueMileage: zod
+          .number()
+          .multipleOf(
+            updatePartnerServiceRequestResponseCreationContextTwoOperationMaintenanceDueMileageMultipleOf,
+          )
+          .nullable(),
+        downtimeSince: zod.coerce.date().nullable(),
+        notes: zod.string().nullable(),
+      }),
+    }),
+  ]),
+  version: zod.number().min(updatePartnerServiceRequestResponseVersionMin),
+  clientRequestId: zod.string(),
+  createdAt: zod.coerce.date(),
+  submittedAt: zod.coerce.date().nullable(),
+  startedAt: zod.coerce.date().nullable(),
+  completedAt: zod.coerce.date().nullable(),
+  cancelledAt: zod.coerce.date().nullable(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * Valid transitions are draft→submitted, submitted→in_progress,
+in_progress→completed, and draft/submitted/in_progress→cancelled.
+Completed and cancelled are terminal. No provider acceptance,
+rejection, scheduling, dispatch, or APS job is involved.
+
+ * @summary Apply one explicit service-request status transition
+ */
+
+export const TransitionPartnerServiceRequestParams = zod.object({
+  organizationId: zod.coerce.number().min(1),
+  requestId: zod.coerce.number().min(1),
+});
+
+export const transitionPartnerServiceRequestBodyExpectedVersionMin = 0;
+export const transitionPartnerServiceRequestBodyExpectedVersionMultipleOf = 1;
+
+export const TransitionPartnerServiceRequestBody = zod.object({
+  expectedVersion: zod
+    .number()
+    .min(transitionPartnerServiceRequestBodyExpectedVersionMin)
+    .multipleOf(transitionPartnerServiceRequestBodyExpectedVersionMultipleOf),
+  toStatus: zod.enum([
+    "draft",
+    "submitted",
+    "in_progress",
+    "completed",
+    "cancelled",
+  ]),
+  note: zod.string().nullish(),
+});
+
+export const transitionPartnerServiceRequestResponseCreationContextOneVehicleYearMultipleOf = 1;
+
+export const transitionPartnerServiceRequestResponseCreationContextOneVehicleMileageMultipleOf = 1;
+
+export const transitionPartnerServiceRequestResponseCreationContextTwoVehicleYearMultipleOf = 1;
+
+export const transitionPartnerServiceRequestResponseCreationContextTwoVehicleMileageMultipleOf = 1;
+
+export const transitionPartnerServiceRequestResponseCreationContextTwoOperationOdometerMultipleOf = 1;
+
+export const transitionPartnerServiceRequestResponseCreationContextTwoOperationMaintenanceDueDateRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const transitionPartnerServiceRequestResponseCreationContextTwoOperationMaintenanceDueMileageMultipleOf = 1;
+
+export const transitionPartnerServiceRequestResponseVersionMin = 0;
+
+export const TransitionPartnerServiceRequestResponse = zod.object({
+  id: zod.number(),
+  organizationId: zod.number(),
+  operationId: zod.number(),
+  vehicleId: zod.number(),
+  sourceSubtype: zod.enum(["dealership", "fleet"]),
+  locationId: zod.number(),
+  status: zod.enum([
+    "draft",
+    "submitted",
+    "in_progress",
+    "completed",
+    "cancelled",
+  ]),
+  category: zod.enum([
+    "inspection",
+    "diagnostics",
+    "maintenance",
+    "repair",
+    "recall",
+    "other",
+  ]),
+  urgency: zod.enum(["low", "normal", "high", "urgent"]),
+  requestedWork: zod.string(),
+  serviceNotes: zod.string().nullable(),
+  creationContext: zod.union([
+    zod.object({
+      capturedAt: zod.coerce.date(),
+      vehicle: zod.object({
+        vin: zod.string(),
+        plateNumber: zod.string().nullable(),
+        make: zod.string(),
+        model: zod.string(),
+        year: zod
+          .number()
+          .multipleOf(
+            transitionPartnerServiceRequestResponseCreationContextOneVehicleYearMultipleOf,
+          ),
+        trim: zod.string().nullable(),
+        color: zod.string().nullable(),
+        mileage: zod
+          .number()
+          .multipleOf(
+            transitionPartnerServiceRequestResponseCreationContextOneVehicleMileageMultipleOf,
+          ),
+      }),
+      operation: zod.object({
+        stockNumber: zod.string().nullable(),
+        inventoryStatus: zod
+          .union([
+            zod.literal("in_stock"),
+            zod.literal("preparing"),
+            zod.literal("ready"),
+            zod.literal("sold"),
+            zod.literal(null),
+          ])
+          .nullable(),
+        serviceNeeded: zod.boolean().nullable(),
+        serviceNotes: zod.string().nullable(),
+      }),
+    }),
+    zod.object({
+      capturedAt: zod.coerce.date(),
+      vehicle: zod.object({
+        vin: zod.string(),
+        plateNumber: zod.string().nullable(),
+        make: zod.string(),
+        model: zod.string(),
+        year: zod
+          .number()
+          .multipleOf(
+            transitionPartnerServiceRequestResponseCreationContextTwoVehicleYearMultipleOf,
+          ),
+        trim: zod.string().nullable(),
+        color: zod.string().nullable(),
+        mileage: zod
+          .number()
+          .multipleOf(
+            transitionPartnerServiceRequestResponseCreationContextTwoVehicleMileageMultipleOf,
+          ),
+      }),
+      operation: zod.object({
+        unitNumber: zod.string().nullable(),
+        groupName: zod.string().nullable(),
+        operatingStatus: zod
+          .union([
+            zod.literal("active"),
+            zod.literal("maintenance"),
+            zod.literal("out_of_service"),
+            zod.literal("retired"),
+            zod.literal(null),
+          ])
+          .nullable(),
+        odometer: zod
+          .number()
+          .multipleOf(
+            transitionPartnerServiceRequestResponseCreationContextTwoOperationOdometerMultipleOf,
+          )
+          .nullable(),
+        usageHours: zod.number().nullable(),
+        maintenanceDueDate: zod
+          .string()
+          .regex(
+            transitionPartnerServiceRequestResponseCreationContextTwoOperationMaintenanceDueDateRegExp,
+          )
+          .nullable(),
+        maintenanceDueMileage: zod
+          .number()
+          .multipleOf(
+            transitionPartnerServiceRequestResponseCreationContextTwoOperationMaintenanceDueMileageMultipleOf,
+          )
+          .nullable(),
+        downtimeSince: zod.coerce.date().nullable(),
+        notes: zod.string().nullable(),
+      }),
+    }),
+  ]),
+  version: zod.number().min(transitionPartnerServiceRequestResponseVersionMin),
+  clientRequestId: zod.string(),
+  createdAt: zod.coerce.date(),
+  submittedAt: zod.coerce.date().nullable(),
+  startedAt: zod.coerce.date().nullable(),
+  completedAt: zod.coerce.date().nullable(),
+  cancelledAt: zod.coerce.date().nullable(),
   updatedAt: zod.coerce.date(),
 });
 

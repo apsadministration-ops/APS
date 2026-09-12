@@ -10,6 +10,7 @@ import {
   text,
   timestamp,
   uniqueIndex,
+  unique,
   boolean,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
@@ -88,6 +89,13 @@ export const partnerVehicleOperationsTable = pgTable(
       foreignColumns: [shopsTable.organizationId, shopsTable.id],
     }),
     uniqueIndex("partner_vehicle_operations_vehicle_unique").on(
+      table.vehicleId,
+    ),
+    // Targets the service-request FK and keeps its organization/operation/
+    // vehicle association internally consistent.
+    unique("partner_vehicle_operations_org_id_vehicle_unique").on(
+      table.organizationId,
+      table.id,
       table.vehicleId,
     ),
     index("partner_vehicle_operations_org_idx").on(table.organizationId),

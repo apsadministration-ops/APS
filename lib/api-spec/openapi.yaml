@@ -34,6 +34,8 @@ tags:
     description: Owner-only partner organization foundation
   - name: partner-vehicle-operations
     description: Owner-only dealership and fleet vehicle operations
+  - name: partner-service-requests
+    description: Owner-only dealership and fleet operational service requests
   - name: bays
     description: Rentable service bays inside a shop
   - name: bookings
@@ -1455,6 +1457,191 @@ paths:
         "403": { description: Active shop_owner and supported organization required }
         "404": { description: Operation or organization not found }
         "409": { description: Inactive or cross-organization location }
+
+  /partner-organizations/{organizationId}/service-requests:
+    parameters:
+      - name: organizationId
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+    get:
+      operationId: listPartnerServiceRequests
+      tags: [partner-service-requests]
+      summary: List owner-managed service requests
+      description: |
+        Lists requests belonging to the authenticated owner's dealership or
+        fleet organization. Inactive organizations remain readable. Unknown
+        query keys and malformed filters are rejected.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/PartnerServiceRequestStatus"
+        - name: urgency
+          in: query
+          schema:
+            $ref: "#/components/schemas/PartnerServiceRequestUrgency"
+        - name: vehicleId
+          in: query
+          schema: { type: integer, minimum: 1 }
+        - name: locationId
+          in: query
+          schema: { type: integer, minimum: 1 }
+        - name: q
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100 }
+      responses:
+        "200":
+          description: Service requests
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PartnerServiceRequest"
+        "400": { description: Invalid query or path }
+        "401": { description: Unauthorized }
+        "403": { description: Active shop_owner and supported organization required }
+        "404": { description: Organization not found }
+    post:
+      operationId: createPartnerServiceRequest
+      tags: [partner-service-requests]
+      summary: Create a draft service request
+      description: |
+        Creates an owner-managed draft from an existing operation. The server
+        derives vehicle, subtype, location association, and creationContext
+        from the operation; clients cannot submit VIN, stock/unit, subtype, or
+        arbitrary context fields. Matching clientRequestId retries return the
+        existing request.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PartnerServiceRequestCreateInput"
+      responses:
+        "201":
+          description: Created draft
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartnerServiceRequest"
+        "200":
+          description: Matching idempotent retry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartnerServiceRequest"
+        "400": { description: Validation error or unknown writable field }
+        "401": { description: Unauthorized }
+        "403": { description: Active shop_owner and supported organization required }
+        "404": { description: Organization or operation not found }
+        "409": { description: Idempotency conflict or inactive/cross-organization target }
+
+  /partner-organizations/{organizationId}/service-requests/{requestId}:
+    parameters:
+      - name: organizationId
+        in: path
+        required: true
+        schema: { type: integer, minimum: 1 }
+      - name: requestId
+        in: path
+        required: true
+        schema: { type: integer, minimum: 1 }
+    get:
+      operationId: getPartnerServiceRequest
+      tags: [partner-service-requests]
+      summary: Get one service request and status history
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Service request detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartnerServiceRequestDetail"
+        "400": { description: Invalid path }
+        "401": { description: Unauthorized }
+        "403": { description: Active shop_owner and supported organization required }
+        "404": { description: Request or organization not found }
+    patch:
+      operationId: updatePartnerServiceRequest
+      tags: [partner-service-requests]
+      summary: Edit draft or submitted request content
+      description: |
+        Content-only edit. `expectedVersion` is required. Status, operation,
+        vehicle, organization, subtype, clientRequestId, and creationContext
+        are immutable.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PartnerServiceRequestUpdateInput"
+      responses:
+        "200":
+          description: Updated request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartnerServiceRequest"
+        "400": { description: Validation error or unknown immutable field }
+        "401": { description: Unauthorized }
+        "403": { description: Active shop_owner and supported organization required }
+        "404": { description: Request or organization not found }
+        "409": { description: "Stale version, terminal status, or inactive/cross-organization location" }
+
+  /partner-organizations/{organizationId}/service-requests/{requestId}/transition:
+    parameters:
+      - name: organizationId
+        in: path
+        required: true
+        schema: { type: integer, minimum: 1 }
+      - name: requestId
+        in: path
+        required: true
+        schema: { type: integer, minimum: 1 }
+    post:
+      operationId: transitionPartnerServiceRequest
+      tags: [partner-service-requests]
+      summary: Apply one explicit service-request status transition
+      description: |
+        Valid transitions are draft→submitted, submitted→in_progress,
+        in_progress→completed, and draft/submitted/in_progress→cancelled.
+        Completed and cancelled are terminal. No provider acceptance,
+        rejection, scheduling, dispatch, or APS job is involved.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PartnerServiceRequestTransitionInput"
+      responses:
+        "200":
+          description: Transitioned request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartnerServiceRequest"
+        "400": { description: Validation error or unknown field }
+        "401": { description: Unauthorized }
+        "403": { description: Active shop_owner and supported organization required }
+        "404": { description: Request or organization not found }
+        "409": { description: Stale version or invalid status transition }
 
   /shops/mine:
     get:
@@ -3493,10 +3680,10 @@ components:
         plateNumber: { type: ["string", "null"] }
         make: { type: string }
         model: { type: string }
-        year: { type: integer }
+        year: { type: integer, multipleOf: 1 }
         trim: { type: ["string", "null"] }
         color: { type: ["string", "null"] }
-        mileage: { type: integer }
+        mileage: { type: integer, multipleOf: 1 }
         insuranceCarrier: { type: ["string", "null"] }
         insurancePolicyNumber: { type: ["string", "null"] }
         ownerShopId: { type: ["integer", "null"] }
@@ -3511,12 +3698,12 @@ components:
         operatingStatus:
           type: ["string", "null"]
           enum: [active, maintenance, out_of_service, retired, null]
-        odometer: { type: ["integer", "null"] }
+        odometer: { type: ["integer", "null"], multipleOf: 1 }
         usageHours: { type: ["number", "null"] }
         maintenanceDueDate:
           type: ["string", "null"]
-          format: date
-        maintenanceDueMileage: { type: ["integer", "null"] }
+          pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+        maintenanceDueMileage: { type: ["integer", "null"], multipleOf: 1 }
         downtimeSince:
           type: ["string", "null"]
           format: date-time
@@ -3564,10 +3751,10 @@ components:
         plateNumber: { type: string }
         make: { type: string, minLength: 1 }
         model: { type: string, minLength: 1 }
-        year: { type: integer, minimum: 1886 }
+        year: { type: integer, minimum: 1886, multipleOf: 1 }
         trim: { type: string }
         color: { type: string }
-        mileage: { type: integer, minimum: 0 }
+        mileage: { type: integer, minimum: 0, multipleOf: 1 }
         insuranceCarrier: { type: string }
         insurancePolicyNumber: { type: string }
         stockNumber: { type: string, minLength: 1 }
@@ -3581,10 +3768,12 @@ components:
         operatingStatus:
           type: string
           enum: [active, maintenance, out_of_service, retired]
-        odometer: { type: integer, minimum: 0 }
+        odometer: { type: integer, minimum: 0, multipleOf: 1 }
         usageHours: { type: number, minimum: 0 }
-        maintenanceDueDate: { type: string, format: date }
-        maintenanceDueMileage: { type: integer, minimum: 0 }
+        maintenanceDueDate:
+          type: string
+          pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+        maintenanceDueMileage: { type: integer, minimum: 0, multipleOf: 1 }
         downtimeSince: { type: string, format: date-time }
         notes: { type: string }
       required:
@@ -3612,10 +3801,12 @@ components:
         operatingStatus:
           type: string
           enum: [active, maintenance, out_of_service, retired]
-        odometer: { type: integer, minimum: 0 }
+        odometer: { type: integer, minimum: 0, multipleOf: 1 }
         usageHours: { type: number, minimum: 0 }
-        maintenanceDueDate: { type: string, format: date }
-        maintenanceDueMileage: { type: integer, minimum: 0 }
+        maintenanceDueDate:
+          type: string
+          pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+        maintenanceDueMileage: { type: integer, minimum: 0, multipleOf: 1 }
         downtimeSince: { type: string, format: date-time }
         notes: { type: string }
       required: [vehicleId, linkedShopId]
@@ -3630,23 +3821,205 @@ components:
         inventoryStatus:
           type: ["string", "null"]
           enum: [in_stock, preparing, ready, sold, null]
-        serviceNeeded: { type: ["boolean", "null"] }
+        serviceNeeded: { type: boolean }
         serviceNotes: { type: ["string", "null"] }
         unitNumber: { type: ["string", "null"], minLength: 1 }
         groupName: { type: ["string", "null"], minLength: 1 }
         operatingStatus:
           type: ["string", "null"]
           enum: [active, maintenance, out_of_service, retired, null]
-        odometer: { type: ["integer", "null"], minimum: 0 }
+        odometer: { type: ["integer", "null"], minimum: 0, multipleOf: 1 }
         usageHours: { type: ["number", "null"], minimum: 0 }
         maintenanceDueDate:
           type: ["string", "null"]
-          format: date
-        maintenanceDueMileage: { type: ["integer", "null"], minimum: 0 }
+          pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+        maintenanceDueMileage: { type: ["integer", "null"], minimum: 0, multipleOf: 1 }
         downtimeSince:
           type: ["string", "null"]
           format: date-time
         notes: { type: ["string", "null"] }
+
+    PartnerServiceRequestStatus:
+      type: string
+      enum: [draft, submitted, in_progress, completed, cancelled]
+
+    PartnerServiceRequestCategory:
+      type: string
+      enum: [inspection, diagnostics, maintenance, repair, recall, other]
+
+    PartnerServiceRequestUrgency:
+      type: string
+      enum: [low, normal, high, urgent]
+
+    PartnerServiceRequestVehicleContext:
+      type: object
+      additionalProperties: false
+      properties:
+        vin: { type: string }
+        plateNumber: { type: ["string", "null"] }
+        make: { type: string }
+        model: { type: string }
+        year: { type: integer, multipleOf: 1 }
+        trim: { type: ["string", "null"] }
+        color: { type: ["string", "null"] }
+        mileage: { type: integer, multipleOf: 1 }
+      required: [vin, plateNumber, make, model, year, trim, color, mileage]
+
+    PartnerServiceRequestDealershipContext:
+      type: object
+      additionalProperties: false
+      properties:
+        capturedAt: { type: string, format: date-time }
+        vehicle:
+          $ref: "#/components/schemas/PartnerServiceRequestVehicleContext"
+        operation:
+          type: object
+          additionalProperties: false
+          properties:
+            stockNumber: { type: ["string", "null"] }
+            inventoryStatus:
+              type: ["string", "null"]
+              enum: [in_stock, preparing, ready, sold, null]
+            serviceNeeded: { type: ["boolean", "null"] }
+            serviceNotes: { type: ["string", "null"] }
+          required: [stockNumber, inventoryStatus, serviceNeeded, serviceNotes]
+      required: [capturedAt, vehicle, operation]
+
+    PartnerServiceRequestFleetContext:
+      type: object
+      additionalProperties: false
+      properties:
+        capturedAt: { type: string, format: date-time }
+        vehicle:
+          $ref: "#/components/schemas/PartnerServiceRequestVehicleContext"
+        operation:
+          type: object
+          additionalProperties: false
+          properties:
+            unitNumber: { type: ["string", "null"] }
+            groupName: { type: ["string", "null"] }
+            operatingStatus:
+              type: ["string", "null"]
+              enum: [active, maintenance, out_of_service, retired, null]
+            odometer: { type: ["integer", "null"], multipleOf: 1 }
+            usageHours: { type: ["number", "null"] }
+            maintenanceDueDate:
+              type: ["string", "null"]
+              pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+            maintenanceDueMileage: { type: ["integer", "null"], multipleOf: 1 }
+            downtimeSince: { type: ["string", "null"], format: date-time }
+            notes: { type: ["string", "null"] }
+          required:
+            [unitNumber, groupName, operatingStatus, odometer, usageHours,
+             maintenanceDueDate, maintenanceDueMileage, downtimeSince, notes]
+      required: [capturedAt, vehicle, operation]
+
+    PartnerServiceRequestCreateInput:
+      type: object
+      additionalProperties: false
+      properties:
+        operationId: { type: integer, minimum: 1 }
+        locationId: { type: integer, minimum: 1 }
+        category:
+          $ref: "#/components/schemas/PartnerServiceRequestCategory"
+        urgency:
+          $ref: "#/components/schemas/PartnerServiceRequestUrgency"
+        requestedWork: { type: string, minLength: 1 }
+        serviceNotes: { type: ["string", "null"] }
+        clientRequestId: { type: string, minLength: 1, maxLength: 200 }
+      required:
+        [operationId, locationId, category, urgency, requestedWork, clientRequestId]
+
+    PartnerServiceRequestUpdateInput:
+      type: object
+      additionalProperties: false
+      minProperties: 2
+      properties:
+        expectedVersion: { type: integer, minimum: 0, multipleOf: 1 }
+        category:
+          $ref: "#/components/schemas/PartnerServiceRequestCategory"
+        urgency:
+          $ref: "#/components/schemas/PartnerServiceRequestUrgency"
+        requestedWork: { type: string, minLength: 1 }
+        serviceNotes: { type: ["string", "null"] }
+        locationId: { type: integer, minimum: 1 }
+      required: [expectedVersion]
+
+    PartnerServiceRequestTransitionInput:
+      type: object
+      additionalProperties: false
+      properties:
+        expectedVersion: { type: integer, minimum: 0, multipleOf: 1 }
+        toStatus:
+          $ref: "#/components/schemas/PartnerServiceRequestStatus"
+        note: { type: ["string", "null"] }
+      required: [expectedVersion, toStatus]
+
+    PartnerServiceRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        id: { type: integer }
+        organizationId: { type: integer }
+        operationId: { type: integer }
+        vehicleId: { type: integer }
+        sourceSubtype:
+          type: string
+          enum: [dealership, fleet]
+        locationId: { type: integer }
+        status:
+          $ref: "#/components/schemas/PartnerServiceRequestStatus"
+        category:
+          $ref: "#/components/schemas/PartnerServiceRequestCategory"
+        urgency:
+          $ref: "#/components/schemas/PartnerServiceRequestUrgency"
+        requestedWork: { type: string }
+        serviceNotes: { type: ["string", "null"] }
+        creationContext:
+          oneOf:
+            - $ref: "#/components/schemas/PartnerServiceRequestDealershipContext"
+            - $ref: "#/components/schemas/PartnerServiceRequestFleetContext"
+        version: { type: integer, minimum: 0 }
+        clientRequestId: { type: string }
+        createdAt: { type: string, format: date-time }
+        submittedAt: { type: ["string", "null"], format: date-time }
+        startedAt: { type: ["string", "null"], format: date-time }
+        completedAt: { type: ["string", "null"], format: date-time }
+        cancelledAt: { type: ["string", "null"], format: date-time }
+        updatedAt: { type: string, format: date-time }
+      required:
+        [id, organizationId, operationId, vehicleId, sourceSubtype, locationId,
+         status, category, urgency, requestedWork, serviceNotes, creationContext,
+         version, clientRequestId, createdAt, submittedAt, startedAt, completedAt,
+         cancelledAt, updatedAt]
+
+    PartnerServiceRequestStatusHistory:
+      type: object
+      additionalProperties: false
+      properties:
+        id: { type: integer }
+        requestId: { type: integer }
+        actorUserId: { type: integer }
+        fromStatus:
+          type: ["string", "null"]
+          enum: [draft, submitted, in_progress, completed, cancelled, null]
+        toStatus:
+          $ref: "#/components/schemas/PartnerServiceRequestStatus"
+        note: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+      required: [id, requestId, actorUserId, fromStatus, toStatus, note, createdAt]
+
+    PartnerServiceRequestDetail:
+      type: object
+      additionalProperties: false
+      properties:
+        request:
+          $ref: "#/components/schemas/PartnerServiceRequest"
+        statusHistory:
+          type: array
+          items:
+            $ref: "#/components/schemas/PartnerServiceRequestStatusHistory"
+      required: [request, statusHistory]
 
     CreateShopBody:
       type: object

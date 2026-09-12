@@ -34,9 +34,10 @@ type Props = {
   vehicle: PartnerVehicleRecord;
   locationNames: string[];
   onEdit?: () => void;
+  onRequestService?: () => void;
 };
 
-export function PartnerVehicleCard({ capability, vehicle, locationNames, onEdit }: Props) {
+export function PartnerVehicleCard({ capability, vehicle, locationNames, onEdit, onRequestService }: Props) {
   const colors = useColors();
   const fleet = capability.subtype === "fleet";
   return (
@@ -125,6 +126,17 @@ export function PartnerVehicleCard({ capability, vehicle, locationNames, onEdit 
           Existing service records: {vehicle.serviceCount}
         </Text>
       ) : null}
+      {onRequestService ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Request service for ${vehicle.year} ${vehicle.make} ${vehicle.model}`}
+          onPress={onRequestService}
+          style={[styles.requestButton, { backgroundColor: colors.primary + "12", borderColor: colors.primary }]}
+        >
+          <Feather name="clipboard" size={13} color={colors.primary} />
+          <Text style={[styles.requestButtonText, { color: colors.primary }]}>Request service</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -139,4 +151,6 @@ const styles = StyleSheet.create({
   metaList: { gap: 2 },
   meta: { fontSize: 12, lineHeight: 17 },
   locations: { fontSize: 11, lineHeight: 16, marginTop: 2 },
+  requestButton: { alignItems: "center", alignSelf: "flex-start", borderRadius: 8, borderWidth: 1, flexDirection: "row", gap: 5, marginTop: 5, paddingHorizontal: 9, paddingVertical: 7 },
+  requestButtonText: { fontSize: 11, fontWeight: "800" },
 });

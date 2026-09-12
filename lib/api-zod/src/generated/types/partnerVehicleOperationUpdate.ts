@@ -18,8 +18,7 @@ export interface PartnerVehicleOperationUpdate {
   stockNumber?: string | null;
   /** @nullable */
   inventoryStatus?: PartnerVehicleOperationUpdateInventoryStatus;
-  /** @nullable */
-  serviceNeeded?: boolean | null;
+  serviceNeeded?: boolean;
   /** @nullable */
   serviceNotes?: string | null;
   /**
@@ -44,8 +43,11 @@ export interface PartnerVehicleOperationUpdate {
    * @nullable
    */
   usageHours?: number | null;
-  /** @nullable */
-  maintenanceDueDate?: Date | null;
+  /**
+   * @nullable
+   * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+   */
+  maintenanceDueDate?: string | null;
   /**
    * @minimum 0
    * @nullable

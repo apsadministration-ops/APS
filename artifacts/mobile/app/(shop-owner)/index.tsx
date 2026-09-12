@@ -212,6 +212,27 @@ export default function ShopsListScreen() {
           </Pressable>
         ) : null}
 
+        {selectedOrganization &&
+        (selectedOrganization.subtype === "dealership" || selectedOrganization.subtype === "fleet") ? (
+          <Pressable
+            testID="link-service-requests"
+            accessibilityRole="button"
+            onPress={() => router.push("/(shop-owner)/service-requests" as any)}
+            style={[styles.operationsLink, { backgroundColor: colors.primary + "12", borderColor: colors.primary }]}
+          >
+            <Feather name="clipboard" size={16} color={colors.primary} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.operationsLinkTitle, { color: colors.primary }]}>
+                Service requests
+              </Text>
+              <Text style={[styles.operationsLinkHint, { color: colors.mutedForeground }]}>
+                Track dealership or fleet work internally by vehicle and location.
+              </Text>
+            </View>
+            <Feather name="arrow-right" size={16} color={colors.primary} />
+          </Pressable>
+        ) : null}
+
         <View style={[styles.filterCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <View style={{ flex: 1 }}>
             <Text style={[styles.filterTitle, { color: colors.foreground }]}>Location view</Text>

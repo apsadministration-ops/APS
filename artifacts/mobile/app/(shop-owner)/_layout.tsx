@@ -112,6 +112,19 @@ export default function ShopOwnerTabLayout() {
           tabBarIcon: ({ color }) => <Feather name="truck" size={22} color={color} />,
         }}
       />
+      <Tabs.Screen
+        name="service-requests"
+        options={{
+          title: "Service requests",
+          // The nested Stack owns list/new/detail headers; this parent route
+          // remains a hidden tab container rather than a second header/tab.
+          headerShown: false,
+          // The dashboard card is the intentional entry point for this
+          // organization-scoped workflow; keep the existing tabs unchanged.
+          tabBarButton: () => null,
+          tabBarIcon: ({ color }) => <Feather name="clipboard" size={22} color={color} />,
+        }}
+      />
     </Tabs>
   );
 }

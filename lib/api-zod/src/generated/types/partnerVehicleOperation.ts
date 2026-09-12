@@ -48,8 +48,11 @@ export interface PartnerVehicleOperation {
   odometer: number | null;
   /** @nullable */
   usageHours: number | null;
-  /** @nullable */
-  maintenanceDueDate: Date | null;
+  /**
+   * @nullable
+   * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+   */
+  maintenanceDueDate: string | null;
   /** @nullable */
   maintenanceDueMileage: number | null;
   /** @nullable */

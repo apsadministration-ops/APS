@@ -28,7 +28,8 @@ export interface PartnerVehicleOperationLink {
   odometer?: number;
   /** @minimum 0 */
   usageHours?: number;
-  maintenanceDueDate?: Date;
+  /** @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ */
+  maintenanceDueDate?: string;
   /** @minimum 0 */
   maintenanceDueMileage?: number;
   downtimeSince?: Date;

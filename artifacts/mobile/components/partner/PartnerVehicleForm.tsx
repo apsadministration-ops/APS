@@ -55,6 +55,7 @@ type PartnerLocation = {
   name: string;
   city?: string | null;
   region?: string | null;
+  status?: "active" | "inactive";
 };
 
 type Props = {
@@ -211,23 +212,27 @@ export function PartnerVehicleForm({
       </Text>
       {locations.length === 0 ? (
         <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-          No linked locations are available for this organization.
+          No active linked locations are available for this write.
         </Text>
       ) : (
         <View style={styles.locationList}>
           {locations.map((location) => {
             const selected = draft.locationId === location.id;
+            const writeEligible = location.status !== "inactive";
             return (
               <Pressable
                 key={location.id}
                 accessibilityRole="button"
-                accessibilityLabel={`${selected ? "Selected" : "Select"} ${location.name}`}
+                accessibilityLabel={`${selected ? "Selected" : "Select"} ${location.name}${writeEligible ? "" : " (inactive)"}`}
+                accessibilityState={{ disabled: !writeEligible }}
+                disabled={!writeEligible}
                 onPress={() => onChange("locationId", selected ? null : location.id)}
                 style={[
                   styles.locationOption,
                   {
                     backgroundColor: selected ? colors.primary + "14" : colors.background,
                     borderColor: selected ? colors.primary : colors.border,
+                    opacity: writeEligible ? 1 : 0.55,
                   },
                 ]}
               >
@@ -242,6 +247,7 @@ export function PartnerVehicleForm({
                   </Text>
                   <Text style={[styles.locationAddress, { color: colors.mutedForeground }]}>
                     {[location.city, location.region].filter(Boolean).join(", ")}
+                    {!writeEligible ? " · inactive (choose an active destination)" : ""}
                   </Text>
                 </View>
               </Pressable>
