@@ -1014,6 +1014,273 @@ export interface PartnerOrganizationLocationLink {
   shopId: number;
 }
 
+/**
+ * @nullable
+ */
+export type PartnerVehicleOperationInventoryStatus =
+  | (typeof PartnerVehicleOperationInventoryStatus)[keyof typeof PartnerVehicleOperationInventoryStatus]
+  | null;
+
+export const PartnerVehicleOperationInventoryStatus = {
+  in_stock: "in_stock",
+  preparing: "preparing",
+  ready: "ready",
+  sold: "sold",
+} as const;
+
+/**
+ * @nullable
+ */
+export type PartnerVehicleOperationOperatingStatus =
+  | (typeof PartnerVehicleOperationOperatingStatus)[keyof typeof PartnerVehicleOperationOperatingStatus]
+  | null;
+
+export const PartnerVehicleOperationOperatingStatus = {
+  active: "active",
+  maintenance: "maintenance",
+  out_of_service: "out_of_service",
+  retired: "retired",
+} as const;
+
+export interface PartnerVehicleOperation {
+  id: number;
+  organizationId: number;
+  vehicleId: number;
+  linkedShopId: number;
+  vin: string;
+  /** @nullable */
+  plateNumber: string | null;
+  make: string;
+  model: string;
+  year: number;
+  /** @nullable */
+  trim: string | null;
+  /** @nullable */
+  color: string | null;
+  mileage: number;
+  /** @nullable */
+  insuranceCarrier: string | null;
+  /** @nullable */
+  insurancePolicyNumber: string | null;
+  /** @nullable */
+  ownerShopId: number | null;
+  /** @nullable */
+  stockNumber: string | null;
+  /** @nullable */
+  inventoryStatus: PartnerVehicleOperationInventoryStatus;
+  /** @nullable */
+  serviceNeeded: boolean | null;
+  /** @nullable */
+  serviceNotes: string | null;
+  /** @nullable */
+  unitNumber: string | null;
+  /** @nullable */
+  groupName: string | null;
+  /** @nullable */
+  operatingStatus: PartnerVehicleOperationOperatingStatus;
+  /** @nullable */
+  odometer: number | null;
+  /** @nullable */
+  usageHours: number | null;
+  /** @nullable */
+  maintenanceDueDate: string | null;
+  /** @nullable */
+  maintenanceDueMileage: number | null;
+  /** @nullable */
+  downtimeSince: string | null;
+  /** @nullable */
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type PartnerVehicleOperationInputInventoryStatus =
+  (typeof PartnerVehicleOperationInputInventoryStatus)[keyof typeof PartnerVehicleOperationInputInventoryStatus];
+
+export const PartnerVehicleOperationInputInventoryStatus = {
+  in_stock: "in_stock",
+  preparing: "preparing",
+  ready: "ready",
+  sold: "sold",
+} as const;
+
+export type PartnerVehicleOperationInputOperatingStatus =
+  (typeof PartnerVehicleOperationInputOperatingStatus)[keyof typeof PartnerVehicleOperationInputOperatingStatus];
+
+export const PartnerVehicleOperationInputOperatingStatus = {
+  active: "active",
+  maintenance: "maintenance",
+  out_of_service: "out_of_service",
+  retired: "retired",
+} as const;
+
+export interface PartnerVehicleOperationInput {
+  /** @minimum 1 */
+  linkedShopId: number;
+  /**
+   * @minLength 17
+   * @maxLength 17
+   */
+  vin: string;
+  plateNumber?: string;
+  /** @minLength 1 */
+  make: string;
+  /** @minLength 1 */
+  model: string;
+  /** @minimum 1886 */
+  year: number;
+  trim?: string;
+  color?: string;
+  /** @minimum 0 */
+  mileage: number;
+  insuranceCarrier?: string;
+  insurancePolicyNumber?: string;
+  /** @minLength 1 */
+  stockNumber?: string;
+  inventoryStatus?: PartnerVehicleOperationInputInventoryStatus;
+  serviceNeeded?: boolean;
+  /** @nullable */
+  serviceNotes?: string | null;
+  /** @minLength 1 */
+  unitNumber?: string;
+  /** @minLength 1 */
+  groupName?: string;
+  operatingStatus?: PartnerVehicleOperationInputOperatingStatus;
+  /** @minimum 0 */
+  odometer?: number;
+  /** @minimum 0 */
+  usageHours?: number;
+  maintenanceDueDate?: string;
+  /** @minimum 0 */
+  maintenanceDueMileage?: number;
+  downtimeSince?: string;
+  notes?: string;
+}
+
+export type PartnerVehicleOperationLinkInventoryStatus =
+  (typeof PartnerVehicleOperationLinkInventoryStatus)[keyof typeof PartnerVehicleOperationLinkInventoryStatus];
+
+export const PartnerVehicleOperationLinkInventoryStatus = {
+  in_stock: "in_stock",
+  preparing: "preparing",
+  ready: "ready",
+  sold: "sold",
+} as const;
+
+export type PartnerVehicleOperationLinkOperatingStatus =
+  (typeof PartnerVehicleOperationLinkOperatingStatus)[keyof typeof PartnerVehicleOperationLinkOperatingStatus];
+
+export const PartnerVehicleOperationLinkOperatingStatus = {
+  active: "active",
+  maintenance: "maintenance",
+  out_of_service: "out_of_service",
+  retired: "retired",
+} as const;
+
+export interface PartnerVehicleOperationLink {
+  /** @minimum 1 */
+  vehicleId: number;
+  /** @minimum 1 */
+  linkedShopId: number;
+  /** @minLength 1 */
+  stockNumber?: string;
+  inventoryStatus?: PartnerVehicleOperationLinkInventoryStatus;
+  serviceNeeded?: boolean;
+  /** @nullable */
+  serviceNotes?: string | null;
+  /** @minLength 1 */
+  unitNumber?: string;
+  /** @minLength 1 */
+  groupName?: string;
+  operatingStatus?: PartnerVehicleOperationLinkOperatingStatus;
+  /** @minimum 0 */
+  odometer?: number;
+  /** @minimum 0 */
+  usageHours?: number;
+  maintenanceDueDate?: string;
+  /** @minimum 0 */
+  maintenanceDueMileage?: number;
+  downtimeSince?: string;
+  notes?: string;
+}
+
+/**
+ * @nullable
+ */
+export type PartnerVehicleOperationUpdateInventoryStatus =
+  | (typeof PartnerVehicleOperationUpdateInventoryStatus)[keyof typeof PartnerVehicleOperationUpdateInventoryStatus]
+  | null;
+
+export const PartnerVehicleOperationUpdateInventoryStatus = {
+  in_stock: "in_stock",
+  preparing: "preparing",
+  ready: "ready",
+  sold: "sold",
+} as const;
+
+/**
+ * @nullable
+ */
+export type PartnerVehicleOperationUpdateOperatingStatus =
+  | (typeof PartnerVehicleOperationUpdateOperatingStatus)[keyof typeof PartnerVehicleOperationUpdateOperatingStatus]
+  | null;
+
+export const PartnerVehicleOperationUpdateOperatingStatus = {
+  active: "active",
+  maintenance: "maintenance",
+  out_of_service: "out_of_service",
+  retired: "retired",
+} as const;
+
+export interface PartnerVehicleOperationUpdate {
+  /** @minimum 1 */
+  linkedShopId?: number;
+  /**
+   * @minLength 1
+   * @nullable
+   */
+  stockNumber?: string | null;
+  /** @nullable */
+  inventoryStatus?: PartnerVehicleOperationUpdateInventoryStatus;
+  /** @nullable */
+  serviceNeeded?: boolean | null;
+  /** @nullable */
+  serviceNotes?: string | null;
+  /**
+   * @minLength 1
+   * @nullable
+   */
+  unitNumber?: string | null;
+  /**
+   * @minLength 1
+   * @nullable
+   */
+  groupName?: string | null;
+  /** @nullable */
+  operatingStatus?: PartnerVehicleOperationUpdateOperatingStatus;
+  /**
+   * @minimum 0
+   * @nullable
+   */
+  odometer?: number | null;
+  /**
+   * @minimum 0
+   * @nullable
+   */
+  usageHours?: number | null;
+  /** @nullable */
+  maintenanceDueDate?: string | null;
+  /**
+   * @minimum 0
+   * @nullable
+   */
+  maintenanceDueMileage?: number | null;
+  /** @nullable */
+  downtimeSince?: string | null;
+  /** @nullable */
+  notes?: string | null;
+}
+
 export type CreateShopBodyPartnerKind =
   (typeof CreateShopBodyPartnerKind)[keyof typeof CreateShopBodyPartnerKind];
 

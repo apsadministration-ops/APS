@@ -1,4 +1,5 @@
 import { pgTable, serial, text, integer, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -24,6 +25,7 @@ export const vehiclesTable = pgTable("vehicles", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   uniqueIndex("vehicles_vin_unique").on(t.vin),
+  uniqueIndex("vehicles_vin_lower_unique").on(sql`lower(${t.vin})`),
 ]);
 
 export const insertVehicleSchema = createInsertSchema(vehiclesTable).omit({ id: true, createdAt: true });

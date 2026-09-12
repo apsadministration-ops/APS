@@ -102,6 +102,16 @@ export default function ShopOwnerTabLayout() {
           tabBarIcon: ({ color }) => <Feather name="briefcase" size={22} color={color} />,
         }}
       />
+      <Tabs.Screen
+        name="partner-vehicles"
+        options={{
+          title: "Partner operations",
+          // The selected organization card is the intentional entry point.
+          // Keep the existing Vehicles tab and its legacy workflow unchanged.
+          tabBarButton: () => null,
+          tabBarIcon: ({ color }) => <Feather name="truck" size={22} color={color} />,
+        }}
+      />
     </Tabs>
   );
 }

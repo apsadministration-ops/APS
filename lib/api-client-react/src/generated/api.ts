@@ -79,6 +79,10 @@ import type {
   PartnerOrganizationInput,
   PartnerOrganizationLocationLink,
   PartnerOrganizationUpdate,
+  PartnerVehicleOperation,
+  PartnerVehicleOperationInput,
+  PartnerVehicleOperationLink,
+  PartnerVehicleOperationUpdate,
   PartsCatalogEntryBody,
   PartsCatalogResponse,
   PartsRecommendations,
@@ -4796,6 +4800,539 @@ export const useLinkPartnerOrganizationLocation = <
   return useMutation(
     getLinkPartnerOrganizationLocationMutationOptions(options),
   );
+};
+
+/**
+ * Owner-only read. `shop` and `commercial_business` organizations are
+forbidden. Inactive organizations may still read their own existing
+operations; the organization and linked location must be active for
+writes.
+
+ * @summary List vehicle operations for an owned dealership or fleet organization
+ */
+export const getListPartnerVehicleOperationsUrl = (organizationId: number) => {
+  return `/api/partner-organizations/${organizationId}/vehicle-operations`;
+};
+
+export const listPartnerVehicleOperations = async (
+  organizationId: number,
+  options?: RequestInit,
+): Promise<PartnerVehicleOperation[]> => {
+  return customFetch<PartnerVehicleOperation[]>(
+    getListPartnerVehicleOperationsUrl(organizationId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getListPartnerVehicleOperationsQueryKey = (
+  organizationId: number,
+) => {
+  return [
+    `/api/partner-organizations/${organizationId}/vehicle-operations`,
+  ] as const;
+};
+
+export const getListPartnerVehicleOperationsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listPartnerVehicleOperations>>,
+  TError = ErrorType<void>,
+>(
+  organizationId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listPartnerVehicleOperations>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getListPartnerVehicleOperationsQueryKey(organizationId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listPartnerVehicleOperations>>
+  > = ({ signal }) =>
+    listPartnerVehicleOperations(organizationId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!organizationId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listPartnerVehicleOperations>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListPartnerVehicleOperationsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listPartnerVehicleOperations>>
+>;
+export type ListPartnerVehicleOperationsQueryError = ErrorType<void>;
+
+/**
+ * @summary List vehicle operations for an owned dealership or fleet organization
+ */
+
+export function useListPartnerVehicleOperations<
+  TData = Awaited<ReturnType<typeof listPartnerVehicleOperations>>,
+  TError = ErrorType<void>,
+>(
+  organizationId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listPartnerVehicleOperations>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListPartnerVehicleOperationsQueryOptions(
+    organizationId,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Creates a new globally unique canonical VIN and its operational record
+transactionally. Existing VINs are rejected; use the explicit link
+endpoint for safe legacy imports. No ownership-history row is written.
+
+ * @summary Create a new canonical vehicle and partner operation
+ */
+export const getCreatePartnerVehicleOperationUrl = (organizationId: number) => {
+  return `/api/partner-organizations/${organizationId}/vehicle-operations`;
+};
+
+export const createPartnerVehicleOperation = async (
+  organizationId: number,
+  partnerVehicleOperationInput: PartnerVehicleOperationInput,
+  options?: RequestInit,
+): Promise<PartnerVehicleOperation> => {
+  return customFetch<PartnerVehicleOperation>(
+    getCreatePartnerVehicleOperationUrl(organizationId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(partnerVehicleOperationInput),
+    },
+  );
+};
+
+export const getCreatePartnerVehicleOperationMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createPartnerVehicleOperation>>,
+    TError,
+    { organizationId: number; data: BodyType<PartnerVehicleOperationInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createPartnerVehicleOperation>>,
+  TError,
+  { organizationId: number; data: BodyType<PartnerVehicleOperationInput> },
+  TContext
+> => {
+  const mutationKey = ["createPartnerVehicleOperation"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createPartnerVehicleOperation>>,
+    { organizationId: number; data: BodyType<PartnerVehicleOperationInput> }
+  > = (props) => {
+    const { organizationId, data } = props ?? {};
+
+    return createPartnerVehicleOperation(organizationId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreatePartnerVehicleOperationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createPartnerVehicleOperation>>
+>;
+export type CreatePartnerVehicleOperationMutationBody =
+  BodyType<PartnerVehicleOperationInput>;
+export type CreatePartnerVehicleOperationMutationError = ErrorType<void>;
+
+/**
+ * @summary Create a new canonical vehicle and partner operation
+ */
+export const useCreatePartnerVehicleOperation = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createPartnerVehicleOperation>>,
+    TError,
+    { organizationId: number; data: BodyType<PartnerVehicleOperationInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createPartnerVehicleOperation>>,
+  TError,
+  { organizationId: number; data: BodyType<PartnerVehicleOperationInput> },
+  TContext
+> => {
+  return useMutation(getCreatePartnerVehicleOperationMutationOptions(options));
+};
+
+/**
+ * Reuses an existing canonical vehicle only when its ownerShopId exactly
+identifies this owner's linked active location. Any active
+ownership-history row must belong to the authenticated organization
+owner; an active foreign-owner row or a customer vehicle with a null
+ownerShopId fails proof. The vehicle must not already be linked by any
+operation. No ownership-history row is written or modified.
+
+ * @summary Link one existing canonical vehicle using legacy-import proof
+ */
+export const getLinkPartnerVehicleOperationUrl = (organizationId: number) => {
+  return `/api/partner-organizations/${organizationId}/vehicle-operations/link`;
+};
+
+export const linkPartnerVehicleOperation = async (
+  organizationId: number,
+  partnerVehicleOperationLink: PartnerVehicleOperationLink,
+  options?: RequestInit,
+): Promise<PartnerVehicleOperation> => {
+  return customFetch<PartnerVehicleOperation>(
+    getLinkPartnerVehicleOperationUrl(organizationId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(partnerVehicleOperationLink),
+    },
+  );
+};
+
+export const getLinkPartnerVehicleOperationMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof linkPartnerVehicleOperation>>,
+    TError,
+    { organizationId: number; data: BodyType<PartnerVehicleOperationLink> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof linkPartnerVehicleOperation>>,
+  TError,
+  { organizationId: number; data: BodyType<PartnerVehicleOperationLink> },
+  TContext
+> => {
+  const mutationKey = ["linkPartnerVehicleOperation"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof linkPartnerVehicleOperation>>,
+    { organizationId: number; data: BodyType<PartnerVehicleOperationLink> }
+  > = (props) => {
+    const { organizationId, data } = props ?? {};
+
+    return linkPartnerVehicleOperation(organizationId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type LinkPartnerVehicleOperationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof linkPartnerVehicleOperation>>
+>;
+export type LinkPartnerVehicleOperationMutationBody =
+  BodyType<PartnerVehicleOperationLink>;
+export type LinkPartnerVehicleOperationMutationError = ErrorType<void>;
+
+/**
+ * @summary Link one existing canonical vehicle using legacy-import proof
+ */
+export const useLinkPartnerVehicleOperation = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof linkPartnerVehicleOperation>>,
+    TError,
+    { organizationId: number; data: BodyType<PartnerVehicleOperationLink> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof linkPartnerVehicleOperation>>,
+  TError,
+  { organizationId: number; data: BodyType<PartnerVehicleOperationLink> },
+  TContext
+> => {
+  return useMutation(getLinkPartnerVehicleOperationMutationOptions(options));
+};
+
+/**
+ * @summary Get one owned partner vehicle operation
+ */
+export const getGetPartnerVehicleOperationUrl = (
+  organizationId: number,
+  operationId: number,
+) => {
+  return `/api/partner-organizations/${organizationId}/vehicle-operations/${operationId}`;
+};
+
+export const getPartnerVehicleOperation = async (
+  organizationId: number,
+  operationId: number,
+  options?: RequestInit,
+): Promise<PartnerVehicleOperation> => {
+  return customFetch<PartnerVehicleOperation>(
+    getGetPartnerVehicleOperationUrl(organizationId, operationId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetPartnerVehicleOperationQueryKey = (
+  organizationId: number,
+  operationId: number,
+) => {
+  return [
+    `/api/partner-organizations/${organizationId}/vehicle-operations/${operationId}`,
+  ] as const;
+};
+
+export const getGetPartnerVehicleOperationQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPartnerVehicleOperation>>,
+  TError = ErrorType<void>,
+>(
+  organizationId: number,
+  operationId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPartnerVehicleOperation>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getGetPartnerVehicleOperationQueryKey(organizationId, operationId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getPartnerVehicleOperation>>
+  > = ({ signal }) =>
+    getPartnerVehicleOperation(organizationId, operationId, {
+      signal,
+      ...requestOptions,
+    });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!(organizationId && operationId),
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPartnerVehicleOperation>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPartnerVehicleOperationQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPartnerVehicleOperation>>
+>;
+export type GetPartnerVehicleOperationQueryError = ErrorType<void>;
+
+/**
+ * @summary Get one owned partner vehicle operation
+ */
+
+export function useGetPartnerVehicleOperation<
+  TData = Awaited<ReturnType<typeof getPartnerVehicleOperation>>,
+  TError = ErrorType<void>,
+>(
+  organizationId: number,
+  operationId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPartnerVehicleOperation>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPartnerVehicleOperationQueryOptions(
+    organizationId,
+    operationId,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Updates operational fields only. The canonical VIN and vehicle identity
+cannot be changed. `linkedShopId` may move only to another active
+location already linked to this organization.
+
+ * @summary Update one partner vehicle operation
+ */
+export const getUpdatePartnerVehicleOperationUrl = (
+  organizationId: number,
+  operationId: number,
+) => {
+  return `/api/partner-organizations/${organizationId}/vehicle-operations/${operationId}`;
+};
+
+export const updatePartnerVehicleOperation = async (
+  organizationId: number,
+  operationId: number,
+  partnerVehicleOperationUpdate: PartnerVehicleOperationUpdate,
+  options?: RequestInit,
+): Promise<PartnerVehicleOperation> => {
+  return customFetch<PartnerVehicleOperation>(
+    getUpdatePartnerVehicleOperationUrl(organizationId, operationId),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(partnerVehicleOperationUpdate),
+    },
+  );
+};
+
+export const getUpdatePartnerVehicleOperationMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updatePartnerVehicleOperation>>,
+    TError,
+    {
+      organizationId: number;
+      operationId: number;
+      data: BodyType<PartnerVehicleOperationUpdate>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updatePartnerVehicleOperation>>,
+  TError,
+  {
+    organizationId: number;
+    operationId: number;
+    data: BodyType<PartnerVehicleOperationUpdate>;
+  },
+  TContext
+> => {
+  const mutationKey = ["updatePartnerVehicleOperation"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updatePartnerVehicleOperation>>,
+    {
+      organizationId: number;
+      operationId: number;
+      data: BodyType<PartnerVehicleOperationUpdate>;
+    }
+  > = (props) => {
+    const { organizationId, operationId, data } = props ?? {};
+
+    return updatePartnerVehicleOperation(
+      organizationId,
+      operationId,
+      data,
+      requestOptions,
+    );
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdatePartnerVehicleOperationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updatePartnerVehicleOperation>>
+>;
+export type UpdatePartnerVehicleOperationMutationBody =
+  BodyType<PartnerVehicleOperationUpdate>;
+export type UpdatePartnerVehicleOperationMutationError = ErrorType<void>;
+
+/**
+ * @summary Update one partner vehicle operation
+ */
+export const useUpdatePartnerVehicleOperation = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updatePartnerVehicleOperation>>,
+    TError,
+    {
+      organizationId: number;
+      operationId: number;
+      data: BodyType<PartnerVehicleOperationUpdate>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updatePartnerVehicleOperation>>,
+  TError,
+  {
+    organizationId: number;
+    operationId: number;
+    data: BodyType<PartnerVehicleOperationUpdate>;
+  },
+  TContext
+> => {
+  return useMutation(getUpdatePartnerVehicleOperationMutationOptions(options));
 };
 
 /**

@@ -1,8 +1,9 @@
 import { Router, type IRouter } from "express";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, count, eq, isNull, sql } from "drizzle-orm";
 import {
   db,
   partnerOrganizationsTable,
+  partnerVehicleOperationsTable,
   shopsTable,
 } from "@workspace/db";
 import {
@@ -250,9 +251,8 @@ router.patch(
       res.status(404).json({ error: "Organization not found" });
       return;
     }
-
-    const updates: Partial<typeof partnerOrganizationsTable.$inferInsert> = {};
     const value = parsed.data;
+    const updates: Partial<typeof partnerOrganizationsTable.$inferInsert> = {};
     if (value.name !== undefined) updates.name = value.name;
     if (value.subtype !== undefined) updates.subtype = value.subtype;
     if (value.contactName !== undefined) updates.contactName = value.contactName;
@@ -264,16 +264,67 @@ router.patch(
     if (value.zipCode !== undefined) updates.zipCode = value.zipCode;
     if (value.status !== undefined) updates.status = value.status;
 
-    const [updated] = await db
-      .update(partnerOrganizationsTable)
-      .set(updates)
-      .where(
-        and(
-          eq(partnerOrganizationsTable.id, organizationId),
-          eq(partnerOrganizationsTable.primaryOwnerId, req.userId!),
-        ),
-      )
-      .returning();
+    let updated: typeof partnerOrganizationsTable.$inferSelect | undefined;
+    try {
+      updated = await db.transaction(async (tx) => {
+        if (value.subtype !== undefined) {
+          // Always lock and re-read when subtype is present, even when the
+          // initial read matched the request. This serializes subtype edits
+          // with operation creation and rejects stale read/modify/write.
+          const lockedRows = await tx.execute(sql`
+            SELECT id, subtype
+            FROM partner_organizations
+            WHERE id = ${organizationId}
+              AND primary_owner_id = ${req.userId!}
+            FOR UPDATE
+          `);
+          const locked = lockedRows.rows[0] as
+            | { id: number; subtype: string }
+            | undefined;
+          if (!locked) return undefined;
+          if (locked.subtype !== organization.subtype) {
+            throw new Error("ORGANIZATION_SUBTYPE_STALE");
+          }
+          if (locked.subtype !== value.subtype) {
+            const [operationCount] = await tx
+              .select({ count: count() })
+              .from(partnerVehicleOperationsTable)
+              .where(
+                eq(
+                  partnerVehicleOperationsTable.organizationId,
+                  organizationId,
+                ),
+              );
+            if (Number(operationCount?.count ?? 0) > 0) {
+              throw new Error("ORGANIZATION_SUBTYPE_LOCKED");
+            }
+          }
+        }
+        const [next] = await tx
+          .update(partnerOrganizationsTable)
+          .set(updates)
+          .where(
+            and(
+              eq(partnerOrganizationsTable.id, organizationId),
+              eq(partnerOrganizationsTable.primaryOwnerId, req.userId!),
+            ),
+          )
+          .returning();
+        return next;
+      });
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        (error.message === "ORGANIZATION_SUBTYPE_LOCKED" ||
+          error.message === "ORGANIZATION_SUBTYPE_STALE")
+      ) {
+        res.status(409).json({
+          error: "Organization subtype cannot change while vehicle operations exist",
+        });
+        return;
+      }
+      throw error;
+    }
     if (!updated) {
       res.status(404).json({ error: "Organization not found" });
       return;

@@ -2925,6 +2925,359 @@ export const LinkPartnerOrganizationLocationResponse = zod.object({
 });
 
 /**
+ * Owner-only read. `shop` and `commercial_business` organizations are
+forbidden. Inactive organizations may still read their own existing
+operations; the organization and linked location must be active for
+writes.
+
+ * @summary List vehicle operations for an owned dealership or fleet organization
+ */
+
+export const ListPartnerVehicleOperationsParams = zod.object({
+  organizationId: zod.coerce.number().min(1),
+});
+
+export const ListPartnerVehicleOperationsResponseItem = zod.object({
+  id: zod.number(),
+  organizationId: zod.number(),
+  vehicleId: zod.number(),
+  linkedShopId: zod.number(),
+  vin: zod.string(),
+  plateNumber: zod.string().nullable(),
+  make: zod.string(),
+  model: zod.string(),
+  year: zod.number(),
+  trim: zod.string().nullable(),
+  color: zod.string().nullable(),
+  mileage: zod.number(),
+  insuranceCarrier: zod.string().nullable(),
+  insurancePolicyNumber: zod.string().nullable(),
+  ownerShopId: zod.number().nullable(),
+  stockNumber: zod.string().nullable(),
+  inventoryStatus: zod
+    .union([
+      zod.literal("in_stock"),
+      zod.literal("preparing"),
+      zod.literal("ready"),
+      zod.literal("sold"),
+      zod.literal(null),
+    ])
+    .nullable(),
+  serviceNeeded: zod.boolean().nullable(),
+  serviceNotes: zod.string().nullable(),
+  unitNumber: zod.string().nullable(),
+  groupName: zod.string().nullable(),
+  operatingStatus: zod
+    .union([
+      zod.literal("active"),
+      zod.literal("maintenance"),
+      zod.literal("out_of_service"),
+      zod.literal("retired"),
+      zod.literal(null),
+    ])
+    .nullable(),
+  odometer: zod.number().nullable(),
+  usageHours: zod.number().nullable(),
+  maintenanceDueDate: zod.coerce.date().nullable(),
+  maintenanceDueMileage: zod.number().nullable(),
+  downtimeSince: zod.coerce.date().nullable(),
+  notes: zod.string().nullable(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+export const ListPartnerVehicleOperationsResponse = zod.array(
+  ListPartnerVehicleOperationsResponseItem,
+);
+
+/**
+ * Creates a new globally unique canonical VIN and its operational record
+transactionally. Existing VINs are rejected; use the explicit link
+endpoint for safe legacy imports. No ownership-history row is written.
+
+ * @summary Create a new canonical vehicle and partner operation
+ */
+
+export const CreatePartnerVehicleOperationParams = zod.object({
+  organizationId: zod.coerce.number().min(1),
+});
+
+export const createPartnerVehicleOperationBodyVinMin = 17;
+export const createPartnerVehicleOperationBodyVinMax = 17;
+
+export const createPartnerVehicleOperationBodyYearMin = 1886;
+
+export const createPartnerVehicleOperationBodyMileageMin = 0;
+
+export const createPartnerVehicleOperationBodyOdometerMin = 0;
+
+export const createPartnerVehicleOperationBodyUsageHoursMin = 0;
+
+export const createPartnerVehicleOperationBodyMaintenanceDueMileageMin = 0;
+
+export const CreatePartnerVehicleOperationBody = zod.object({
+  linkedShopId: zod.number().min(1),
+  vin: zod
+    .string()
+    .min(createPartnerVehicleOperationBodyVinMin)
+    .max(createPartnerVehicleOperationBodyVinMax),
+  plateNumber: zod.string().optional(),
+  make: zod.string().min(1),
+  model: zod.string().min(1),
+  year: zod.number().min(createPartnerVehicleOperationBodyYearMin),
+  trim: zod.string().optional(),
+  color: zod.string().optional(),
+  mileage: zod.number().min(createPartnerVehicleOperationBodyMileageMin),
+  insuranceCarrier: zod.string().optional(),
+  insurancePolicyNumber: zod.string().optional(),
+  stockNumber: zod.string().min(1).optional(),
+  inventoryStatus: zod
+    .enum(["in_stock", "preparing", "ready", "sold"])
+    .optional(),
+  serviceNeeded: zod.boolean().optional(),
+  serviceNotes: zod.string().nullish(),
+  unitNumber: zod.string().min(1).optional(),
+  groupName: zod.string().min(1).optional(),
+  operatingStatus: zod
+    .enum(["active", "maintenance", "out_of_service", "retired"])
+    .optional(),
+  odometer: zod
+    .number()
+    .min(createPartnerVehicleOperationBodyOdometerMin)
+    .optional(),
+  usageHours: zod
+    .number()
+    .min(createPartnerVehicleOperationBodyUsageHoursMin)
+    .optional(),
+  maintenanceDueDate: zod.coerce.date().optional(),
+  maintenanceDueMileage: zod
+    .number()
+    .min(createPartnerVehicleOperationBodyMaintenanceDueMileageMin)
+    .optional(),
+  downtimeSince: zod.coerce.date().optional(),
+  notes: zod.string().optional(),
+});
+
+/**
+ * Reuses an existing canonical vehicle only when its ownerShopId exactly
+identifies this owner's linked active location. Any active
+ownership-history row must belong to the authenticated organization
+owner; an active foreign-owner row or a customer vehicle with a null
+ownerShopId fails proof. The vehicle must not already be linked by any
+operation. No ownership-history row is written or modified.
+
+ * @summary Link one existing canonical vehicle using legacy-import proof
+ */
+
+export const LinkPartnerVehicleOperationParams = zod.object({
+  organizationId: zod.coerce.number().min(1),
+});
+
+export const linkPartnerVehicleOperationBodyOdometerMin = 0;
+
+export const linkPartnerVehicleOperationBodyUsageHoursMin = 0;
+
+export const linkPartnerVehicleOperationBodyMaintenanceDueMileageMin = 0;
+
+export const LinkPartnerVehicleOperationBody = zod.object({
+  vehicleId: zod.number().min(1),
+  linkedShopId: zod.number().min(1),
+  stockNumber: zod.string().min(1).optional(),
+  inventoryStatus: zod
+    .enum(["in_stock", "preparing", "ready", "sold"])
+    .optional(),
+  serviceNeeded: zod.boolean().optional(),
+  serviceNotes: zod.string().nullish(),
+  unitNumber: zod.string().min(1).optional(),
+  groupName: zod.string().min(1).optional(),
+  operatingStatus: zod
+    .enum(["active", "maintenance", "out_of_service", "retired"])
+    .optional(),
+  odometer: zod
+    .number()
+    .min(linkPartnerVehicleOperationBodyOdometerMin)
+    .optional(),
+  usageHours: zod
+    .number()
+    .min(linkPartnerVehicleOperationBodyUsageHoursMin)
+    .optional(),
+  maintenanceDueDate: zod.coerce.date().optional(),
+  maintenanceDueMileage: zod
+    .number()
+    .min(linkPartnerVehicleOperationBodyMaintenanceDueMileageMin)
+    .optional(),
+  downtimeSince: zod.coerce.date().optional(),
+  notes: zod.string().optional(),
+});
+
+/**
+ * @summary Get one owned partner vehicle operation
+ */
+
+export const GetPartnerVehicleOperationParams = zod.object({
+  organizationId: zod.coerce.number().min(1),
+  operationId: zod.coerce.number().min(1),
+});
+
+export const GetPartnerVehicleOperationResponse = zod.object({
+  id: zod.number(),
+  organizationId: zod.number(),
+  vehicleId: zod.number(),
+  linkedShopId: zod.number(),
+  vin: zod.string(),
+  plateNumber: zod.string().nullable(),
+  make: zod.string(),
+  model: zod.string(),
+  year: zod.number(),
+  trim: zod.string().nullable(),
+  color: zod.string().nullable(),
+  mileage: zod.number(),
+  insuranceCarrier: zod.string().nullable(),
+  insurancePolicyNumber: zod.string().nullable(),
+  ownerShopId: zod.number().nullable(),
+  stockNumber: zod.string().nullable(),
+  inventoryStatus: zod
+    .union([
+      zod.literal("in_stock"),
+      zod.literal("preparing"),
+      zod.literal("ready"),
+      zod.literal("sold"),
+      zod.literal(null),
+    ])
+    .nullable(),
+  serviceNeeded: zod.boolean().nullable(),
+  serviceNotes: zod.string().nullable(),
+  unitNumber: zod.string().nullable(),
+  groupName: zod.string().nullable(),
+  operatingStatus: zod
+    .union([
+      zod.literal("active"),
+      zod.literal("maintenance"),
+      zod.literal("out_of_service"),
+      zod.literal("retired"),
+      zod.literal(null),
+    ])
+    .nullable(),
+  odometer: zod.number().nullable(),
+  usageHours: zod.number().nullable(),
+  maintenanceDueDate: zod.coerce.date().nullable(),
+  maintenanceDueMileage: zod.number().nullable(),
+  downtimeSince: zod.coerce.date().nullable(),
+  notes: zod.string().nullable(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * Updates operational fields only. The canonical VIN and vehicle identity
+cannot be changed. `linkedShopId` may move only to another active
+location already linked to this organization.
+
+ * @summary Update one partner vehicle operation
+ */
+
+export const UpdatePartnerVehicleOperationParams = zod.object({
+  organizationId: zod.coerce.number().min(1),
+  operationId: zod.coerce.number().min(1),
+});
+
+export const updatePartnerVehicleOperationBodyOdometerMin = 0;
+
+export const updatePartnerVehicleOperationBodyUsageHoursMin = 0;
+
+export const updatePartnerVehicleOperationBodyMaintenanceDueMileageMin = 0;
+
+export const UpdatePartnerVehicleOperationBody = zod.object({
+  linkedShopId: zod.number().min(1).optional(),
+  stockNumber: zod.string().min(1).nullish(),
+  inventoryStatus: zod
+    .union([
+      zod.literal("in_stock"),
+      zod.literal("preparing"),
+      zod.literal("ready"),
+      zod.literal("sold"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  serviceNeeded: zod.boolean().nullish(),
+  serviceNotes: zod.string().nullish(),
+  unitNumber: zod.string().min(1).nullish(),
+  groupName: zod.string().min(1).nullish(),
+  operatingStatus: zod
+    .union([
+      zod.literal("active"),
+      zod.literal("maintenance"),
+      zod.literal("out_of_service"),
+      zod.literal("retired"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  odometer: zod
+    .number()
+    .min(updatePartnerVehicleOperationBodyOdometerMin)
+    .nullish(),
+  usageHours: zod
+    .number()
+    .min(updatePartnerVehicleOperationBodyUsageHoursMin)
+    .nullish(),
+  maintenanceDueDate: zod.coerce.date().nullish(),
+  maintenanceDueMileage: zod
+    .number()
+    .min(updatePartnerVehicleOperationBodyMaintenanceDueMileageMin)
+    .nullish(),
+  downtimeSince: zod.coerce.date().nullish(),
+  notes: zod.string().nullish(),
+});
+
+export const UpdatePartnerVehicleOperationResponse = zod.object({
+  id: zod.number(),
+  organizationId: zod.number(),
+  vehicleId: zod.number(),
+  linkedShopId: zod.number(),
+  vin: zod.string(),
+  plateNumber: zod.string().nullable(),
+  make: zod.string(),
+  model: zod.string(),
+  year: zod.number(),
+  trim: zod.string().nullable(),
+  color: zod.string().nullable(),
+  mileage: zod.number(),
+  insuranceCarrier: zod.string().nullable(),
+  insurancePolicyNumber: zod.string().nullable(),
+  ownerShopId: zod.number().nullable(),
+  stockNumber: zod.string().nullable(),
+  inventoryStatus: zod
+    .union([
+      zod.literal("in_stock"),
+      zod.literal("preparing"),
+      zod.literal("ready"),
+      zod.literal("sold"),
+      zod.literal(null),
+    ])
+    .nullable(),
+  serviceNeeded: zod.boolean().nullable(),
+  serviceNotes: zod.string().nullable(),
+  unitNumber: zod.string().nullable(),
+  groupName: zod.string().nullable(),
+  operatingStatus: zod
+    .union([
+      zod.literal("active"),
+      zod.literal("maintenance"),
+      zod.literal("out_of_service"),
+      zod.literal("retired"),
+      zod.literal(null),
+    ])
+    .nullable(),
+  odometer: zod.number().nullable(),
+  usageHours: zod.number().nullable(),
+  maintenanceDueDate: zod.coerce.date().nullable(),
+  maintenanceDueMileage: zod.number().nullable(),
+  downtimeSince: zod.coerce.date().nullable(),
+  notes: zod.string().nullable(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
  * @summary List shops owned by the current shop_owner
  */
 export const ListMyShopsResponseItem = zod.object({

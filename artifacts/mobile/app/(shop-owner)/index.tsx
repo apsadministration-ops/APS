@@ -19,6 +19,7 @@ import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollV
 import { alertMessage } from "@/utils/confirm";
 import { PARTNER_LAYER_LABEL, PARTNER_LAYER_DESCRIPTION } from "@/lib/partnerIdentity";
 import { partnerOrganizationSubtypeLabel } from "@/lib/partnerOrganization";
+import { partnerSubtypeHasVehicleOperations } from "@/lib/partnerSubtypeCapabilities";
 import { useSelectedPartnerOrganization } from "@/hooks/useSelectedPartnerOrganization";
 
 export default function ShopsListScreen() {
@@ -100,6 +101,16 @@ export default function ShopsListScreen() {
     k === "dealership" ? "award" :
     k === "fleet" ? "truck" :
     k === "gsa" ? "shield" : "tool";
+  const operationsLabel =
+    selectedOrganization?.subtype === "dealership"
+      ? "Open dealership inventory"
+      : selectedOrganization?.subtype === "fleet"
+        ? "Open fleet operations"
+        : "Open subtype operations";
+  const operationsHint =
+    selectedOrganization?.subtype === "dealership"
+      ? "Track canonical vehicle inventory and service readiness."
+      : "Track fleet units, usage, maintenance, and downtime.";
 
   const selectedOrganizationLocations = useMemo(
     () => (shops ?? []).filter((shop) => shop.organizationId === selectedOrganization?.id),
@@ -178,6 +189,26 @@ export default function ShopsListScreen() {
               </Text>
             </View>
             <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+          </Pressable>
+        ) : null}
+
+        {selectedOrganization && partnerSubtypeHasVehicleOperations(selectedOrganization.subtype) ? (
+          <Pressable
+            testID="link-partner-operations"
+            accessibilityRole="button"
+            onPress={() => router.push("/(shop-owner)/partner-vehicles" as any)}
+            style={[styles.operationsLink, { backgroundColor: colors.primary + "12", borderColor: colors.primary }]}
+          >
+            <Feather name="truck" size={16} color={colors.primary} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.operationsLinkTitle, { color: colors.primary }]}>
+                {operationsLabel}
+              </Text>
+              <Text style={[styles.operationsLinkHint, { color: colors.mutedForeground }]}>
+                {operationsHint}
+              </Text>
+            </View>
+            <Feather name="arrow-right" size={16} color={colors.primary} />
           </Pressable>
         ) : null}
 
@@ -479,6 +510,12 @@ const styles = StyleSheet.create({
   },
   toggleBtnText: { fontSize: 15, fontWeight: "700" },
   formCard: { borderWidth: 1, borderRadius: 14, padding: 16, marginTop: 12, gap: 8 },
+  operationsLink: {
+    flexDirection: "row", alignItems: "center", gap: 9,
+    padding: 12, borderRadius: 12, borderWidth: 1, marginTop: 8,
+  },
+  operationsLinkTitle: { fontSize: 13, fontWeight: "800" },
+  operationsLinkHint: { fontSize: 11, lineHeight: 16, marginTop: 2 },
   formTitle: { fontSize: 17, fontWeight: "700", marginBottom: 4 },
   label: { fontSize: 11, fontWeight: "700", letterSpacing: 1, marginTop: 8, marginBottom: 4 },
   input: { height: 46, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, fontSize: 15 },

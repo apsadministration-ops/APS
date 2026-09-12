@@ -32,6 +32,8 @@ tags:
     description: Ghost Garage shop management (shop owners list bays for rent)
   - name: partner-organizations
     description: Owner-only partner organization foundation
+  - name: partner-vehicle-operations
+    description: Owner-only dealership and fleet vehicle operations
   - name: bays
     description: Rentable service bays inside a shop
   - name: bookings
@@ -1294,6 +1296,165 @@ paths:
         "403": { description: Forbidden }
         "404": { description: Organization or shop not found }
         "409": { description: Shop is already linked to an organization }
+
+  /partner-organizations/{organizationId}/vehicle-operations:
+    parameters:
+      - name: organizationId
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+    get:
+      operationId: listPartnerVehicleOperations
+      tags: [partner-vehicle-operations]
+      summary: List vehicle operations for an owned dealership or fleet organization
+      description: |
+        Owner-only read. `shop` and `commercial_business` organizations are
+        forbidden. Inactive organizations may still read their own existing
+        operations; the organization and linked location must be active for
+        writes.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Vehicle operations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PartnerVehicleOperation"
+        "401": { description: Unauthorized }
+        "403": { description: Active shop_owner and supported organization required }
+        "404": { description: Organization not found }
+    post:
+      operationId: createPartnerVehicleOperation
+      tags: [partner-vehicle-operations]
+      summary: Create a new canonical vehicle and partner operation
+      description: |
+        Creates a new globally unique canonical VIN and its operational record
+        transactionally. Existing VINs are rejected; use the explicit link
+        endpoint for safe legacy imports. No ownership-history row is written.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PartnerVehicleOperationInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartnerVehicleOperation"
+        "400": { description: Validation error or irrelevant subtype fields }
+        "401": { description: Unauthorized }
+        "403": { description: Active shop_owner and supported organization required }
+        "404": { description: Organization or location not found }
+        "409": { description: "VIN or operation already exists, or inactive write target" }
+
+  /partner-organizations/{organizationId}/vehicle-operations/link:
+    parameters:
+      - name: organizationId
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+    post:
+      operationId: linkPartnerVehicleOperation
+      tags: [partner-vehicle-operations]
+      summary: Link one existing canonical vehicle using legacy-import proof
+      description: |
+        Reuses an existing canonical vehicle only when its ownerShopId exactly
+        identifies this owner's linked active location. Any active
+        ownership-history row must belong to the authenticated organization
+        owner; an active foreign-owner row or a customer vehicle with a null
+        ownerShopId fails proof. The vehicle must not already be linked by any
+        operation. No ownership-history row is written or modified.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PartnerVehicleOperationLink"
+      responses:
+        "201":
+          description: Linked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartnerVehicleOperation"
+        "400": { description: Validation error or irrelevant subtype fields }
+        "401": { description: Unauthorized }
+        "403": { description: Active shop_owner and supported organization required }
+        "404": { description: "Organization, location, or vehicle not found" }
+        "409": { description: "Legacy-import proof failed or vehicle is already linked" }
+
+  /partner-organizations/{organizationId}/vehicle-operations/{operationId}:
+    parameters:
+      - name: organizationId
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+      - name: operationId
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+    get:
+      operationId: getPartnerVehicleOperation
+      tags: [partner-vehicle-operations]
+      summary: Get one owned partner vehicle operation
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Vehicle operation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartnerVehicleOperation"
+        "401": { description: Unauthorized }
+        "403": { description: Active shop_owner and supported organization required }
+        "404": { description: Operation not found }
+    patch:
+      operationId: updatePartnerVehicleOperation
+      tags: [partner-vehicle-operations]
+      summary: Update one partner vehicle operation
+      description: |
+        Updates operational fields only. The canonical VIN and vehicle identity
+        cannot be changed. `linkedShopId` may move only to another active
+        location already linked to this organization.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PartnerVehicleOperationUpdate"
+      responses:
+        "200":
+          description: Updated vehicle operation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartnerVehicleOperation"
+        "400": { description: Validation error or irrelevant subtype fields }
+        "401": { description: Unauthorized }
+        "403": { description: Active shop_owner and supported organization required }
+        "404": { description: Operation or organization not found }
+        "409": { description: Inactive or cross-organization location }
 
   /shops/mine:
     get:
@@ -3320,6 +3481,172 @@ components:
         shopId:
           type: integer
       required: [shopId]
+
+    PartnerVehicleOperation:
+      type: object
+      properties:
+        id: { type: integer }
+        organizationId: { type: integer }
+        vehicleId: { type: integer }
+        linkedShopId: { type: integer }
+        vin: { type: string }
+        plateNumber: { type: ["string", "null"] }
+        make: { type: string }
+        model: { type: string }
+        year: { type: integer }
+        trim: { type: ["string", "null"] }
+        color: { type: ["string", "null"] }
+        mileage: { type: integer }
+        insuranceCarrier: { type: ["string", "null"] }
+        insurancePolicyNumber: { type: ["string", "null"] }
+        ownerShopId: { type: ["integer", "null"] }
+        stockNumber: { type: ["string", "null"] }
+        inventoryStatus:
+          type: ["string", "null"]
+          enum: [in_stock, preparing, ready, sold, null]
+        serviceNeeded: { type: ["boolean", "null"] }
+        serviceNotes: { type: ["string", "null"] }
+        unitNumber: { type: ["string", "null"] }
+        groupName: { type: ["string", "null"] }
+        operatingStatus:
+          type: ["string", "null"]
+          enum: [active, maintenance, out_of_service, retired, null]
+        odometer: { type: ["integer", "null"] }
+        usageHours: { type: ["number", "null"] }
+        maintenanceDueDate:
+          type: ["string", "null"]
+          format: date
+        maintenanceDueMileage: { type: ["integer", "null"] }
+        downtimeSince:
+          type: ["string", "null"]
+          format: date-time
+        notes: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      required:
+        - id
+        - organizationId
+        - vehicleId
+        - linkedShopId
+        - vin
+        - plateNumber
+        - make
+        - model
+        - year
+        - trim
+        - color
+        - mileage
+        - insuranceCarrier
+        - insurancePolicyNumber
+        - ownerShopId
+        - stockNumber
+        - inventoryStatus
+        - serviceNeeded
+        - serviceNotes
+        - unitNumber
+        - groupName
+        - operatingStatus
+        - odometer
+        - usageHours
+        - maintenanceDueDate
+        - maintenanceDueMileage
+        - downtimeSince
+        - notes
+        - createdAt
+        - updatedAt
+
+    PartnerVehicleOperationInput:
+      type: object
+      additionalProperties: false
+      properties:
+        linkedShopId: { type: integer, minimum: 1 }
+        vin: { type: string, minLength: 17, maxLength: 17 }
+        plateNumber: { type: string }
+        make: { type: string, minLength: 1 }
+        model: { type: string, minLength: 1 }
+        year: { type: integer, minimum: 1886 }
+        trim: { type: string }
+        color: { type: string }
+        mileage: { type: integer, minimum: 0 }
+        insuranceCarrier: { type: string }
+        insurancePolicyNumber: { type: string }
+        stockNumber: { type: string, minLength: 1 }
+        inventoryStatus:
+          type: string
+          enum: [in_stock, preparing, ready, sold]
+        serviceNeeded: { type: boolean }
+        serviceNotes: { type: ["string", "null"] }
+        unitNumber: { type: string, minLength: 1 }
+        groupName: { type: string, minLength: 1 }
+        operatingStatus:
+          type: string
+          enum: [active, maintenance, out_of_service, retired]
+        odometer: { type: integer, minimum: 0 }
+        usageHours: { type: number, minimum: 0 }
+        maintenanceDueDate: { type: string, format: date }
+        maintenanceDueMileage: { type: integer, minimum: 0 }
+        downtimeSince: { type: string, format: date-time }
+        notes: { type: string }
+      required:
+        - linkedShopId
+        - vin
+        - make
+        - model
+        - year
+        - mileage
+
+    PartnerVehicleOperationLink:
+      type: object
+      additionalProperties: false
+      properties:
+        vehicleId: { type: integer, minimum: 1 }
+        linkedShopId: { type: integer, minimum: 1 }
+        stockNumber: { type: string, minLength: 1 }
+        inventoryStatus:
+          type: string
+          enum: [in_stock, preparing, ready, sold]
+        serviceNeeded: { type: boolean }
+        serviceNotes: { type: ["string", "null"] }
+        unitNumber: { type: string, minLength: 1 }
+        groupName: { type: string, minLength: 1 }
+        operatingStatus:
+          type: string
+          enum: [active, maintenance, out_of_service, retired]
+        odometer: { type: integer, minimum: 0 }
+        usageHours: { type: number, minimum: 0 }
+        maintenanceDueDate: { type: string, format: date }
+        maintenanceDueMileage: { type: integer, minimum: 0 }
+        downtimeSince: { type: string, format: date-time }
+        notes: { type: string }
+      required: [vehicleId, linkedShopId]
+
+    PartnerVehicleOperationUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        linkedShopId: { type: integer, minimum: 1 }
+        stockNumber: { type: ["string", "null"], minLength: 1 }
+        inventoryStatus:
+          type: ["string", "null"]
+          enum: [in_stock, preparing, ready, sold, null]
+        serviceNeeded: { type: ["boolean", "null"] }
+        serviceNotes: { type: ["string", "null"] }
+        unitNumber: { type: ["string", "null"], minLength: 1 }
+        groupName: { type: ["string", "null"], minLength: 1 }
+        operatingStatus:
+          type: ["string", "null"]
+          enum: [active, maintenance, out_of_service, retired, null]
+        odometer: { type: ["integer", "null"], minimum: 0 }
+        usageHours: { type: ["number", "null"], minimum: 0 }
+        maintenanceDueDate:
+          type: ["string", "null"]
+          format: date
+        maintenanceDueMileage: { type: ["integer", "null"], minimum: 0 }
+        downtimeSince:
+          type: ["string", "null"]
+          format: date-time
+        notes: { type: ["string", "null"] }
 
     CreateShopBody:
       type: object

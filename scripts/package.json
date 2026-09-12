@@ -8,6 +8,8 @@
     "ghost-garage-demo": "tsx ./src/ghostGarageDemo.ts",
     "report:partner-organizations": "node ./src/report_partner_organizations.mjs",
     "migrate:partner-organizations": "node ./src/migrate_partner_organizations.mjs",
+    "report:partner-part4-vehicle-operations": "node ./src/report_partner_part4_vehicle_operations.mjs",
+    "migrate:partner-part4-vehicle-operations": "node ./src/migrate_partner_part4_vehicle_operations.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {

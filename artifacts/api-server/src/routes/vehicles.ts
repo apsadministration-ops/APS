@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { eq, and, isNull, count, inArray } from "drizzle-orm";
-import { db, vehiclesTable, ownershipTable, usersTable, workLogsTable, jobsTable, shopsTable } from "@workspace/db";
+import { eq, and, isNull, count, inArray, sql } from "drizzle-orm";
+import { db, vehiclesTable, ownershipTable, usersTable, workLogsTable, jobsTable, shopsTable, partnerVehicleOperationsTable } from "@workspace/db";
 import { authenticate, type AuthRequest } from "../middlewares/authenticate";
 import { lookupComponentSpecs } from "../lib/componentSpecs";
 import { lookupParts, type PartCategory } from "../lib/partsCatalog";
@@ -35,6 +35,21 @@ async function canAccessVehicle(userId: number, role: string, vehicleId: number)
 }
 
 const router: IRouter = Router();
+
+class LegacyVehicleConflict extends Error {
+  constructor(readonly response: string) {
+    super(response);
+  }
+}
+
+class VehicleTransferError extends Error {
+  constructor(
+    readonly status: number,
+    readonly response: string,
+  ) {
+    super(response);
+  }
+}
 
 function formatVehicle(
   vehicle: typeof vehiclesTable.$inferSelect,
@@ -113,44 +128,91 @@ router.post("/vehicles", authenticate, async (req: AuthRequest, res): Promise<vo
     return;
   }
 
-  const [existing] = await db.select().from(vehiclesTable).where(eq(vehiclesTable.vin, vin.toUpperCase()));
+  const normalizedVin = vin.toUpperCase();
+  const [existing] = await db.select().from(vehiclesTable).where(sql`lower(${vehiclesTable.vin}) = lower(${normalizedVin})`);
   if (existing) {
-    const [activeOwnership] = await db
-      .select()
-      .from(ownershipTable)
-      .where(and(eq(ownershipTable.vehicleId, existing.id), isNull(ownershipTable.endDate)));
+    try {
+      const claimed = await db.transaction(async (tx) => {
+        // This advisory lock is shared with partner create/link and ownership
+        // transfer. It closes the no-row race where a VIN is being imported
+        // while the legacy endpoint is trying to claim it.
+        await tx.execute(sql`
+          SELECT pg_advisory_xact_lock(
+            hashtextextended(lower(${normalizedVin}), 0)
+          )
+        `);
+        const lockedRows = await tx.execute(sql`
+          SELECT id
+          FROM vehicles
+          WHERE id = ${existing.id}
+          FOR UPDATE
+        `);
+        const lockedId = lockedRows.rows[0] as { id: number } | undefined;
+        if (!lockedId) throw new LegacyVehicleConflict("This vehicle no longer exists");
+        const [currentVehicle] = await tx
+          .select()
+          .from(vehiclesTable)
+          .where(eq(vehiclesTable.id, lockedId.id));
+        if (!currentVehicle) throw new LegacyVehicleConflict("This vehicle no longer exists");
 
-    if (activeOwnership) {
-      if (activeOwnership.userId === req.userId) {
-        res.status(409).json({ error: "You already own this vehicle" });
-      } else {
-        res.status(409).json({ error: "This VIN is already registered to another user" });
+        // Re-check the registry only after the canonical vehicle row is
+        // locked. A committed operation always wins over a legacy claim.
+        const [registeredPartnerVehicle] = await tx
+          .select({ id: partnerVehicleOperationsTable.id })
+          .from(partnerVehicleOperationsTable)
+          .where(eq(partnerVehicleOperationsTable.vehicleId, currentVehicle.id));
+        if (registeredPartnerVehicle) {
+          throw new LegacyVehicleConflict("This VIN is registered to a commercial partner vehicle");
+        }
+
+        const [activeOwnership] = await tx
+          .select()
+          .from(ownershipTable)
+          .where(and(eq(ownershipTable.vehicleId, currentVehicle.id), isNull(ownershipTable.endDate)));
+        if (activeOwnership) {
+          if (activeOwnership.userId === req.userId) {
+            throw new LegacyVehicleConflict("You already own this vehicle");
+          }
+          throw new LegacyVehicleConflict("This VIN is already registered to another user");
+        }
+
+        // Update plate number + mileage if provided. Only accept a higher
+        // mileage on re-add (odometers don't go down).
+        const updateFields: { plateNumber?: string; mileage?: number } = {};
+        if (plateNumber) updateFields.plateNumber = plateNumber.toUpperCase();
+        const newMileageInt = Math.floor(mileage);
+        if (newMileageInt > (currentVehicle.mileage ?? 0)) updateFields.mileage = newMileageInt;
+        if (Object.keys(updateFields).length > 0) {
+          await tx
+            .update(vehiclesTable)
+            .set(updateFields)
+            .where(eq(vehiclesTable.id, currentVehicle.id));
+        }
+
+        const [newOwnership] = await tx.insert(ownershipTable).values({
+          vehicleId: currentVehicle.id,
+          userId: req.userId!,
+          vin: currentVehicle.vin,
+          startDate: new Date(),
+          transferVerified: false,
+        }).returning();
+        if (!newOwnership) throw new Error("Ownership insert did not return a row");
+        return {
+          vehicle: { ...currentVehicle, ...updateFields } as typeof currentVehicle,
+          ownership: newOwnership,
+        };
+      });
+
+      const [owner] = await db.select().from(usersTable).where(eq(usersTable.id, req.userId!));
+      const [sc] = await db.select({ c: count() }).from(workLogsTable).where(eq(workLogsTable.vehicleId, claimed.vehicle.id));
+      res.status(201).json(formatVehicle(claimed.vehicle, claimed.ownership, owner ?? null, Number(sc?.c ?? 0), req.userId!));
+    } catch (error) {
+      if (error instanceof LegacyVehicleConflict) {
+        res.status(409).json({ error: error.response });
+        return;
       }
-      return;
+      throw error;
     }
-
-    // Update plate number + mileage if provided
-    const updateFields: { plateNumber?: string; mileage?: number } = {};
-    if (plateNumber) updateFields.plateNumber = plateNumber.toUpperCase();
-    // Only accept a higher mileage on re-add (odometers don't go down)
-    const newMileageInt = Math.floor(mileage);
-    if (newMileageInt > (existing.mileage ?? 0)) updateFields.mileage = newMileageInt;
-    if (Object.keys(updateFields).length > 0) {
-      await db.update(vehiclesTable).set(updateFields).where(eq(vehiclesTable.id, existing.id));
-    }
-
-    const [newOwnership] = await db.insert(ownershipTable).values({
-      vehicleId: existing.id,
-      userId: req.userId!,
-      vin: existing.vin,
-      startDate: new Date(),
-      transferVerified: false,
-    }).returning();
-
-    const [owner] = await db.select().from(usersTable).where(eq(usersTable.id, req.userId!));
-    const [sc] = await db.select({ c: count() }).from(workLogsTable).where(eq(workLogsTable.vehicleId, existing.id));
-    const updated = { ...existing, ...updateFields } as typeof existing;
-    res.status(201).json(formatVehicle(updated, newOwnership, owner ?? null, Number(sc?.c ?? 0), req.userId!));
     return;
   }
 
@@ -175,25 +237,56 @@ router.post("/vehicles", authenticate, async (req: AuthRequest, res): Promise<vo
     resolvedOwnerShopId = sid;
   }
 
-  const [vehicle] = await db.insert(vehiclesTable).values({
-    vin: vin.toUpperCase(),
-    plateNumber: plateNumber ? plateNumber.toUpperCase() : null,
-    make, model, year,
-    trim: trim ?? null,
-    color: color ?? null,
-    mileage: Math.floor(mileage),
-    insuranceCarrier: insuranceCarrier?.trim() || null,
-    insurancePolicyNumber: insurancePolicyNumber?.trim() || null,
-    ownerShopId: resolvedOwnerShopId,
-  }).returning();
-
-  const [ownership] = await db.insert(ownershipTable).values({
-    vehicleId: vehicle.id,
-    userId: req.userId!,
-    vin: vehicle.vin,
-    startDate: new Date(),
-    transferVerified: true,
-  }).returning();
+  let vehicle: typeof vehiclesTable.$inferSelect | undefined;
+  let ownership: typeof ownershipTable.$inferSelect | undefined;
+  try {
+    ({ vehicle, ownership } = await db.transaction(async (tx) => {
+      await tx.execute(sql`
+        SELECT pg_advisory_xact_lock(
+          hashtextextended(lower(${normalizedVin}), 0)
+        )
+      `);
+      const [insertedVehicle] = await tx.insert(vehiclesTable).values({
+        vin: normalizedVin,
+        plateNumber: plateNumber ? plateNumber.toUpperCase() : null,
+        make, model, year,
+        trim: trim ?? null,
+        color: color ?? null,
+        mileage: Math.floor(mileage),
+        insuranceCarrier: insuranceCarrier?.trim() || null,
+        insurancePolicyNumber: insurancePolicyNumber?.trim() || null,
+        ownerShopId: resolvedOwnerShopId,
+      }).returning();
+      if (!insertedVehicle) throw new Error("Vehicle insert did not return a row");
+      const [insertedOwnership] = await tx.insert(ownershipTable).values({
+        vehicleId: insertedVehicle.id,
+        userId: req.userId!,
+        vin: insertedVehicle.vin,
+        startDate: new Date(),
+        transferVerified: true,
+      }).returning();
+      if (!insertedOwnership) throw new Error("Ownership insert did not return a row");
+      return { vehicle: insertedVehicle, ownership: insertedOwnership };
+    }));
+  } catch (error) {
+    // A concurrent partner registry insert may win the global VIN race after
+    // the lookup above. Preserve the legacy endpoint's normal 409 behavior
+    // instead of leaking a unique-index error as a 500.
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      (error as { code?: unknown }).code === "23505"
+    ) {
+      res.status(409).json({ error: "This VIN is already registered" });
+      return;
+    }
+    throw error;
+  }
+  if (!vehicle) {
+    res.status(500).json({ error: "Vehicle insert did not return a row" });
+    return;
+  }
 
   const [owner] = await db.select().from(usersTable).where(eq(usersTable.id, req.userId!));
   res.status(201).json(formatVehicle(vehicle, ownership, owner ?? null, 0, req.userId!));
@@ -352,22 +445,90 @@ router.post("/vehicles/:vehicleId/transfer", authenticate, async (req: AuthReque
   const { newOwnerEmail } = req.body as { newOwnerEmail: string };
   if (!newOwnerEmail) { res.status(400).json({ error: "newOwnerEmail is required" }); return; }
 
-  const [currentOwnership] = await db.select().from(ownershipTable)
-    .where(and(eq(ownershipTable.vehicleId, vehicleId), isNull(ownershipTable.endDate)));
-  if (!currentOwnership || currentOwnership.userId !== req.userId) {
-    res.status(403).json({ error: "You do not own this vehicle" }); return;
+  try {
+    const transferred = await db.transaction(async (tx) => {
+      const identityRows = await tx.execute(sql`
+        SELECT vin
+        FROM vehicles
+        WHERE id = ${vehicleId}
+      `);
+      const identity = identityRows.rows[0] as { vin: string } | undefined;
+      if (!identity) throw new VehicleTransferError(404, "Vehicle not found");
+      // Match partner import and legacy claim locking. The row lock and this
+      // advisory VIN lock ensure a transfer cannot race an import.
+      await tx.execute(sql`
+        SELECT pg_advisory_xact_lock(
+          hashtextextended(lower(${identity.vin}), 0)
+        )
+      `);
+      const lockedRows = await tx.execute(sql`
+        SELECT id
+        FROM vehicles
+        WHERE id = ${vehicleId}
+        FOR UPDATE
+      `);
+      if (!lockedRows.rows[0]) throw new VehicleTransferError(404, "Vehicle not found");
+      const [vehicle] = await tx
+        .select()
+        .from(vehiclesTable)
+        .where(eq(vehiclesTable.id, vehicleId));
+      if (!vehicle) throw new VehicleTransferError(404, "Vehicle not found");
+
+      // Imported commercial vehicles remain registry-owned. Do not end their
+      // existing ownership history or append a transfer row.
+      const [registeredPartnerVehicle] = await tx
+        .select({ id: partnerVehicleOperationsTable.id })
+        .from(partnerVehicleOperationsTable)
+        .where(eq(partnerVehicleOperationsTable.vehicleId, vehicleId));
+      if (registeredPartnerVehicle) {
+        throw new VehicleTransferError(
+          409,
+          "This VIN is registered to a commercial partner vehicle",
+        );
+      }
+
+      const [currentOwnership] = await tx.select().from(ownershipTable)
+        .where(and(eq(ownershipTable.vehicleId, vehicleId), isNull(ownershipTable.endDate)));
+      if (!currentOwnership || currentOwnership.userId !== req.userId) {
+        throw new VehicleTransferError(403, "You do not own this vehicle");
+      }
+
+      const [newOwner] = await tx.select().from(usersTable).where(eq(usersTable.email, newOwnerEmail));
+      if (!newOwner) throw new VehicleTransferError(404, "New owner not found");
+
+      const [endedOwnership] = await tx.update(ownershipTable)
+        .set({ endDate: new Date(), transferVerified: true })
+        .where(eq(ownershipTable.id, currentOwnership.id))
+        .returning();
+      if (!endedOwnership) throw new Error("Ownership transfer update did not return a row");
+      const [newOwnership] = await tx.insert(ownershipTable).values({
+        vehicleId,
+        userId: newOwner.id,
+        vin: vehicle.vin,
+        startDate: new Date(),
+        transferVerified: true,
+      }).returning();
+      if (!newOwnership) throw new Error("Ownership transfer insert did not return a row");
+      return { newOwnership, newOwner };
+    });
+
+    res.json({
+      id: transferred.newOwnership.id,
+      vehicleId: transferred.newOwnership.vehicleId,
+      vin: transferred.newOwnership.vin,
+      userId: transferred.newOwnership.userId,
+      userName: transferred.newOwner.name,
+      startDate: transferred.newOwnership.startDate,
+      endDate: transferred.newOwnership.endDate ?? null,
+      transferVerified: transferred.newOwnership.transferVerified,
+    });
+  } catch (error) {
+    if (error instanceof VehicleTransferError) {
+      res.status(error.status).json({ error: error.response });
+      return;
+    }
+    throw error;
   }
-
-  const [newOwner] = await db.select().from(usersTable).where(eq(usersTable.email, newOwnerEmail));
-  if (!newOwner) { res.status(404).json({ error: "New owner not found" }); return; }
-
-  const [vehicle] = await db.select().from(vehiclesTable).where(eq(vehiclesTable.id, vehicleId));
-  if (!vehicle) { res.status(404).json({ error: "Vehicle not found" }); return; }
-
-  await db.update(ownershipTable).set({ endDate: new Date(), transferVerified: true }).where(eq(ownershipTable.id, currentOwnership.id));
-  const [newOwnership] = await db.insert(ownershipTable).values({ vehicleId, userId: newOwner.id, vin: vehicle.vin, startDate: new Date(), transferVerified: true }).returning();
-
-  res.json({ id: newOwnership.id, vehicleId: newOwnership.vehicleId, vin: newOwnership.vin, userId: newOwnership.userId, userName: newOwner.name, startDate: newOwnership.startDate, endDate: newOwnership.endDate ?? null, transferVerified: newOwnership.transferVerified });
 });
 
 // List the fleet vehicles owned by a single partner shop. Restricted to the

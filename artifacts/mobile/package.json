@@ -8,6 +8,7 @@
     "build": "node scripts/build.js",
     "serve": "node server/serve.js",
     "test:phase2": "node --experimental-strip-types scripts/phase2-regression.mjs",
+    "test:partner-vehicles": "node --experimental-strip-types scripts/partner-vehicle-operations.test.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {

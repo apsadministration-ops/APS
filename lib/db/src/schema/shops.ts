@@ -7,6 +7,7 @@ import {
   timestamp,
   doublePrecision,
   index,
+  unique,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -77,6 +78,10 @@ export const shopsTable = pgTable("shops", {
     columns: [t.organizationId, t.ownerId],
     foreignColumns: [partnerOrganizationsTable.id, partnerOrganizationsTable.primaryOwnerId],
   }),
+  // Target for operation rows' composite organization/location FK. Keeping
+  // organizationId in the key prevents a location from being referenced by an
+  // operation belonging to another organization.
+  unique("shops_organization_id_id_unique").on(t.organizationId, t.id),
   index("shops_owner_id_idx").on(t.ownerId),
   index("shops_organization_id_idx").on(t.organizationId),
   index("shops_status_idx").on(t.status),

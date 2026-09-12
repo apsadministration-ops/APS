@@ -12,6 +12,7 @@ export * from "./favorites";
 export * from "./flags";
 export * from "./shops";
 export * from "./partnerOrganizations";
+export * from "./partnerVehicleOperations";
 export * from "./bays";
 export * from "./bayBookings";
 export * from "./inspections";
