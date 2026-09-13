@@ -4,7 +4,6 @@ import {
   getGetJobQueryKey,
   getGetTierCatalogQueryKey,
   getListPartnerOrganizationLocationsQueryKey,
-  getListPartnerOrganizationsQueryKey,
   getListPartnerServiceRequestsQueryKey,
   getListPartnerVehicleOperationsQueryKey,
   getListJobsQueryKey,
@@ -42,6 +41,7 @@ import {
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { useSelectedPartnerOrganization } from "@/hooks/useSelectedPartnerOrganization";
+import { partnerOrganizationsQueryKey } from "@/lib/partnerOrganization";
 import {
   CommercialJobContext,
 } from "@/components/partner/CommercialJobIntegration";
@@ -158,7 +158,7 @@ export default function ServiceRequestDetailScreen() {
   const originOrganizationIdRef = useRef<number | null>(null);
 
   const organizationsQuery = useListPartnerOrganizations({
-    query: { enabled, queryKey: getListPartnerOrganizationsQueryKey() },
+    query: { enabled, queryKey: partnerOrganizationsQueryKey(user?.id) },
   });
   const { selectedId, selectedOrganization, isSelectionReady } = useSelectedPartnerOrganization(
     user?.id,

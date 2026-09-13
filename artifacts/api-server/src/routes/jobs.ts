@@ -1,6 +1,16 @@
 import { Router, type IRouter } from "express";
 import { eq, and, sql } from "drizzle-orm";
-import { db, jobsTable, vehiclesTable, usersTable, workLogsTable, paymentsTable, messagesTable } from "@workspace/db";
+import {
+  db,
+  jobsTable,
+  partnerOrganizationsTable,
+  partnerServiceRequestsTable,
+  vehiclesTable,
+  usersTable,
+  workLogsTable,
+  paymentsTable,
+  messagesTable,
+} from "@workspace/db";
 import { authenticate, requireActiveMechanic, type AuthRequest } from "../middlewares/authenticate";
 import { notifyMechanics, notifyCustomerApprovalPending } from "../lib/notifications";
 import { getUncachableStripeClient } from "../lib/stripeClient";
@@ -77,12 +87,51 @@ export async function formatJob(
     ? (await db.select().from(usersTable).where(eq(usersTable.id, job.mechanicId)))[0] ?? null
     : null;
   const [vehicle] = await db.select().from(vehiclesTable).where(eq(vehiclesTable.id, job.vehicleId));
+  // A source-linked commercial job is business-facing even though
+  // `customerId` remains the human principal for authorization, payment,
+  // review, and audit flows. Require the complete reverse link before using
+  // the organization label so a malformed/stale pair cannot disclose another
+  // organization's identity.
+  let commercialOrganization: {
+    name: string;
+    legalName: string | null;
+  } | null = null;
+  if (job.sourceOrganizationId != null && job.sourceServiceRequestId != null) {
+    const [linked] = await db
+      .select({
+        name: partnerOrganizationsTable.name,
+        legalName: partnerOrganizationsTable.legalName,
+      })
+      .from(partnerOrganizationsTable)
+      .innerJoin(
+        partnerServiceRequestsTable,
+        and(
+          eq(
+            partnerServiceRequestsTable.organizationId,
+            partnerOrganizationsTable.id,
+          ),
+          eq(
+            partnerServiceRequestsTable.id,
+            job.sourceServiceRequestId,
+          ),
+          eq(partnerServiceRequestsTable.linkedApsJobId, job.id),
+        ),
+      )
+      .where(eq(partnerOrganizationsTable.id, job.sourceOrganizationId));
+    commercialOrganization = linked ?? null;
+  }
+  const customerDisplayName = commercialOrganization
+    ? commercialOrganization.name || commercialOrganization.legalName || "Business"
+    : customer?.name ?? "Unknown";
   return {
     id: job.id,
     vehicleId: job.vehicleId,
     vin: job.vin,
     customerId: job.customerId,
-    customerName: customer?.name ?? "Unknown",
+    // Keep customerId as the human principal. Only the display label changes
+    // for a validated commercial source link; ordinary customer jobs retain
+    // the existing human name.
+    customerName: customerDisplayName,
     mechanicId: job.mechanicId ?? null,
     mechanicName: mechanic?.name ?? null,
     jobType: job.jobType,

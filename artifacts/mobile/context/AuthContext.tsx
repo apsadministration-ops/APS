@@ -2,12 +2,13 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { setAuthTokenGetter, User } from "@workspace/api-client-react";
 import { getApiConfig, getApiUrl } from "@/lib/apiConfig";
+import { writeSelectedPartnerOrganizationId } from "@/lib/partnerOrganization";
 
 interface AuthContextType {
   user: User | null;
   token: string | null;
   isLoading: boolean;
-  login: (user: User, token: string) => Promise<void>;
+  login: (user: User, token: string, organizationId?: number | null) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -84,9 +85,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loadAuth();
   }, []);
 
-  const login = async (newUser: User, newToken: string) => {
+  const login = async (
+    newUser: User,
+    newToken: string,
+    organizationId?: number | null,
+  ) => {
     await AsyncStorage.setItem("auth_token", newToken);
     await AsyncStorage.setItem("auth_user", JSON.stringify(newUser));
+    if (newUser.role === "shop_owner" && organizationId != null) {
+      await writeSelectedPartnerOrganizationId(newUser.id, organizationId);
+    }
     setToken(newToken);
     setUser(newUser);
   };

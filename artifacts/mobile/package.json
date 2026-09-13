@@ -10,6 +10,7 @@
     "test:phase2": "node --experimental-strip-types scripts/phase2-regression.mjs",
     "test:partner-vehicles": "node --experimental-strip-types scripts/partner-vehicle-operations.test.mjs",
     "test:partner-service-requests": "node --experimental-strip-types scripts/partner-service-requests.test.mjs",
+    "test:business-account-ui": "node scripts/business-account-ui.test.mjs",
     "test:ghost-garage-ui": "node scripts/ghost-garage-ui.test.mjs",
     "test:part7-security": "node scripts/part7-security-regression.test.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"

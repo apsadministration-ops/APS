@@ -11,6 +11,8 @@
  *   GET  /payouts/tax-documents         link to Stripe Express dashboard
  *   POST /payouts/:jobId/retry          admin or self — retry failed capture/payout
  *   GET  /admin/payouts/overview        platform-wide payout health (admin)
+ *   POST/GET /partner-organizations/:organizationId/payouts/{onboard,status,login-link}
+ *                                      organization-owned business Connect
  *
  * All non-admin endpoints scope to the caller's mechanic id (or shop's
  * mechanics for shop owners).
@@ -25,6 +27,13 @@ import { getUncachableStripeClient, StripeNotConfiguredError } from "../lib/stri
 import { getPublicBaseUrl } from "../lib/publicUrl";
 import { canManagePayoutDestination, canRetryCapture } from "../lib/authorization";
 import { isCommercialJobOwner, isPartnerJobOwner } from "../lib/commercialJobAccess";
+import {
+  beginBusinessOnboarding,
+  BusinessConnectError,
+  createBusinessLoginLink,
+  getBusinessOrganization,
+  getBusinessPayoutStatus,
+} from "../lib/businessConnect";
 
 const router: IRouter = Router();
 
@@ -74,6 +83,114 @@ function windowStart(window: string): Date {
   }
 }
 
+function organizationIdFromValue(value: unknown): number | null {
+  if (typeof value === "number") {
+    return Number.isSafeInteger(value) && value > 0 ? value : null;
+  }
+  if (typeof value === "string" && /^[1-9]\d*$/.test(value)) {
+    const parsed = Number(value);
+    return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+  }
+  return null;
+}
+
+function writeBusinessConnectError(res: Response, error: unknown): void {
+  if (error instanceof BusinessConnectError) {
+    res.status(error.status).json({ error: error.code, message: error.message });
+    return;
+  }
+  if (error instanceof StripeNotConfiguredError) {
+    res.status(503).json({ error: "stripe_provider_not_configured" });
+    return;
+  }
+  res.status(502).json({ error: "stripe_provider_error" });
+}
+
+function explicitBusinessOrganizationId(
+  value: unknown,
+  res: Response,
+): number | null {
+  const organizationId = organizationIdFromValue(value);
+  if (organizationId === null) {
+    res.status(400).json({
+      error: "organizationId_required",
+      message: "organizationId is required; use the organization payout route.",
+    });
+    return null;
+  }
+  return organizationId;
+}
+
+function requireEmptyBusinessOnboardingBody(req: AuthRequest, res: Response): boolean {
+  if (
+    req.body !== null &&
+    typeof req.body === "object" &&
+    !Array.isArray(req.body) &&
+    Object.keys(req.body).length > 0
+  ) {
+    res.status(400).json({
+      error: "unknown_business_onboarding_field",
+      message: "Business onboarding accepts no payout fields; organizationId belongs in the URL.",
+    });
+    return false;
+  }
+  return true;
+}
+
+function requireOrganizationOnlyBody(req: AuthRequest, res: Response): boolean {
+  if (
+    req.body !== null &&
+    typeof req.body === "object" &&
+    !Array.isArray(req.body) &&
+    Object.keys(req.body).some((key) => key !== "organizationId")
+  ) {
+    res.status(400).json({
+      error: "unknown_business_onboarding_field",
+      message: "Only organizationId is accepted on this compatibility route.",
+    });
+    return false;
+  }
+  return true;
+}
+
+function requireActiveBusinessOwner(req: AuthRequest, res: Response): boolean {
+  if (req.userRole !== "shop_owner" || req.user?.status !== "active") {
+    res.status(403).json({ error: "Active organization primary owners only" });
+    return false;
+  }
+  return true;
+}
+
+async function requireBusinessPayoutContext(
+  req: AuthRequest,
+  res: Response,
+  expectedOrganizationId?: number,
+): Promise<boolean> {
+  if (req.userRole !== "shop_owner") return true;
+  const organizationId = organizationIdFromValue(req.query["organizationId"]);
+  if (organizationId === null) {
+    res.status(400).json({
+      error: "organizationId_required",
+      message: "organizationId is required to view business payout financial data.",
+    });
+    return false;
+  }
+  const organization = await getBusinessOrganization(db, organizationId, req.userId!);
+  if (!organization) {
+    res.status(404).json({ error: "organization_not_found", message: "Organization not found." });
+    return false;
+  }
+  if (organization.status !== "active") {
+    res.status(409).json({ error: "organization_inactive", message: "This organization is inactive." });
+    return false;
+  }
+  if (expectedOrganizationId !== undefined && organization.id !== expectedOrganizationId) {
+    res.status(404).json({ error: "organization_not_found", message: "Organization not found." });
+    return false;
+  }
+  return true;
+}
+
 /** Returns the set of job IDs whose payouts belong to the caller. */
 async function jobIdsForCaller(req: AuthRequest): Promise<Set<number>> {
   const all = await db.select()
@@ -81,20 +198,52 @@ async function jobIdsForCaller(req: AuthRequest): Promise<Set<number>> {
   if (req.userRole === "admin") return new Set(all.map((j) => j.id));
   if (req.userRole === "mechanic") return new Set(all.filter((j) => j.mechanicId === req.userId).map((j) => j.id));
   if (req.userRole === "shop_owner") {
+    const requestedOrganizationId = req.query["organizationId"] === undefined
+      ? null
+      : organizationIdFromValue(req.query["organizationId"]);
+    if (req.query["organizationId"] !== undefined && requestedOrganizationId === null) {
+      return new Set();
+    }
+    let selectedOrganizationId = requestedOrganizationId;
+    if (selectedOrganizationId !== null) {
+      const organization = await getBusinessOrganization(
+        db,
+        selectedOrganizationId,
+        req.userId!,
+      );
+      if (!organization || organization.status !== "active") return new Set();
+    }
     // Shop owner sees jobs whose payment.shopId belongs to a shop they own.
     const shops = await db.select().from(shopsTable).where(eq(shopsTable.ownerId, req.userId!));
-    const shopIds = new Set(shops.map((s) => s.id));
+    const scopedShops = selectedOrganizationId === null
+      ? shops
+      : shops.filter((shop) => shop.organizationId === selectedOrganizationId);
+    const shopIds = new Set(scopedShops.map((s) => s.id));
     const pmts = await db.select({ jobId: paymentsTable.jobId, shopId: paymentsTable.shopId }).from(paymentsTable);
     const postedShopJobIds = pmts
       .filter((p) => p.shopId !== null && shopIds.has(p.shopId))
       .map((p) => p.jobId);
+    const postedShopJobIdSet = new Set(postedShopJobIds);
+    const scopedPostedShopJobIds = all
+      .filter((job) => {
+        if (!postedShopJobIdSet.has(job.id)) return false;
+        if (selectedOrganizationId === null) return true;
+        return job.sourceOrganizationId === selectedOrganizationId ||
+          (job.sourceOrganizationId === null &&
+            job.postedByShopId !== null &&
+            shopIds.has(job.postedByShopId));
+      })
+      .map((job) => job.id);
     const linkedOwnerJobIds = await Promise.all(
       all
-        .filter((j) => j.customerId === req.userId)
+        .filter((j) =>
+          j.customerId === req.userId &&
+          (selectedOrganizationId === null || j.sourceOrganizationId === selectedOrganizationId),
+        )
         .map(async (j) => (await isPartnerJobOwner(j, req.userId!)) ? j.id : null),
     );
     return new Set([
-      ...postedShopJobIds,
+      ...scopedPostedShopJobIds,
       ...linkedOwnerJobIds.filter((id): id is number => id !== null),
     ]);
   }
@@ -102,6 +251,7 @@ async function jobIdsForCaller(req: AuthRequest): Promise<Set<number>> {
 }
 
 router.get("/payouts/summary", authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
+  if (!(await requireBusinessPayoutContext(req, res))) return;
   const window = String(req.query["window"] ?? "month");
   const since = windowStart(window);
   const ids = await jobIdsForCaller(req);
@@ -145,6 +295,7 @@ router.get("/payouts/summary", authenticate, async (req: AuthRequest, res: Respo
 });
 
 router.get("/payouts/buckets", authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
+  if (!(await requireBusinessPayoutContext(req, res))) return;
   const ids = await jobIdsForCaller(req);
   const buckets: Record<string, { count: number; total: number }> = {
     pending: { count: 0, total: 0 },
@@ -174,6 +325,7 @@ router.get("/payouts/buckets", authenticate, async (req: AuthRequest, res: Respo
 });
 
 router.get("/payouts/jobs", authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
+  if (!(await requireBusinessPayoutContext(req, res))) return;
   const limit = Math.min(200, Math.max(1, Number(req.query["limit"] ?? 50)));
   const status = String(req.query["status"] ?? "");
   const ids = await jobIdsForCaller(req);
@@ -199,6 +351,9 @@ router.get("/payouts/job/:jobId", authenticate, async (req: AuthRequest, res: Re
   if (!Number.isInteger(jobId)) { res.status(400).json({ error: "Bad jobId" }); return; }
   const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, jobId));
   if (!job) { res.status(404).json({ error: "Not found" }); return; }
+  if (req.userRole === "shop_owner" && job.sourceOrganizationId !== null) {
+    if (!(await requireBusinessPayoutContext(req, res, job.sourceOrganizationId))) return;
+  }
   const isCustomer = req.userRole === "customer" && req.userId === job.customerId;
   const isCommercialOwner = req.userRole === "shop_owner" &&
     await isCommercialJobOwner(job, req.userId!);
@@ -211,7 +366,14 @@ router.get("/payouts/job/:jobId", authenticate, async (req: AuthRequest, res: Re
   const tips = await db.select().from(tipsTable).where(eq(tipsTable.jobId, jobId)).orderBy(desc(tipsTable.createdAt));
   const events = pmt
     ? await db.select().from(payoutEventsTable)
-        .where(eq(payoutEventsTable.paymentId, pmt.id))
+        .where(
+          job.sourceOrganizationId !== null && req.userRole === "shop_owner"
+            ? and(
+                eq(payoutEventsTable.paymentId, pmt.id),
+                eq(payoutEventsTable.organizationId, job.sourceOrganizationId),
+              )
+            : eq(payoutEventsTable.paymentId, pmt.id),
+        )
         .orderBy(desc(payoutEventsTable.createdAt))
     : [];
   res.json({
@@ -224,10 +386,25 @@ router.get("/payouts/job/:jobId", authenticate, async (req: AuthRequest, res: Re
 });
 
 router.get("/payouts/events", authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
+  if (!(await requireBusinessPayoutContext(req, res))) return;
   const limit = Math.min(200, Math.max(1, Number(req.query["limit"] ?? 50)));
   let rows;
   if (req.userRole === "admin") {
     rows = await db.select().from(payoutEventsTable)
+      .orderBy(desc(payoutEventsTable.createdAt))
+      .limit(limit);
+  } else if (req.userRole === "shop_owner" && req.query["organizationId"] !== undefined) {
+    const organizationId = organizationIdFromValue(req.query["organizationId"]);
+    if (organizationId === null) {
+      res.status(400).json({ error: "organizationId_required" });
+      return;
+    }
+    // Organization events are scoped by the immutable event/account mapping,
+    // not by a potentially stale payment/job join. Account-level payout
+    // events may aggregate several payments and must not be assigned to an
+    // arbitrary organization through the first matching payment.
+    rows = await db.select().from(payoutEventsTable)
+      .where(eq(payoutEventsTable.organizationId, organizationId))
       .orderBy(desc(payoutEventsTable.createdAt))
       .limit(limit);
   } else {
@@ -242,6 +419,23 @@ router.get("/payouts/events", authenticate, async (req: AuthRequest, res: Respon
 router.get("/payouts/tax-documents", authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
   if (!["mechanic", "shop_owner"].includes(req.userRole ?? "")) {
     res.status(403).json({ error: "Mechanics & shop owners only" }); return;
+  }
+  if (req.userRole === "shop_owner") {
+    if (!requireActiveBusinessOwner(req, res)) return;
+    const organizationId = explicitBusinessOrganizationId(req.query["organizationId"], res);
+    if (organizationId === null) return;
+    try {
+      const stripe = await getUncachableStripeClient();
+      const result = await createBusinessLoginLink({
+        organizationId,
+        ownerId: req.userId!,
+        stripe,
+      });
+      res.json(result);
+    } catch (error) {
+      writeBusinessConnectError(res, error);
+    }
+    return;
   }
   const [u] = await db.select().from(usersTable).where(eq(usersTable.id, req.userId!));
   if (!u?.stripeAccountId) { res.status(400).json({ error: "Set up payouts first." }); return; }
@@ -305,67 +499,221 @@ router.get("/admin/payouts/overview", authenticate, requireRole("admin"), async 
 });
 
 /* -------------------------------------------------------------------------- */
-/* Shop-owner Connect onboarding (company-type Express)                       */
+/* Organization-owner Connect onboarding (company-type Express)               */
 /* -------------------------------------------------------------------------- */
 
-router.post("/payouts/shop/connect/onboarding", authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
-  if (req.userRole !== "shop_owner" || req.user?.status !== "active") {
-    res.status(403).json({ error: "Active shop owners only" }); return;
+async function businessOnboarding(
+  req: AuthRequest,
+  res: Response,
+  organizationId: number,
+): Promise<void> {
+  try {
+    const organization = await getBusinessOrganization(db, organizationId, req.userId!);
+    if (!organization) {
+      throw new BusinessConnectError(404, "organization_not_found", "Organization not found.");
+    }
+    if (organization.status !== "active") {
+      throw new BusinessConnectError(
+        409,
+        "organization_inactive",
+        "This organization is inactive. Reactivate it before setting up payouts.",
+      );
+    }
+  } catch (error) {
+    writeBusinessConnectError(res, error);
+    return;
   }
   const baseUrl = getPublicBaseUrl("payout");
   if (!baseUrl) {
     res.status(503).json({ error: "public_url_not_configured" });
     return;
   }
-  const stripe = await getUncachableStripeClient();
-  const [u] = await db.select().from(usersTable).where(eq(usersTable.id, req.userId!));
-  if (!u) { res.status(404).json({ error: "User not found" }); return; }
-  let stripeAccountId = u.stripeAccountId;
-  if (!stripeAccountId) {
-    const account = await stripe.accounts.create({
-      type: "express",
-      email: u.email,
-      business_type: "company",
-      capabilities: { transfers: { requested: true }, card_payments: { requested: true } },
-      metadata: { userId: String(u.id), kind: "shop_owner" },
+  try {
+    const stripe = await getUncachableStripeClient();
+    const result = await beginBusinessOnboarding({
+      organizationId,
+      ownerId: req.userId!,
+      stripe,
+      baseUrl,
     });
-    stripeAccountId = account.id;
-    await db.update(usersTable)
-      .set({ stripeAccountId, stripeAccountType: "company" })
-      .where(eq(usersTable.id, u.id));
+    res.json(result);
+  } catch (error) {
+    writeBusinessConnectError(res, error);
   }
-  const link = await stripe.accountLinks.create({
-    account: stripeAccountId,
-    refresh_url: `${baseUrl}/api/payments/connect/return?status=refresh`,
-    return_url: `${baseUrl}/api/payments/connect/return?status=done`,
-    type: "account_onboarding",
-  });
-  res.json({ url: link.url });
-});
+}
 
-router.get("/payouts/shop/connect/status", authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
-  if (req.userRole !== "shop_owner" || req.user?.status !== "active") {
-    res.status(403).json({ error: "Active shop owners only" }); return;
+async function businessStatus(
+  req: AuthRequest,
+  res: Response,
+  organizationId: number,
+): Promise<void> {
+  try {
+    // A not-yet-onboarded organization has a useful status response even when
+    // the provider is unavailable. Avoid requiring a Stripe client merely to
+    // report the local empty state.
+    const organization = await getBusinessOrganization(db, organizationId, req.userId!);
+    if (!organization) {
+      throw new BusinessConnectError(404, "organization_not_found", "Organization not found.");
+    }
+    if (organization.status !== "active") {
+      throw new BusinessConnectError(
+        409,
+        "organization_inactive",
+        "This organization is inactive. Reactivate it before setting up payouts.",
+      );
+    }
+    if (!organization.stripeAccountId) {
+      res.json({
+        organizationId: organization.id,
+        accountId: null,
+        ready: false,
+        chargesEnabled: false,
+        payoutsEnabled: false,
+        detailsSubmitted: false,
+      });
+      return;
+    }
+    const stripe = await getUncachableStripeClient();
+    const result = await getBusinessPayoutStatus({
+      organizationId,
+      ownerId: req.userId!,
+      stripe,
+    });
+    res.json(result);
+  } catch (error) {
+    writeBusinessConnectError(res, error);
   }
-  const [u] = await db.select().from(usersTable).where(eq(usersTable.id, req.userId!));
-  if (!u?.stripeAccountId) {
-    res.json({ accountId: null, ready: false, chargesEnabled: false, payoutsEnabled: false, detailsSubmitted: false });
-    return;
+}
+
+async function businessLoginLink(
+  req: AuthRequest,
+  res: Response,
+  organizationId: number,
+): Promise<void> {
+  try {
+    const organization = await getBusinessOrganization(db, organizationId, req.userId!);
+    if (!organization) {
+      throw new BusinessConnectError(404, "organization_not_found", "Organization not found.");
+    }
+    if (organization.status !== "active") {
+      throw new BusinessConnectError(
+        409,
+        "organization_inactive",
+        "This organization is inactive. Reactivate it before opening payouts.",
+      );
+    }
+    const stripe = await getUncachableStripeClient();
+    const result = await createBusinessLoginLink({
+      organizationId,
+      ownerId: req.userId!,
+      stripe,
+    });
+    res.json(result);
+  } catch (error) {
+    writeBusinessConnectError(res, error);
   }
-  const stripe = await getUncachableStripeClient();
-  const account = await stripe.accounts.retrieve(u.stripeAccountId);
-  const ready = !!(account.charges_enabled && account.payouts_enabled && account.details_submitted);
-  if (ready !== u.stripeAccountReady) {
-    await db.update(usersTable).set({ stripeAccountReady: ready }).where(eq(usersTable.id, u.id));
-  }
-  res.json({
-    accountId: u.stripeAccountId,
-    ready,
-    chargesEnabled: !!account.charges_enabled,
-    payoutsEnabled: !!account.payouts_enabled,
-    detailsSubmitted: !!account.details_submitted,
-  });
-});
+}
+
+router.post(
+  "/partner-organizations/:organizationId/payouts/onboard",
+  authenticate,
+  async (req: AuthRequest, res: Response): Promise<void> => {
+    if (!requireActiveBusinessOwner(req, res)) return;
+    if (!requireEmptyBusinessOnboardingBody(req, res)) return;
+    const organizationId = explicitBusinessOrganizationId(req.params.organizationId, res);
+    if (organizationId === null) return;
+    await businessOnboarding(req, res, organizationId);
+  },
+);
+
+router.get(
+  "/partner-organizations/:organizationId/payouts/status",
+  authenticate,
+  async (req: AuthRequest, res: Response): Promise<void> => {
+    if (!requireActiveBusinessOwner(req, res)) return;
+    const organizationId = explicitBusinessOrganizationId(req.params.organizationId, res);
+    if (organizationId === null) return;
+    await businessStatus(req, res, organizationId);
+  },
+);
+
+router.get(
+  "/partner-organizations/:organizationId/payouts/login-link",
+  authenticate,
+  async (req: AuthRequest, res: Response): Promise<void> => {
+    if (!requireActiveBusinessOwner(req, res)) return;
+    const organizationId = explicitBusinessOrganizationId(req.params.organizationId, res);
+    if (organizationId === null) return;
+    await businessLoginLink(req, res, organizationId);
+  },
+);
+
+/**
+ * Compatibility routes must carry an explicit organization context. They
+ * never fall back to users.stripeAccountId, which is reserved for mechanics.
+ */
+router.post(
+  "/payouts/shop/connect/onboarding",
+  authenticate,
+  async (req: AuthRequest, res: Response): Promise<void> => {
+    if (!requireActiveBusinessOwner(req, res)) return;
+    if (!requireOrganizationOnlyBody(req, res)) return;
+    const organizationId = explicitBusinessOrganizationId(
+      req.body?.organizationId ?? req.query["organizationId"],
+      res,
+    );
+    if (organizationId === null) return;
+    await businessOnboarding(req, res, organizationId);
+  },
+);
+
+router.get(
+  "/payouts/shop/connect/status",
+  authenticate,
+  async (req: AuthRequest, res: Response): Promise<void> => {
+    if (!requireActiveBusinessOwner(req, res)) return;
+    const organizationId = explicitBusinessOrganizationId(req.query["organizationId"], res);
+    if (organizationId === null) return;
+    await businessStatus(req, res, organizationId);
+  },
+);
+
+router.post(
+  "/payouts/onboard",
+  authenticate,
+  async (req: AuthRequest, res: Response): Promise<void> => {
+    if (!requireActiveBusinessOwner(req, res)) return;
+    if (!requireOrganizationOnlyBody(req, res)) return;
+    const organizationId = explicitBusinessOrganizationId(
+      req.body?.organizationId ?? req.query["organizationId"],
+      res,
+    );
+    if (organizationId === null) return;
+    await businessOnboarding(req, res, organizationId);
+  },
+);
+
+router.get(
+  "/payouts/status",
+  authenticate,
+  async (req: AuthRequest, res: Response): Promise<void> => {
+    if (!requireActiveBusinessOwner(req, res)) return;
+    const organizationId = explicitBusinessOrganizationId(req.query["organizationId"], res);
+    if (organizationId === null) return;
+    await businessStatus(req, res, organizationId);
+  },
+);
+
+router.get(
+  "/payouts/login",
+  authenticate,
+  async (req: AuthRequest, res: Response): Promise<void> => {
+    if (!requireActiveBusinessOwner(req, res)) return;
+    const organizationId = explicitBusinessOrganizationId(req.query["organizationId"], res);
+    if (organizationId === null) return;
+    await businessLoginLink(req, res, organizationId);
+  },
+);
 
 /* -------------------------------------------------------------------------- */
 /* Per-job payout destination toggle (shop_owner / admin only)                */
@@ -440,6 +788,21 @@ router.patch("/payouts/job/:jobId/destination", authenticate, async (req: AuthRe
         if (shop.status !== "active") abortDestination(409, { error: "Shop is inactive." });
         if (req.userRole === "shop_owner" && shop.ownerId !== req.userId) {
           abortDestination(403, { error: "Not your shop" });
+        }
+        if (shop.organizationId !== null) {
+          if (job.sourceOrganizationId !== shop.organizationId) {
+            abortDestination(403, {
+              error: "shop_organization_mismatch",
+              message: "The selected location is not the exact organization for this job.",
+            });
+          }
+          const organization = await getBusinessOrganization(tx, shop.organizationId);
+          if (!organization || organization.primaryOwnerId !== shop.ownerId) {
+            abortDestination(403, {
+              error: "shop_organization_owner_mismatch",
+              message: "The selected location is not owned by its linked organization.",
+            });
+          }
         }
       }
 

@@ -11,6 +11,58 @@ interface ExpoPushMessage {
 
 export const PUSH_REQUEST_TIMEOUT_MS = 8_000;
 
+/**
+ * Resolve business-facing identity only from the complete Part 6 source link.
+ * This keeps the notification recipient (the human primary owner) unchanged
+ * while preventing an owner's personal name from being presented as the
+ * business on commercial jobs. The dynamic import keeps transport-only
+ * notification tests independent from the database.
+ */
+async function commercialBusinessDisplayName(jobId: number): Promise<string | null> {
+  try {
+    const { and, eq } = await import("drizzle-orm");
+    const {
+      db,
+      jobsTable,
+      partnerOrganizationsTable,
+      partnerServiceRequestsTable,
+    } = await import("@workspace/db");
+    const [row] = await db
+      .select({
+        name: partnerOrganizationsTable.name,
+        legalName: partnerOrganizationsTable.legalName,
+      })
+      .from(jobsTable)
+      .innerJoin(
+        partnerOrganizationsTable,
+        eq(
+          partnerOrganizationsTable.id,
+          jobsTable.sourceOrganizationId,
+        ),
+      )
+      .innerJoin(
+        partnerServiceRequestsTable,
+        and(
+          eq(
+            partnerServiceRequestsTable.id,
+            jobsTable.sourceServiceRequestId,
+          ),
+          eq(
+            partnerServiceRequestsTable.organizationId,
+            partnerOrganizationsTable.id,
+          ),
+          eq(partnerServiceRequestsTable.linkedApsJobId, jobsTable.id),
+        ),
+      )
+      .where(eq(jobsTable.id, jobId));
+    return row?.name || row?.legalName || null;
+  } catch {
+    // Notification delivery is best-effort. If the lookup cannot run, callers
+    // retain the ordinary customer wording rather than disclosing a contact.
+    return null;
+  }
+}
+
 export async function sendPushNotifications(messages: ExpoPushMessage[]): Promise<void> {
   const validMessages = messages.filter((message) => message.to.startsWith("ExponentPushToken["));
   if (validMessages.length === 0) return;
@@ -106,11 +158,14 @@ export async function notifyCustomerJobComplete(
   jobId: number,
 ): Promise<void> {
   if (!token.startsWith("ExponentPushToken[")) return;
+  const businessName = await commercialBusinessDisplayName(jobId);
   await sendPushNotifications([
     {
       to: token,
-      title: "Service Complete",
-      body: `Your ${vehicleName} has been serviced. Total: $${totalCost.toFixed(2)}.`,
+      title: businessName ? `${businessName} — Service Complete` : "Service Complete",
+      body: businessName
+        ? `${businessName}: your ${vehicleName} has been serviced. Total: $${totalCost.toFixed(2)}.`
+        : `Your ${vehicleName} has been serviced. Total: $${totalCost.toFixed(2)}.`,
       data: { jobId, screen: "job" },
       sound: "default",
     },
@@ -124,11 +179,14 @@ export async function notifyCustomerJobAccepted(
   jobId: number,
 ): Promise<void> {
   if (!token.startsWith("ExponentPushToken[")) return;
+  const businessName = await commercialBusinessDisplayName(jobId);
   await sendPushNotifications([
     {
       to: token,
-      title: "Mechanic En Route",
-      body: `${mechanicName} accepted your job for ${vehicleName}.`,
+      title: businessName ? `${businessName} — Mechanic En Route` : "Mechanic En Route",
+      body: businessName
+        ? `${mechanicName} accepted ${businessName}'s job for ${vehicleName}.`
+        : `${mechanicName} accepted your job for ${vehicleName}.`,
       data: { jobId, screen: "job" },
       sound: "default",
     },
@@ -146,11 +204,16 @@ export async function notifyCustomerApprovalPending(
   jobId: number,
 ): Promise<void> {
   if (!token.startsWith("ExponentPushToken[")) return;
+  const businessName = await commercialBusinessDisplayName(jobId);
   await sendPushNotifications([
     {
       to: token,
-      title: "Approve your mechanic — 60s",
-      body: `${mechanicName} wants to take your job. Tap to review and approve.`,
+      title: businessName
+        ? `Approve ${businessName} mechanic — 60s`
+        : "Approve your mechanic — 60s",
+      body: businessName
+        ? `${mechanicName} wants to take ${businessName}'s job. Tap to review and approve.`
+        : `${mechanicName} wants to take your job. Tap to review and approve.`,
       data: { jobId, screen: "approve" },
       sound: "default",
     },
@@ -200,10 +263,15 @@ export async function notifyCustomerWorkAwaitingConfirmation(
   jobId: number,
 ): Promise<void> {
   if (!token.startsWith("ExponentPushToken[")) return;
+  const businessName = await commercialBusinessDisplayName(jobId);
   await sendPushNotifications([{
     to: token,
-    title: "Confirm completed work — 24h",
-    body: `Tap to approve the work on your ${vehicleName} or open a dispute.`,
+    title: businessName
+      ? `Confirm ${businessName} work — 24h`
+      : "Confirm completed work — 24h",
+    body: businessName
+      ? `Tap to approve the work on ${businessName}'s ${vehicleName} or open a dispute.`
+      : `Tap to approve the work on your ${vehicleName} or open a dispute.`,
     data: { jobId, screen: "confirm-work" },
     sound: "default",
   }]);

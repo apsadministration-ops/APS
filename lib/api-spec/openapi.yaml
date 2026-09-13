@@ -24,6 +24,8 @@ tags:
     description: Immutable work log records
   - name: payments
     description: Payment management
+  - name: business-connect
+    description: Organization-owned Stripe Connect onboarding and payout readiness
   - name: dashboard
     description: Summary and analytics endpoints
   - name: assistant
@@ -88,6 +90,37 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "409":
           description: Email already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/register-business:
+    post:
+      operationId: registerBusiness
+      tags: [auth]
+      summary: Register a business organization and its primary administrator
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterBusinessBody"
+      responses:
+        "201":
+          description: Business account registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusinessAuthResponse"
+        "400":
+          description: Validation error or unsupported legacy owner signup
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Administrator login email already exists
           content:
             application/json:
               schema:
@@ -887,6 +920,170 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Payment"
+
+  # Organization-owned Stripe Connect
+  /partner-organizations/{organizationId}/payouts/onboard:
+    post:
+      operationId: beginBusinessOrganizationPayoutOnboarding
+      tags: [business-connect]
+      summary: Create or resume an organization's Express payout onboarding
+      description: The organization ID is explicit and the request body accepts no Stripe or payout fields.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BusinessConnectOnboardingBody"
+      responses:
+        "200":
+          description: Account-link URL for onboarding
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusinessConnectOnboardingResponse"
+        "400":
+          description: Invalid organization ID or caller-owned payout fields
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Caller is not an active organization primary owner
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Organization is not owned by the caller
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Organization is inactive
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Public URL or Stripe provider is not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /partner-organizations/{organizationId}/payouts/status:
+    get:
+      operationId: getBusinessOrganizationPayoutStatus
+      tags: [business-connect]
+      summary: Read an organization's Stripe Connect payout readiness
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: Payout readiness
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusinessConnectStatusResponse"
+        "400":
+          description: Invalid organization ID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Caller is not an active organization primary owner
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Organization is not owned by the caller
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Organization is inactive
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Stripe provider is not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /partner-organizations/{organizationId}/payouts/login-link:
+    get:
+      operationId: getBusinessOrganizationPayoutLoginLink
+      tags: [business-connect]
+      summary: Create a Stripe Express dashboard login link for an organization
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: Stripe Express dashboard login link
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusinessConnectLoginLinkResponse"
+        "400":
+          description: Invalid organization ID or onboarding is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Caller is not an active organization primary owner
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Organization is not owned by the caller
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Organization is inactive
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Stripe provider is not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   # Dashboard / Summary
   /dashboard/customer:
@@ -2770,6 +2967,65 @@ components:
           type: string
       required: [name, email, password, role, address, city, region, zipCode]
 
+    RegisterBusinessBody:
+      type: object
+      additionalProperties: false
+      properties:
+        business:
+          type: object
+          additionalProperties: false
+          properties:
+            legalName:
+              type: string
+              minLength: 1
+            name:
+              type: string
+              minLength: 1
+            subtype:
+              type: string
+              enum: [shop, dealership, fleet]
+            email:
+              type: string
+              format: email
+            phone:
+              type: string
+              minLength: 1
+            address:
+              type: string
+              minLength: 1
+            city:
+              type: string
+              minLength: 1
+            region:
+              type: string
+              minLength: 1
+            zipCode:
+              type: string
+              minLength: 1
+            contactName:
+              type: string
+              minLength: 1
+          required:
+            [legalName, subtype, email, phone, address, city, region]
+        administrator:
+          type: object
+          additionalProperties: false
+          properties:
+            name:
+              type: string
+              minLength: 1
+            email:
+              type: string
+              format: email
+            phone:
+              type: string
+              minLength: 1
+            password:
+              type: string
+              minLength: 1
+          required: [name, email, password]
+      required: [business, administrator]
+
     LoginBody:
       type: object
       properties:
@@ -2788,6 +3044,66 @@ components:
         user:
           $ref: "#/components/schemas/User"
       required: [token, user]
+
+    BusinessAuthResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        user:
+          $ref: "#/components/schemas/User"
+        organization:
+          $ref: "#/components/schemas/PartnerOrganization"
+      required: [token, user, organization]
+
+    BusinessConnectOnboardingBody:
+      type: object
+      additionalProperties: false
+      description: No client-owned Stripe or payout fields are accepted.
+
+    BusinessConnectOnboardingResponse:
+      type: object
+      properties:
+        organizationId:
+          type: integer
+        accountId:
+          type: string
+        ready:
+          type: boolean
+        url:
+          type: string
+          format: uri
+      required: [organizationId, accountId, ready, url]
+
+    BusinessConnectStatusResponse:
+      type: object
+      properties:
+        organizationId:
+          type: integer
+        accountId:
+          type: ["string", "null"]
+        ready:
+          type: boolean
+        chargesEnabled:
+          type: boolean
+        payoutsEnabled:
+          type: boolean
+        detailsSubmitted:
+          type: boolean
+      required:
+        [organizationId, accountId, ready, chargesEnabled, payoutsEnabled, detailsSubmitted]
+
+    BusinessConnectLoginLinkResponse:
+      type: object
+      properties:
+        organizationId:
+          type: integer
+        accountId:
+          type: string
+        url:
+          type: string
+          format: uri
+      required: [organizationId, accountId, url]
 
     # User
     User:
@@ -3886,6 +4202,8 @@ components:
           type: integer
         primaryOwnerId:
           type: integer
+        legalName:
+          type: ["string", "null"]
         name:
           type: string
         subtype:
@@ -3915,12 +4233,15 @@ components:
         updatedAt:
           type: string
           format: date-time
-      required: [id, primaryOwnerId, name, subtype, contactName, phone, email, address, city, region, zipCode, status, createdAt, updatedAt]
+      required: [id, primaryOwnerId, legalName, name, subtype, contactName, phone, email, address, city, region, zipCode, status, createdAt, updatedAt]
 
     PartnerOrganizationInput:
       type: object
       additionalProperties: false
       properties:
+        legalName:
+          type: string
+          minLength: 1
         name:
           type: string
           minLength: 1
@@ -3953,6 +4274,9 @@ components:
       additionalProperties: false
       minProperties: 1
       properties:
+        legalName:
+          type: ["string", "null"]
+          minLength: 1
         name:
           type: string
           minLength: 1

@@ -9,6 +9,8 @@ import type { PartnerOrganizationInputSubtype } from './partnerOrganizationInput
 
 export interface PartnerOrganizationInput {
   /** @minLength 1 */
+  legalName?: string;
+  /** @minLength 1 */
   name: string;
   subtype: PartnerOrganizationInputSubtype;
   contactName?: string;

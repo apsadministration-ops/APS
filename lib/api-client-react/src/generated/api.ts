@@ -32,6 +32,11 @@ import type {
   BayWithShop,
   BulkSeedPartsCatalog201,
   BulkSeedPartsCatalogBody,
+  BusinessAuthResponse,
+  BusinessConnectLoginLinkResponse,
+  BusinessConnectOnboardingBody,
+  BusinessConnectOnboardingResponse,
+  BusinessConnectStatusResponse,
   CancelBayBookingBody,
   ComponentSpecs,
   CreateBayBody,
@@ -106,6 +111,7 @@ import type {
   RateCustomerBody,
   RateJobBody,
   RegisterBody,
+  RegisterBusinessBody,
   RejectBayBookingBody,
   RemoveFavorite200,
   Review,
@@ -308,6 +314,77 @@ export const useRegister = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getRegisterMutationOptions(options));
+    }
+
+export const getRegisterBusinessUrl = () => {
+
+
+
+
+  return `/api/auth/register-business`
+}
+
+/**
+ * @summary Register a business organization and its primary administrator
+ */
+export const registerBusiness = async (registerBusinessBody: RegisterBusinessBody, options?: RequestInit): Promise<BusinessAuthResponse> => {
+
+  return customFetch<BusinessAuthResponse>(getRegisterBusinessUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(registerBusinessBody)
+  }
+);}
+
+
+
+
+
+export const getRegisterBusinessMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof registerBusiness>>, TError,{data: BodyType<RegisterBusinessBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof registerBusiness>>, TError,{data: BodyType<RegisterBusinessBody>}, TContext> => {
+
+const mutationKey = ['registerBusiness'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof registerBusiness>>, {data: BodyType<RegisterBusinessBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  registerBusiness(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RegisterBusinessMutationResult = NonNullable<Awaited<ReturnType<typeof registerBusiness>>>
+    export type RegisterBusinessMutationBody = BodyType<RegisterBusinessBody>
+    export type RegisterBusinessMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Register a business organization and its primary administrator
+ */
+export const useRegisterBusiness = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof registerBusiness>>, TError,{data: BodyType<RegisterBusinessBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof registerBusiness>>,
+        TError,
+        {data: BodyType<RegisterBusinessBody>},
+        TContext
+      > => {
+      return useMutation(getRegisterBusinessMutationOptions(options));
     }
 
 export const getLoginUrl = () => {
@@ -2766,6 +2843,233 @@ export const useReleasePayment = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getReleasePaymentMutationOptions(options));
     }
+
+export const getBeginBusinessOrganizationPayoutOnboardingUrl = (organizationId: number,) => {
+
+
+
+
+  return `/api/partner-organizations/${organizationId}/payouts/onboard`
+}
+
+/**
+ * The organization ID is explicit and the request body accepts no Stripe or payout fields.
+ * @summary Create or resume an organization's Express payout onboarding
+ */
+export const beginBusinessOrganizationPayoutOnboarding = async (organizationId: number,
+    businessConnectOnboardingBody?: BusinessConnectOnboardingBody, options?: RequestInit): Promise<BusinessConnectOnboardingResponse> => {
+
+  return customFetch<BusinessConnectOnboardingResponse>(getBeginBusinessOrganizationPayoutOnboardingUrl(organizationId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(businessConnectOnboardingBody)
+  }
+);}
+
+
+
+
+
+export const getBeginBusinessOrganizationPayoutOnboardingMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof beginBusinessOrganizationPayoutOnboarding>>, TError,{organizationId: number;data?: BodyType<BusinessConnectOnboardingBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof beginBusinessOrganizationPayoutOnboarding>>, TError,{organizationId: number;data?: BodyType<BusinessConnectOnboardingBody>}, TContext> => {
+
+const mutationKey = ['beginBusinessOrganizationPayoutOnboarding'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof beginBusinessOrganizationPayoutOnboarding>>, {organizationId: number;data?: BodyType<BusinessConnectOnboardingBody>}> = (props) => {
+          const {organizationId,data} = props ?? {};
+
+          return  beginBusinessOrganizationPayoutOnboarding(organizationId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type BeginBusinessOrganizationPayoutOnboardingMutationResult = NonNullable<Awaited<ReturnType<typeof beginBusinessOrganizationPayoutOnboarding>>>
+    export type BeginBusinessOrganizationPayoutOnboardingMutationBody = BodyType<BusinessConnectOnboardingBody> | undefined
+    export type BeginBusinessOrganizationPayoutOnboardingMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Create or resume an organization's Express payout onboarding
+ */
+export const useBeginBusinessOrganizationPayoutOnboarding = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof beginBusinessOrganizationPayoutOnboarding>>, TError,{organizationId: number;data?: BodyType<BusinessConnectOnboardingBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof beginBusinessOrganizationPayoutOnboarding>>,
+        TError,
+        {organizationId: number;data?: BodyType<BusinessConnectOnboardingBody>},
+        TContext
+      > => {
+      return useMutation(getBeginBusinessOrganizationPayoutOnboardingMutationOptions(options));
+    }
+
+export const getGetBusinessOrganizationPayoutStatusUrl = (organizationId: number,) => {
+
+
+
+
+  return `/api/partner-organizations/${organizationId}/payouts/status`
+}
+
+/**
+ * @summary Read an organization's Stripe Connect payout readiness
+ */
+export const getBusinessOrganizationPayoutStatus = async (organizationId: number, options?: RequestInit): Promise<BusinessConnectStatusResponse> => {
+
+  return customFetch<BusinessConnectStatusResponse>(getGetBusinessOrganizationPayoutStatusUrl(organizationId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetBusinessOrganizationPayoutStatusQueryKey = (organizationId: number,) => {
+    return [
+    `/api/partner-organizations/${organizationId}/payouts/status`
+    ] as const;
+    }
+
+
+export const getGetBusinessOrganizationPayoutStatusQueryOptions = <TData = Awaited<ReturnType<typeof getBusinessOrganizationPayoutStatus>>, TError = ErrorType<ErrorResponse>>(organizationId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBusinessOrganizationPayoutStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetBusinessOrganizationPayoutStatusQueryKey(organizationId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getBusinessOrganizationPayoutStatus>>> = ({ signal }) => getBusinessOrganizationPayoutStatus(organizationId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: organizationId !== null && organizationId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getBusinessOrganizationPayoutStatus>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetBusinessOrganizationPayoutStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getBusinessOrganizationPayoutStatus>>>
+export type GetBusinessOrganizationPayoutStatusQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Read an organization's Stripe Connect payout readiness
+ */
+
+export function useGetBusinessOrganizationPayoutStatus<TData = Awaited<ReturnType<typeof getBusinessOrganizationPayoutStatus>>, TError = ErrorType<ErrorResponse>>(
+ organizationId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBusinessOrganizationPayoutStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetBusinessOrganizationPayoutStatusQueryOptions(organizationId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetBusinessOrganizationPayoutLoginLinkUrl = (organizationId: number,) => {
+
+
+
+
+  return `/api/partner-organizations/${organizationId}/payouts/login-link`
+}
+
+/**
+ * @summary Create a Stripe Express dashboard login link for an organization
+ */
+export const getBusinessOrganizationPayoutLoginLink = async (organizationId: number, options?: RequestInit): Promise<BusinessConnectLoginLinkResponse> => {
+
+  return customFetch<BusinessConnectLoginLinkResponse>(getGetBusinessOrganizationPayoutLoginLinkUrl(organizationId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetBusinessOrganizationPayoutLoginLinkQueryKey = (organizationId: number,) => {
+    return [
+    `/api/partner-organizations/${organizationId}/payouts/login-link`
+    ] as const;
+    }
+
+
+export const getGetBusinessOrganizationPayoutLoginLinkQueryOptions = <TData = Awaited<ReturnType<typeof getBusinessOrganizationPayoutLoginLink>>, TError = ErrorType<ErrorResponse>>(organizationId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBusinessOrganizationPayoutLoginLink>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetBusinessOrganizationPayoutLoginLinkQueryKey(organizationId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getBusinessOrganizationPayoutLoginLink>>> = ({ signal }) => getBusinessOrganizationPayoutLoginLink(organizationId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: organizationId !== null && organizationId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getBusinessOrganizationPayoutLoginLink>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetBusinessOrganizationPayoutLoginLinkQueryResult = NonNullable<Awaited<ReturnType<typeof getBusinessOrganizationPayoutLoginLink>>>
+export type GetBusinessOrganizationPayoutLoginLinkQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Create a Stripe Express dashboard login link for an organization
+ */
+
+export function useGetBusinessOrganizationPayoutLoginLink<TData = Awaited<ReturnType<typeof getBusinessOrganizationPayoutLoginLink>>, TError = ErrorType<ErrorResponse>>(
+ organizationId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBusinessOrganizationPayoutLoginLink>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetBusinessOrganizationPayoutLoginLinkQueryOptions(organizationId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getGetCustomerDashboardUrl = () => {
 

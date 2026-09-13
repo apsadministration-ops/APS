@@ -118,3 +118,17 @@ mtime_ms = 1789265673269
 storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:098396b5-f3fa-4e71-ae39-a5d9b7f5042e/2a97311d-e39a-4d8a-96ca-a18bcd12c8a2/fb7a458b-e116-4872-881c-e882c13ac698"
 storage_version_token = "1789265679126465"
 content_type = "text/markdown"
+
+[[outputs]]
+id = "uphBg0o08jNYB4GKUmPzl"
+uri = "file://docs/business-account-identity-correction.md"
+type = "text"
+title = "Business-account identity correction — before/after report"
+description = "Implemented identity, signup, organization ownership and Connect changes; changed files, verification results, cleanup and remaining limitations."
+logical_id = "5d236e7e-dffc-488b-b52f-55571320a696"
+content_hash = "sha256:f0c8c682609a64c094308313754f93e7253ff9f3d731f5c0ff0694e8a9157158"
+size = 10796
+mtime_ms = 1789268889383
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:098396b5-f3fa-4e71-ae39-a5d9b7f5042e/5d236e7e-dffc-488b-b52f-55571320a696/4aa243eb-3540-44a6-a1d7-11a02ee13d04"
+storage_version_token = "1789268920490078"
+content_type = "text/markdown"

@@ -35,6 +35,7 @@ import { useColors } from "@/hooks/useColors";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import {
   PARTNER_ORGANIZATION_SUBTYPE_OPTIONS,
+  partnerOrganizationsQueryKey,
   partnerOrganizationSubtypeLabel,
 } from "@/lib/partnerOrganization";
 import { useSelectedPartnerOrganization } from "@/hooks/useSelectedPartnerOrganization";
@@ -47,6 +48,7 @@ import {
 type FormMode = "create" | "edit" | null;
 
 type OrganizationForm = {
+  legalName: string;
   name: string;
   subtype: PartnerOrganizationSubtype;
   contactName: string;
@@ -60,6 +62,7 @@ type OrganizationForm = {
 };
 
 const EMPTY_FORM: OrganizationForm = {
+  legalName: "",
   name: "",
   subtype: "shop",
   contactName: "",
@@ -93,6 +96,10 @@ function displayAddress(organization: PartnerOrganization) {
     .join(", ");
 }
 
+function organizationLegalName(organization: PartnerOrganization) {
+  return (organization as PartnerOrganization & { legalName?: string | null }).legalName ?? "";
+}
+
 export default function PartnerOrganizationsScreen() {
   const colors = useColors();
   const pathname = usePathname();
@@ -108,7 +115,7 @@ export default function PartnerOrganizationsScreen() {
     isRefetching: organizationsRefetching,
     refetch: refetchOrganizations,
   } = useListPartnerOrganizations({
-    query: { enabled, queryKey: getListPartnerOrganizationsQueryKey() },
+    query: { enabled, queryKey: partnerOrganizationsQueryKey(user?.id) },
   });
   const {
     data: shops,
@@ -188,6 +195,7 @@ export default function PartnerOrganizationsScreen() {
     setActionError("");
     setFormError("");
     setForm({
+      legalName: organizationLegalName(selectedOrganization),
       name: selectedOrganization.name,
       subtype: selectedOrganization.subtype,
       contactName: selectedOrganization.contactName ?? "",
@@ -227,6 +235,7 @@ export default function PartnerOrganizationsScreen() {
       createMutation.mutate(
         {
           data: {
+            ...(form.legalName.trim() ? { legalName: form.legalName.trim() } : {}),
             name: form.name.trim(),
             subtype: form.subtype,
             ...(form.contactName.trim() ? { contactName: form.contactName.trim() } : {}),
@@ -261,6 +270,7 @@ export default function PartnerOrganizationsScreen() {
       {
         organizationId: selectedOrganization.id,
         data: {
+          legalName: form.legalName.trim() || null,
           name: form.name.trim(),
           subtype: form.subtype,
           contactName: form.contactName.trim() || null,
@@ -551,6 +561,12 @@ export default function PartnerOrganizationsScreen() {
                   {selectedOrganization.contactName}
                 </Text>
               ) : null}
+              {organizationLegalName(selectedOrganization) &&
+              organizationLegalName(selectedOrganization) !== selectedOrganization.name ? (
+                <Text testID="text-selected-organization-legal-name" style={[styles.detailLine, { color: colors.foreground }]}>
+                  Legal name: {organizationLegalName(selectedOrganization)}
+                </Text>
+              ) : null}
               <Text style={[styles.detailLine, { color: colors.mutedForeground }]}>
                 {selectedOrganization.phone} · {selectedOrganization.email}
               </Text>
@@ -802,6 +818,14 @@ function OrganizationFormCard({
         })}
       </View>
 
+      <OrganizationInput
+        colors={colors}
+        testID="input-organization-legal-name"
+        label="LEGAL BUSINESS NAME"
+        placeholder="Optional legal name"
+        value={form.legalName}
+        onChangeText={(value) => onChange("legalName", value)}
+      />
       <OrganizationInput
         colors={colors}
         testID="input-organization-name"

@@ -1,6 +1,15 @@
 import { Router, type IRouter } from "express";
 import { eq, and, isNull, count, sum, avg } from "drizzle-orm";
-import { db, jobsTable, vehiclesTable, ownershipTable, usersTable, paymentsTable } from "@workspace/db";
+import {
+  db,
+  jobsTable,
+  partnerOrganizationsTable,
+  partnerServiceRequestsTable,
+  vehiclesTable,
+  ownershipTable,
+  usersTable,
+  paymentsTable,
+} from "@workspace/db";
 import { authenticate, requireRole, requireActiveMechanic, type AuthRequest } from "../middlewares/authenticate";
 
 const router: IRouter = Router();
@@ -11,12 +20,36 @@ async function formatJob(job: typeof jobsTable.$inferSelect) {
     ? (await db.select().from(usersTable).where(eq(usersTable.id, job.mechanicId)))[0] ?? null
     : null;
   const [vehicle] = await db.select().from(vehiclesTable).where(eq(vehiclesTable.id, job.vehicleId));
+  let customerDisplayName = customer?.name ?? "Unknown";
+  if (job.sourceOrganizationId != null && job.sourceServiceRequestId != null) {
+    const [organization] = await db
+      .select({
+        name: partnerOrganizationsTable.name,
+        legalName: partnerOrganizationsTable.legalName,
+      })
+      .from(partnerOrganizationsTable)
+      .innerJoin(
+        partnerServiceRequestsTable,
+        and(
+          eq(
+            partnerServiceRequestsTable.organizationId,
+            partnerOrganizationsTable.id,
+          ),
+          eq(partnerServiceRequestsTable.id, job.sourceServiceRequestId),
+          eq(partnerServiceRequestsTable.linkedApsJobId, job.id),
+        ),
+      )
+      .where(eq(partnerOrganizationsTable.id, job.sourceOrganizationId));
+    if (organization) {
+      customerDisplayName = organization.name || organization.legalName || "Business";
+    }
+  }
   return {
     id: job.id,
     vehicleId: job.vehicleId,
     vin: job.vin,
     customerId: job.customerId,
-    customerName: customer?.name ?? "Unknown",
+    customerName: customerDisplayName,
     mechanicId: job.mechanicId ?? null,
     mechanicName: mechanic?.name ?? null,
     jobType: job.jobType,

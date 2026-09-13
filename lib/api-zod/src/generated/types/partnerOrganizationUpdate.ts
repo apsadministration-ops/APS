@@ -9,6 +9,11 @@ import type { PartnerOrganizationUpdateStatus } from './partnerOrganizationUpdat
 import type { PartnerOrganizationUpdateSubtype } from './partnerOrganizationUpdateSubtype';
 
 export interface PartnerOrganizationUpdate {
+  /**
+     * @minLength 1
+     * @nullable
+     */
+  legalName?: string | null;
   /** @minLength 1 */
   name?: string;
   subtype?: PartnerOrganizationUpdateSubtype;

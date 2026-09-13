@@ -1,6 +1,5 @@
 import {
   getListPartnerOrganizationLocationsQueryKey,
-  getListPartnerOrganizationsQueryKey,
   getListPartnerVehicleOperationsQueryKey,
   useCreatePartnerServiceRequest,
   useListPartnerOrganizationLocations,
@@ -24,6 +23,7 @@ import {
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { useSelectedPartnerOrganization } from "@/hooks/useSelectedPartnerOrganization";
+import { partnerOrganizationsQueryKey } from "@/lib/partnerOrganization";
 import {
   createClientRequestId,
   serviceRequestContextKey,
@@ -71,7 +71,7 @@ export default function NewServiceRequestScreen() {
   const mutationContextRef = useRef("");
   const originOrganizationIdRef = useRef<number | null>(null);
   const organizationsQuery = useListPartnerOrganizations({
-    query: { enabled, queryKey: getListPartnerOrganizationsQueryKey() },
+    query: { enabled, queryKey: partnerOrganizationsQueryKey(user?.id) },
   });
   const { selectedId, selectedOrganization, isSelectionReady } = useSelectedPartnerOrganization(
     user?.id,

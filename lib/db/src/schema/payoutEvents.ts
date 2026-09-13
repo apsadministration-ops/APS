@@ -2,6 +2,7 @@ import { pgTable, serial, integer, text, timestamp, jsonb, index, unique } from 
 import { paymentsTable } from "./payments";
 import { tipsTable } from "./tips";
 import { usersTable } from "./users";
+import { partnerOrganizationsTable } from "./partnerOrganizations";
 
 /**
  * Append-only Stripe payout/transfer event log. Powers the mechanic payout
@@ -23,6 +24,9 @@ export const payoutEventsTable = pgTable("payout_events", {
 
   // Mechanic or shop owner whose Connect account this concerns.
   mechanicId: integer("mechanic_id").references(() => usersTable.id),
+  // Canonical organization account scope. Nullable for mechanic/legacy events
+  // and historical rows; never inferred from a human owner.
+  organizationId: integer("organization_id").references(() => partnerOrganizationsTable.id),
   // Associated payment (job-payout) or tip when discoverable.
   paymentId: integer("payment_id").references(() => paymentsTable.id, { onDelete: "set null" }),
   tipId: integer("tip_id").references(() => tipsTable.id, { onDelete: "set null" }),
@@ -55,6 +59,7 @@ export const payoutEventsTable = pgTable("payout_events", {
 }, (t) => [
   unique("payout_events_provider_event_uq").on(t.providerEventId),
   index("payout_events_mechanic_idx").on(t.mechanicId),
+  index("payout_events_organization_idx").on(t.organizationId),
   index("payout_events_payment_idx").on(t.paymentId),
   index("payout_events_kind_idx").on(t.kind),
   index("payout_events_created_idx").on(t.createdAt),

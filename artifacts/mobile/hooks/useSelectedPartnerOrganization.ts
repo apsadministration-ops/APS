@@ -1,9 +1,11 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import type { PartnerOrganization } from "@workspace/api-client-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   readSelectedPartnerOrganizationId,
+  resolveSelectedPartnerOrganizationId,
   writeSelectedPartnerOrganizationId,
+  clearSelectedPartnerOrganizationId,
 } from "@/lib/partnerOrganization";
 
 const SELECTION_QUERY_PREFIX = "partner-organization-selection";
@@ -51,11 +53,45 @@ export function useSelectedPartnerOrganization(
     staleTime: Infinity,
   });
 
-  const selectedId = selectionQuery.data ?? null;
+  const selectedId = resolveSelectedPartnerOrganizationId(selectionQuery.data, organizations);
+
+  // Organization selections are scoped to the authenticated user. Drop a
+  // stale id from this account, and persist the safe sole-organization
+  // default so a subsequent login restores the same validated context.
+  useEffect(() => {
+    if (userId == null || !organizations || selectionQuery.status === "pending") return;
+    const savedId = selectionQuery.data ?? null;
+    if (
+      savedId != null &&
+      !organizations.some((organization) => organization.id === savedId)
+    ) {
+      queryClient.setQueryData(scopedSelectionKey, null);
+      queryClient.setQueryData(storageErrorKey, null);
+      void clearSelectedPartnerOrganizationId(userId);
+      return;
+    }
+    if (organizations.length === 1 && savedId !== organizations[0].id) {
+      queryClient.setQueryData(scopedSelectionKey, organizations[0].id);
+      void writeSelectedPartnerOrganizationId(userId, organizations[0].id);
+    }
+  }, [
+    organizations,
+    queryClient,
+    selectionQuery.data,
+    scopedSelectionKey,
+    selectionQuery.status,
+    storageErrorKey,
+    userId,
+  ]);
 
   const selectOrganization = useCallback(
     (organizationId: number) => {
-      if (userId == null) return;
+      if (
+        userId == null ||
+        !organizations?.some((organization) => organization.id === organizationId)
+      ) {
+        return;
+      }
       const queryKey = selectionQueryKey(userId);
       const errorKey = [...queryKey, "storage-error"] as const;
       queryClient.setQueryData(queryKey, organizationId);
@@ -67,7 +103,7 @@ export function useSelectedPartnerOrganization(
         );
       });
     },
-    [queryClient, userId],
+    [organizations, queryClient, userId],
   );
 
   const selectedOrganization = useMemo(

@@ -77,24 +77,54 @@ async function register(
   suffix: string,
 ) {
   const email = `partner-org-${Date.now()}-${suffix}@example.test`;
-  const result = await api<{
-    token: string;
-    user: { id: number };
-  }>("/api/auth/register", {
-    method: "POST",
-    body: {
-      name: `Partner organization ${suffix}`,
-      email,
-      password: "PartnerOrgTest!2026",
-      role,
-      phone: "+15550123456",
-      address: "100 Main Street",
-      city: "Brooklyn",
-      region: "NY",
-      zipCode: "11201",
-    },
-  });
+  const result = role === "shop_owner"
+    ? await api<{
+      token: string;
+      user: { id: number };
+      organization: { id: number };
+    }>("/api/auth/register-business", {
+      method: "POST",
+      body: {
+        business: {
+          legalName: `Partner organization ${suffix} LLC`,
+          name: `Partner organization ${suffix}`,
+          subtype: "shop",
+          email: `ops-${suffix}@example.test`,
+          phone: "+15550123456",
+          address: "100 Main Street",
+          city: "Brooklyn",
+          region: "NY",
+          zipCode: "11201",
+        },
+        administrator: {
+          name: `Partner organization ${suffix}`,
+          email,
+          phone: "+15550123457",
+          password: "PartnerOrgTest!2026",
+        },
+      },
+    })
+    : await api<{
+      token: string;
+      user: { id: number };
+    }>("/api/auth/register", {
+      method: "POST",
+      body: {
+        name: `Partner organization ${suffix}`,
+        email,
+        password: "PartnerOrgTest!2026",
+        role,
+        phone: "+15550123456",
+        address: "100 Main Street",
+        city: "Brooklyn",
+        region: "NY",
+        zipCode: "11201",
+      },
+    });
   assert.equal(result.response.status, 201);
+  if (role === "shop_owner" && "organization" in result.body) {
+    fixture.organizationIds.push(result.body.organization.id);
+  }
   return {
     id: result.body.user.id,
     email,

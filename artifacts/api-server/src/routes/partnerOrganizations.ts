@@ -29,6 +29,7 @@ import {
 const router: IRouter = Router();
 
 const CREATE_FIELDS = new Set([
+  "legalName",
   "name",
   "subtype",
   "contactName",
@@ -74,12 +75,13 @@ function requireOrganizationId(
   return organizationId;
 }
 
-function formatOrganization(
+export function formatOrganization(
   organization: typeof partnerOrganizationsTable.$inferSelect,
 ) {
   return {
     id: organization.id,
     primaryOwnerId: organization.primaryOwnerId,
+    legalName: organization.legalName ?? null,
     name: organization.name,
     subtype: organization.subtype,
     contactName: organization.contactName ?? null,
@@ -171,6 +173,7 @@ router.post(
       .insert(partnerOrganizationsTable)
       .values({
         primaryOwnerId: req.userId!,
+        legalName: parsed.data.legalName ?? null,
         name: parsed.data.name,
         subtype: parsed.data.subtype,
         contactName: parsed.data.contactName ?? null,
@@ -253,6 +256,7 @@ router.patch(
     }
     const value = parsed.data;
     const updates: Partial<typeof partnerOrganizationsTable.$inferInsert> = {};
+    if (value.legalName !== undefined) updates.legalName = value.legalName;
     if (value.name !== undefined) updates.name = value.name;
     if (value.subtype !== undefined) updates.subtype = value.subtype;
     if (value.contactName !== undefined) updates.contactName = value.contactName;

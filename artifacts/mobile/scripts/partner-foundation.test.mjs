@@ -41,9 +41,11 @@ assert.equal(isPartnerRouteActive("/partner-vehicles", "partner-vehicles"), true
 assert.equal(isPartnerRouteActive("/organizations", "organizations"), true);
 const screen = (name) => readFileSync(new URL(`../app/${name}.tsx`, import.meta.url), "utf8");
 const registration = screen("(auth)/register");
-assert.match(registration, /setRole\("shop_owner"\)/);
-assert.match(registration, /role === "shop_owner" &&/);
-for (const name of ["(auth)/register", "(shop-owner)/index", "(shop-owner)/profile"]) {
+assert.match(registration, /role: "shop_owner"/);
+assert.match(registration, /selectRole\(option\.role, option\.businessSubtype\)/);
+assert.match(registration, /useRegisterBusiness/);
+assert.match(registration, /PARTNER_LAYER_DESCRIPTION/);
+for (const name of ["(shop-owner)/index", "(shop-owner)/profile"]) {
   assert.match(screen(name), /\{PARTNER_LAYER_LABEL\}/);
 }
 const organizations = screen("(shop-owner)/organizations");

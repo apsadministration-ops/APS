@@ -11,6 +11,8 @@ import type { PartnerOrganizationSubtype } from './partnerOrganizationSubtype';
 export interface PartnerOrganization {
   id: number;
   primaryOwnerId: number;
+  /** @nullable */
+  legalName: string | null;
   name: string;
   subtype: PartnerOrganizationSubtype;
   /** @nullable */

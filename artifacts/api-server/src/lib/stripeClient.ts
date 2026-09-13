@@ -59,6 +59,7 @@ async function getCredentials(): Promise<{ publishableKey: string; secretKey: st
 }
 
 export async function getUncachableStripeClient(): Promise<Stripe> {
+  if (TEST_STRIPE_CLIENT) return TEST_STRIPE_CLIENT;
   const { secretKey } = await getCredentials();
   // apiVersion is omitted so the SDK picks its pinned default; Stripe servers
   // accept any recent version. Pin in env STRIPE_API_VERSION if needed.
@@ -77,3 +78,13 @@ export async function getStripeSecretKey(): Promise<string> {
 let WEBHOOK_SECRET: string | null = null;
 export function setWebhookSecret(secret: string): void { WEBHOOK_SECRET = secret; }
 export function getWebhookSecret(): string | null { return WEBHOOK_SECRET; }
+
+// Development-only provider seam for database integration tests. It is never
+// accepted in production and does not persist provider state or credentials.
+let TEST_STRIPE_CLIENT: Stripe | null = null;
+export function setStripeClientForTests(client: Stripe | null): void {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("Stripe test client cannot be configured in production.");
+  }
+  TEST_STRIPE_CLIENT = client;
+}

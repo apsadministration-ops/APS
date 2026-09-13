@@ -9,7 +9,6 @@ import {
   useCreateShop,
   getListMyShopsQueryKey,
   useListPartnerOrganizations,
-  getListPartnerOrganizationsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
@@ -18,7 +17,11 @@ import { useMemo, useState } from "react";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { alertMessage } from "@/utils/confirm";
 import { PARTNER_LAYER_LABEL, PARTNER_LAYER_DESCRIPTION } from "@/lib/partnerIdentity";
-import { partnerOrganizationSubtypeLabel } from "@/lib/partnerOrganization";
+import {
+  partnerOrganizationSubtypeLabel,
+  partnerOrganizationsQueryKey,
+} from "@/lib/partnerOrganization";
+import { businessDisplayName } from "@/lib/businessAccount";
 import { partnerSubtypeHasVehicleOperations } from "@/lib/partnerSubtypeCapabilities";
 import { useSelectedPartnerOrganization } from "@/hooks/useSelectedPartnerOrganization";
 
@@ -33,7 +36,7 @@ export default function ShopsListScreen() {
     query: { enabled, queryKey: getListMyShopsQueryKey() },
   });
   const { data: organizations } = useListPartnerOrganizations({
-    query: { enabled, queryKey: getListPartnerOrganizationsQueryKey() },
+    query: { enabled, queryKey: partnerOrganizationsQueryKey(user?.id) },
   });
   const { selectedOrganization } = useSelectedPartnerOrganization(user?.id, organizations);
   const createMutation = useCreateShop();
@@ -116,6 +119,9 @@ export default function ShopsListScreen() {
     () => (shops ?? []).filter((shop) => shop.organizationId === selectedOrganization?.id),
     [selectedOrganization?.id, shops],
   );
+  const selectedBusiness = selectedOrganization as
+    | (typeof selectedOrganization & { legalName?: string | null })
+    | null;
   const visibleShops = locationFilter === "selected" && selectedOrganization
     ? selectedOrganizationLocations
     : (shops ?? []);
@@ -176,7 +182,7 @@ export default function ShopsListScreen() {
                 style={[styles.organizationSummaryName, { color: colors.foreground }]}
                 numberOfLines={1}
               >
-                {selectedOrganization.name}
+                {businessDisplayName(selectedBusiness ?? selectedOrganization)}
               </Text>
               <Text
                 testID="text-selected-organization-subtype"
@@ -187,8 +193,47 @@ export default function ShopsListScreen() {
               <Text style={[styles.organizationSummaryMeta, { color: colors.mutedForeground }]}>
                 {selectedOrganizationLocations.length} linked physical location{selectedOrganizationLocations.length === 1 ? "" : "s"}
               </Text>
+              {selectedBusiness?.legalName &&
+              selectedBusiness.legalName !== selectedBusiness.name ? (
+                <Text
+                  testID="text-selected-organization-legal-name"
+                  style={[styles.organizationSummaryMeta, { color: colors.mutedForeground }]}
+                  numberOfLines={1}
+                >
+                  Legal name: {selectedBusiness.legalName}
+                </Text>
+              ) : null}
+              {selectedOrganization.contactName ? (
+                <Text
+                  testID="text-selected-organization-contact"
+                  style={[styles.organizationSummaryMeta, { color: colors.mutedForeground }]}
+                  numberOfLines={1}
+                >
+                  Contact: {selectedOrganization.contactName}
+                </Text>
+              ) : null}
             </View>
             <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+          </Pressable>
+        ) : null}
+
+        {selectedOrganization ? (
+          <Pressable
+            testID="link-business-payouts-dashboard"
+            accessibilityRole="button"
+            onPress={() => router.push("/(shop-owner)/payouts" as any)}
+            style={[styles.operationsLink, { backgroundColor: colors.primary + "12", borderColor: colors.primary }]}
+          >
+            <Feather name="credit-card" size={16} color={colors.primary} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.operationsLinkTitle, { color: colors.primary }]}>
+                Business payouts
+              </Text>
+              <Text style={[styles.operationsLinkHint, { color: colors.mutedForeground }]}>
+                Set up or open the selected company's payout dashboard and activity.
+              </Text>
+            </View>
+            <Feather name="arrow-right" size={16} color={colors.primary} />
           </Pressable>
         ) : null}
 

@@ -1,11 +1,17 @@
 import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
-import { db, usersTable } from "@workspace/db";
+import {
+  db,
+  partnerOrganizationsTable,
+  usersTable,
+} from "@workspace/db";
 import { RegisterBody, LoginBody } from "@workspace/api-zod";
 import { hashPassword, verifyPassword, signToken } from "../lib/auth";
 import { authenticate, type AuthRequest } from "../middlewares/authenticate";
 import { recordReferralSignup } from "../lib/referralEngine";
 import { hasValidAdminSetupKey } from "../lib/authorization";
+import { registerBusinessSchema } from "../lib/sharedRegistrationValidator";
+import { formatOrganization } from "./partnerOrganizations";
 
 // Format APS-XXXXXX (6 chars after the prefix) — distinctive, brand-friendly,
 // and easy to share verbally. 32^6 ≈ 1B combinations, plenty for our scale.
@@ -50,6 +56,101 @@ function formatUser(user: typeof usersTable.$inferSelect) {
   };
 }
 
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "23505"
+  );
+}
+
+router.post("/auth/register-business", async (req, res): Promise<void> => {
+  const parsed = registerBusinessSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const { business, administrator } = parsed.data;
+  const administratorEmail = administrator.email.toLowerCase();
+  const businessEmail = business.email.toLowerCase();
+
+  // Fast-path the common duplicate case. The unique constraint and
+  // transaction below remain authoritative for concurrent requests.
+  const [existing] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.email, administratorEmail));
+  if (existing) {
+    res.status(409).json({ error: "Email already registered" });
+    return;
+  }
+
+  const passwordHash = await hashPassword(administrator.password);
+  const referralCode = await uniqueReferralCode();
+
+  try {
+    const result = await db.transaction(async (tx) => {
+      const [user] = await tx
+        .insert(usersTable)
+        .values({
+          name: administrator.name,
+          email: administratorEmail,
+          phone: administrator.phone ?? null,
+          passwordHash,
+          role: "shop_owner",
+          status: "active",
+          referralCode,
+          mechanicTier: null,
+        })
+        .returning();
+      if (!user) throw new Error("Business administrator insert did not return a row");
+
+      const displayName = business.name ?? business.legalName;
+      const [organization] = await tx
+        .insert(partnerOrganizationsTable)
+        .values({
+          primaryOwnerId: user.id,
+          legalName: business.legalName,
+          name: displayName,
+          subtype: business.subtype,
+          contactName: business.contactName ?? null,
+          phone: business.phone,
+          email: businessEmail,
+          address: business.address,
+          city: business.city,
+          region: business.region,
+          zipCode: business.zipCode ?? null,
+        })
+        .returning();
+      if (!organization) {
+        throw new Error("Business organization insert did not return a row");
+      }
+      return { user, organization };
+    });
+
+    const token = signToken({
+      userId: result.user.id,
+      role: result.user.role,
+    });
+    res.status(201).json({
+      token,
+      user: formatUser(result.user),
+      organization: formatOrganization(result.organization),
+    });
+  } catch (error) {
+    // Includes a race with another registration. PostgreSQL rolls the whole
+    // transaction back, so an administrator conflict can never orphan an org
+    // (and an organization failure can never leave an owner user).
+    if (isUniqueViolation(error)) {
+      res.status(409).json({ error: "Email already registered" });
+      return;
+    }
+    throw error;
+  }
+});
+
 router.post("/auth/register", async (req, res): Promise<void> => {
   const parsed = RegisterBody.safeParse(req.body);
   if (!parsed.success) {
@@ -60,6 +161,12 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     name, phone, password, role,
     address, city, region, zipCode, homeLat, homeLng, serviceRadiusMiles, referredBy,
   } = parsed.data;
+  if (role === "shop_owner") {
+    res.status(400).json({
+      error: "Business accounts must use /auth/register-business",
+    });
+    return;
+  }
   const email = parsed.data.email.trim().toLowerCase();
 
   const [existing] = await db.select().from(usersTable).where(eq(usersTable.email, email));

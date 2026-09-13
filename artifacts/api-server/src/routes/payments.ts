@@ -15,6 +15,10 @@ import { getPublicBaseUrl } from "../lib/publicUrl";
 import { commissionForJob, splitOnNetProfit, findServiceBySlug, partsCostCentsFor, defaultPartsCostPct, type TierKey, type ServiceCategory } from "@workspace/tier-catalog";
 import { isRefundablePayment } from "../lib/authorization";
 import { isPartnerJobOwner, isCommercialJobOwner } from "../lib/commercialJobAccess";
+import {
+  BusinessConnectError,
+  resolveShopPayoutDestination,
+} from "../lib/businessConnect";
 
 const router: IRouter = Router();
 
@@ -121,45 +125,63 @@ router.post("/payments/jobs/:jobId/checkout", authenticate, checkoutCreationLimi
       }
 
       // Idempotency: don't create a second authorized intent for the same job.
-      const [existing] = await tx.select().from(paymentsTable).where(eq(paymentsTable.jobId, jobId));
-      if (existing && ["authorized", "captured", "released", "held"].includes(existing.status)) {
-        abortCheckout(409, { error: "Payment already authorized for this job", paymentId: existing.id });
+      const existingRows = await tx.select().from(paymentsTable)
+        .where(eq(paymentsTable.jobId, jobId))
+        .orderBy(paymentsTable.id);
+      if (existingRows.length > 1) {
+        abortCheckout(409, {
+          error: "Multiple payment rows exist for this job; explicit payment resolution is required.",
+          code: "payment_mapping_ambiguous",
+        });
       }
-  // If a previous "pending" attempt left a session/intent dangling, void it
-  // before creating a new one. Otherwise the old session could still be
-  // completed by the customer (in another tab) and create a ghost hold on
-  // their card with no DB linkage. Best-effort — Stripe may already have
-  // expired the session, in which case the call is a no-op.
-  if (existing && existing.status === "pending") {
-    try {
-      const stripeAdmin = await getUncachableStripeClient();
-      if (existing.providerPaymentIntentId) {
-        await stripeAdmin.paymentIntents.cancel(existing.providerPaymentIntentId).catch(() => {});
-      } else if (existing.providerSessionId) {
-        await stripeAdmin.checkout.sessions.expire(existing.providerSessionId).catch(() => {});
+      const existingRow = existingRows[0];
+      if (existingRow && ["authorized", "captured", "released", "held", "refunded"].includes(existingRow.status)) {
+        abortCheckout(409, { error: "Payment already authorized for this job", paymentId: existingRow.id });
       }
-    } catch { /* non-fatal — proceed with new session */ }
-  }
+      // An abandoned pending/failed/cancelled checkout may be safely resumed
+      // on this same canonical row. Cancel/expire its old provider object
+      // before creating the replacement, while preserving its destination
+      // snapshot. A legacy provider row without that snapshot is blocked
+      // rather than mapped to a changed current account.
+      if (
+        existingRow &&
+        (
+          existingRow.providerSessionId ||
+          existingRow.providerPaymentIntentId ||
+          existingRow.providerTransferId ||
+          existingRow.providerPayoutId
+        )
+      ) {
+        if (!existingRow.payoutAccountId) {
+          abortCheckout(409, {
+            error: "This historical checkout has no verified payout destination snapshot; explicit payment resolution is required.",
+            code: "legacy_payout_snapshot_required",
+            paymentId: existingRow.id,
+          });
+        }
+        try {
+          const stripeAdmin = await getUncachableStripeClient();
+          if (existingRow.providerPaymentIntentId) {
+            await stripeAdmin.paymentIntents.cancel(existingRow.providerPaymentIntentId).catch(() => {});
+          } else if (existingRow.providerSessionId) {
+            await stripeAdmin.checkout.sessions.expire(existingRow.providerSessionId).catch(() => {});
+          }
+        } catch {
+          // Provider cancellation is best effort, matching the pre-correction
+          // retry behavior. The replacement keeps the same payment row and
+          // immutable payout snapshot.
+        }
+      }
+      // Every retry uses the one canonical payment row for this job. Terminal
+      // paid/refunded rows were rejected above; failed/cancelled rows can
+      // resume without creating an attempt row.
+      const existing = existingRow ?? null;
 
   const [customer] = await tx.select().from(usersTable).where(eq(usersTable.id, req.userId!));
   const [mechanic] = await tx.select().from(usersTable).where(eq(usersTable.id, job.mechanicId));
   if (!customer || !mechanic) abortCheckout(404, { error: "User not found" });
   if (!mechanic.stripeAccountId || !mechanic.stripeAccountReady) {
     abortCheckout(400, { error: "Mechanic has not completed payout onboarding yet" });
-  }
-
-  const stripe = await getUncachableStripeClient();
-
-  // Ensure customer has a Stripe Customer record. We never store card data — only this id.
-  let stripeCustomerId = customer.stripeCustomerId;
-  if (!stripeCustomerId) {
-    const created = await stripe.customers.create({
-      email: customer.email,
-      name: customer.name,
-      metadata: { userId: String(customer.id) },
-    });
-    stripeCustomerId = created.id;
-    await tx.update(usersTable).set({ stripeCustomerId }).where(eq(usersTable.id, customer.id));
   }
 
   // Tax handling — customer can pass a sales-tax rate (decimal 0..0.15)
@@ -223,21 +245,93 @@ router.post("/payments/jobs/:jobId/checkout", authenticate, checkoutCreationLimi
   // financial result. Existing split rows fail closed below until a future
   // implementation adds an atomic secondary transfer + ledger entry.
   let transferDestination = mechanic.stripeAccountId;
-  let resolvedShopId: number | null = existing?.shopId ?? null;
+  let resolvedShopId: number | null = null;
+  let resolvedPayoutOrganizationId: number | null = null;
   let resolvedDestination: "mechanic" | "shop" | "split" = (existing?.payoutDestination ?? "mechanic") as "mechanic" | "shop" | "split";
+  const hasPersistedDestinationSnapshot = !!existing?.payoutAccountId;
   if (resolvedDestination === "split") {
     abortCheckout(409, { error: "Split payouts are not supported yet. Choose mechanic or shop." });
   }
-  if (resolvedDestination === "shop" && resolvedShopId) {
-    const [shop] = await tx.select().from(shopsTable).where(eq(shopsTable.id, resolvedShopId));
-    if (!shop || shop.status !== "active" || !shop.stripeAccountId || !shop.stripeAccountReady) {
-      abortCheckout(400, { error: "Selected shop has not finished payout setup yet." });
+  if (hasPersistedDestinationSnapshot) {
+    // A retry must use exactly what the canonical payment row committed before
+    // its first provider attempt. Do not re-resolve a changed organization or
+    // location mapping.
+    transferDestination = existing!.payoutAccountId!;
+    resolvedPayoutOrganizationId = existing!.payoutOrganizationId;
+    resolvedShopId = resolvedDestination === "shop" ? existing!.shopId : null;
+  } else {
+    if (resolvedDestination === "shop") {
+      resolvedShopId = existing?.shopId ?? null;
     }
-    transferDestination = shop.stripeAccountId;
-  } else if (resolvedDestination === "shop") {
-    // A shop destination without a concrete shop would otherwise fall
-    // through to the mechanic account while retaining payoutDestination=shop.
-    abortCheckout(400, { error: "A shop destination requires a shopId." });
+    if (resolvedDestination === "shop" && resolvedShopId) {
+      const [shop] = await tx.select().from(shopsTable).where(eq(shopsTable.id, resolvedShopId));
+      if (!shop) {
+        abortCheckout(400, { error: "Selected shop has not finished payout setup yet." });
+      }
+      try {
+        const resolved = await resolveShopPayoutDestination(tx, shop, {
+          sourceOrganizationId: job.sourceOrganizationId,
+        });
+        transferDestination = resolved.accountId;
+        resolvedPayoutOrganizationId = resolved.organizationId;
+      } catch (error) {
+        if (error instanceof BusinessConnectError) {
+          abortCheckout(error.status, { error: error.code, message: error.message });
+        }
+        throw error;
+      }
+    } else if (resolvedDestination === "shop") {
+      // A shop destination without a concrete shop would otherwise fall
+      // through to the mechanic account while retaining payoutDestination=shop.
+      abortCheckout(400, { error: "A shop destination requires a shopId." });
+    }
+  }
+
+  // Persist the exact locked destination before any provider call. These
+  // fields are immutable snapshots once a provider reference is written;
+  // historical rows remain nullable and are never backfilled or reassigned.
+  const destinationSnapshot = {
+    payoutDestination: resolvedDestination,
+    shopId: resolvedShopId,
+    payoutOrganizationId: resolvedPayoutOrganizationId,
+    payoutAccountId: transferDestination,
+  };
+  let paymentId = existing?.id ?? null;
+  if (existing) {
+    if (!hasPersistedDestinationSnapshot) {
+      await tx.update(paymentsTable)
+        .set(destinationSnapshot)
+        .where(eq(paymentsTable.id, existing.id));
+    }
+  } else {
+    const [snapshot] = await tx.insert(paymentsTable).values({
+      jobId,
+      amount: 0,
+      platformFee: 0,
+      mechanicPayout: 0,
+      status: "pending",
+      ...destinationSnapshot,
+    }).returning({ id: paymentsTable.id });
+    paymentId = snapshot?.id ?? null;
+    if (paymentId === null) {
+      abortCheckout(503, { error: "Unable to persist payout destination snapshot." });
+    }
+  }
+
+  const stripe = await getUncachableStripeClient();
+
+  // Ensure customer has a Stripe Customer record. We never store card data —
+  // only this id. The immutable payout snapshot above is already persisted
+  // before this provider call.
+  let stripeCustomerId = customer.stripeCustomerId;
+  if (!stripeCustomerId) {
+    const created = await stripe.customers.create({
+      email: customer.email,
+      name: customer.name,
+      metadata: { userId: String(customer.id) },
+    });
+    stripeCustomerId = created.id;
+    await tx.update(usersTable).set({ stripeCustomerId }).where(eq(usersTable.id, customer.id));
   }
 
   // Idempotency key — if the customer double-taps "Pay" or the network
@@ -275,11 +369,20 @@ router.post("/payments/jobs/:jobId/checkout", authenticate, checkoutCreationLimi
       capture_method: "manual",
       application_fee_amount: platformFeeCents,
       transfer_data: { destination: transferDestination },
-      metadata: { jobId: String(jobId), customerId: String(customer.id), mechanicId: String(mechanic.id), payoutDestination: resolvedDestination },
+       metadata: {
+         jobId: String(jobId),
+         paymentId: String(paymentId),
+         customerId: String(customer.id),
+         mechanicId: String(mechanic.id),
+         payoutDestination: resolvedDestination,
+         ...(resolvedPayoutOrganizationId !== null
+           ? { organizationId: String(resolvedPayoutOrganizationId) }
+           : {}),
+       },
     },
     success_url: `${baseUrl}/api/payments/checkout/return?session_id={CHECKOUT_SESSION_ID}&status=success`,
     cancel_url: `${baseUrl}/api/payments/checkout/return?session_id={CHECKOUT_SESSION_ID}&status=cancel`,
-    metadata: { jobId: String(jobId) },
+    metadata: { jobId: String(jobId), paymentId: String(paymentId) },
   }, { idempotencyKey });
 
   // Upsert payment row — pre-record so webhook can find it by session id.
@@ -287,9 +390,9 @@ router.post("/payments/jobs/:jobId/checkout", authenticate, checkoutCreationLimi
   // Stamp the tax + estimate snapshot on both the payment row AND the job
   // row so admin reporting + customer invoice are consistent before capture.
   await tx.update(jobsTable).set({ taxCents }).where(eq(jobsTable.id, jobId));
-  if (existing) {
+  if (paymentId !== null) {
     // Reset Stripe references so a late webhook from the previous (now
-    // canceled) intent can't flip this fresh row back to authorized.
+    // canceled) intent can't flip this replacement back to authorized.
     await tx.update(paymentsTable)
       .set({
         amount: totalCost,
@@ -304,30 +407,12 @@ router.post("/payments/jobs/:jobId/checkout", authenticate, checkoutCreationLimi
         netProfitCents: subtotalCents - partsCostCents,
         providerSessionId: session.id,
         providerPaymentIntentId: null,
+        providerTransferId: null,
+        providerPayoutId: null,
         failureReason: null,
         status: "pending",
-        payoutDestination: resolvedDestination,
-        shopId: resolvedShopId,
       })
-      .where(eq(paymentsTable.id, existing.id));
-  } else {
-    await tx.insert(paymentsTable).values({
-      jobId,
-      amount: totalCost,
-      platformFee: platformFeeCents / 100,
-      mechanicPayout: mechanicPayoutCents / 100,
-      amountCents,
-      platformFeeCents,
-      mechanicPayoutCents,
-      taxCents,
-      partsCostAppliedCents: partsCostCents,
-      laborRevenueCents: subtotalCents - partsCostCents,
-      netProfitCents: subtotalCents - partsCostCents,
-      providerSessionId: session.id,
-      status: "pending",
-      payoutDestination: resolvedDestination,
-      shopId: resolvedShopId,
-    });
+      .where(eq(paymentsTable.id, paymentId));
   }
 
       return checkoutResponse(200, { url: session.url, sessionId: session.id });

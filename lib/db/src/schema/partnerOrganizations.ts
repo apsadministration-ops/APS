@@ -6,7 +6,9 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
@@ -27,6 +29,10 @@ export const partnerOrganizationsTable = pgTable(
     primaryOwnerId: integer("primary_owner_id")
       .notNull()
       .references(() => usersTable.id),
+    // Legal identity is retained separately from the canonical display/DBA
+    // name. Existing rows remain valid and may be populated through the
+    // owner-only organization editor.
+    legalName: text("legal_name"),
     name: text("name").notNull(),
     subtype: text("subtype", { enum: PARTNER_ORGANIZATION_SUBTYPES }).notNull(),
     contactName: text("contact_name"),
@@ -39,6 +45,13 @@ export const partnerOrganizationsTable = pgTable(
     status: text("status", { enum: PARTNER_ORGANIZATION_STATUSES })
       .notNull()
       .default("active"),
+    // Connect state belongs to the organization, not its human owner. These
+    // fields are intentionally omitted from public/mechanic formatters.
+    stripeAccountId: text("stripe_account_id"),
+    stripeAccountReady: integer("stripe_account_ready").notNull().default(0),
+    stripeAccountType: text("stripe_account_type", {
+      enum: ["individual", "company"],
+    }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -55,6 +68,9 @@ export const partnerOrganizationsTable = pgTable(
       table.id,
       table.primaryOwnerId,
     ),
+    uniqueIndex("partner_organizations_stripe_account_id_unique")
+      .on(table.stripeAccountId)
+      .where(sql`${table.stripeAccountId} IS NOT NULL`),
     index("partner_organizations_owner_id_idx").on(table.primaryOwnerId),
     index("partner_organizations_status_idx").on(table.status),
   ],

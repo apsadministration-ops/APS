@@ -38,6 +38,51 @@ export interface RegisterBody {
   referredBy?: string;
 }
 
+export type RegisterBusinessBodyBusinessSubtype = typeof RegisterBusinessBodyBusinessSubtype[keyof typeof RegisterBusinessBodyBusinessSubtype];
+
+
+export const RegisterBusinessBodyBusinessSubtype = {
+  shop: 'shop',
+  dealership: 'dealership',
+  fleet: 'fleet',
+} as const;
+
+export type RegisterBusinessBodyBusiness = {
+  /** @minLength 1 */
+  legalName: string;
+  /** @minLength 1 */
+  name?: string;
+  subtype: RegisterBusinessBodyBusinessSubtype;
+  email: string;
+  /** @minLength 1 */
+  phone: string;
+  /** @minLength 1 */
+  address: string;
+  /** @minLength 1 */
+  city: string;
+  /** @minLength 1 */
+  region: string;
+  /** @minLength 1 */
+  zipCode?: string;
+  /** @minLength 1 */
+  contactName?: string;
+};
+
+export type RegisterBusinessBodyAdministrator = {
+  /** @minLength 1 */
+  name: string;
+  email: string;
+  /** @minLength 1 */
+  phone?: string;
+  /** @minLength 1 */
+  password: string;
+};
+
+export interface RegisterBusinessBody {
+  business: RegisterBusinessBodyBusiness;
+  administrator: RegisterBusinessBodyAdministrator;
+}
+
 export interface LoginBody {
   email: string;
   password: string;
@@ -99,6 +144,79 @@ export interface User {
 export interface AuthResponse {
   token: string;
   user: User;
+}
+
+export type PartnerOrganizationSubtype = typeof PartnerOrganizationSubtype[keyof typeof PartnerOrganizationSubtype];
+
+
+export const PartnerOrganizationSubtype = {
+  shop: 'shop',
+  dealership: 'dealership',
+  fleet: 'fleet',
+  commercial_business: 'commercial_business',
+} as const;
+
+export type PartnerOrganizationStatus = typeof PartnerOrganizationStatus[keyof typeof PartnerOrganizationStatus];
+
+
+export const PartnerOrganizationStatus = {
+  active: 'active',
+  inactive: 'inactive',
+} as const;
+
+export interface PartnerOrganization {
+  id: number;
+  primaryOwnerId: number;
+  /** @nullable */
+  legalName: string | null;
+  name: string;
+  subtype: PartnerOrganizationSubtype;
+  /** @nullable */
+  contactName: string | null;
+  phone: string;
+  email: string;
+  address: string;
+  city: string;
+  region: string;
+  /** @nullable */
+  zipCode: string | null;
+  status: PartnerOrganizationStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BusinessAuthResponse {
+  token: string;
+  user: User;
+  organization: PartnerOrganization;
+}
+
+/**
+ * No client-owned Stripe or payout fields are accepted.
+ */
+export interface BusinessConnectOnboardingBody { [key: string]: unknown }
+
+export interface BusinessConnectOnboardingResponse {
+  organizationId: number;
+  accountId: string;
+  ready: boolean;
+  url: string;
+}
+
+export interface BusinessConnectStatusResponse {
+  organizationId: number;
+  /** @nullable */
+  accountId: string | null;
+  ready: boolean;
+  chargesEnabled: boolean;
+  payoutsEnabled: boolean;
+  detailsSubmitted: boolean;
+}
+
+export interface BusinessConnectLoginLinkResponse {
+  organizationId: number;
+  accountId: string;
+  url: string;
 }
 
 export type UpdateUserBodyStatus = typeof UpdateUserBodyStatus[keyof typeof UpdateUserBodyStatus];
@@ -994,43 +1112,6 @@ export interface Shop {
   createdAt: string;
 }
 
-export type PartnerOrganizationSubtype = typeof PartnerOrganizationSubtype[keyof typeof PartnerOrganizationSubtype];
-
-
-export const PartnerOrganizationSubtype = {
-  shop: 'shop',
-  dealership: 'dealership',
-  fleet: 'fleet',
-  commercial_business: 'commercial_business',
-} as const;
-
-export type PartnerOrganizationStatus = typeof PartnerOrganizationStatus[keyof typeof PartnerOrganizationStatus];
-
-
-export const PartnerOrganizationStatus = {
-  active: 'active',
-  inactive: 'inactive',
-} as const;
-
-export interface PartnerOrganization {
-  id: number;
-  primaryOwnerId: number;
-  name: string;
-  subtype: PartnerOrganizationSubtype;
-  /** @nullable */
-  contactName: string | null;
-  phone: string;
-  email: string;
-  address: string;
-  city: string;
-  region: string;
-  /** @nullable */
-  zipCode: string | null;
-  status: PartnerOrganizationStatus;
-  createdAt: string;
-  updatedAt: string;
-}
-
 export type PartnerOrganizationInputSubtype = typeof PartnerOrganizationInputSubtype[keyof typeof PartnerOrganizationInputSubtype];
 
 
@@ -1042,6 +1123,8 @@ export const PartnerOrganizationInputSubtype = {
 } as const;
 
 export interface PartnerOrganizationInput {
+  /** @minLength 1 */
+  legalName?: string;
   /** @minLength 1 */
   name: string;
   subtype: PartnerOrganizationInputSubtype;
@@ -1077,6 +1160,11 @@ export const PartnerOrganizationUpdateStatus = {
 } as const;
 
 export interface PartnerOrganizationUpdate {
+  /**
+     * @minLength 1
+     * @nullable
+     */
+  legalName?: string | null;
   /** @minLength 1 */
   name?: string;
   subtype?: PartnerOrganizationUpdateSubtype;

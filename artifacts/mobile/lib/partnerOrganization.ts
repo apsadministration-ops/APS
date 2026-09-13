@@ -37,6 +37,34 @@ export function partnerOrganizationSubtypeLabel(
   );
 }
 
+/**
+ * The generated organization-list key is not user-scoped. Add the current
+ * user id so a login transition cannot render another account's cached
+ * organization list while the new request is in flight.
+ */
+export function partnerOrganizationsQueryKey(userId: number | null | undefined) {
+  return ["/api/partner-organizations", userId ?? "signed-out"] as const;
+}
+
+/**
+ * Resolve the saved organization only against the organizations returned for
+ * the current authenticated user. Invalid ids are intentionally not guessed;
+ * when there is exactly one owned organization it is the safe default.
+ */
+export function resolveSelectedPartnerOrganizationId(
+  savedId: number | null | undefined,
+  organizations: ReadonlyArray<{ id: number }> | undefined,
+) {
+  // Never expose a cached id before the current user's owned list has loaded.
+  // This prevents a previous account's organization from being fetched or
+  // rendered during the login transition.
+  if (!organizations) return null;
+  if (savedId != null && organizations.some((organization) => organization.id === savedId)) {
+    return savedId;
+  }
+  return organizations.length === 1 ? organizations[0].id : null;
+}
+
 export function partnerOrganizationSelectionStorageKey(userId: number | string) {
   return `partner-organization-selection:${String(userId)}`;
 }

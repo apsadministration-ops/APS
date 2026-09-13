@@ -63,6 +63,87 @@ export const RegisterResponse = zod.object({
 
 
 /**
+ * @summary Register a business organization and its primary administrator
+ */
+
+
+
+
+
+
+
+
+
+
+
+
+
+export const RegisterBusinessBody = zod.object({
+  "business": zod.object({
+  "legalName": zod.string().min(1),
+  "name": zod.string().min(1).optional(),
+  "subtype": zod.enum(['shop', 'dealership', 'fleet']),
+  "email": zod.string().email(),
+  "phone": zod.string().min(1),
+  "address": zod.string().min(1),
+  "city": zod.string().min(1),
+  "region": zod.string().min(1),
+  "zipCode": zod.string().min(1).optional(),
+  "contactName": zod.string().min(1).optional()
+}),
+  "administrator": zod.object({
+  "name": zod.string().min(1),
+  "email": zod.string().email(),
+  "phone": zod.string().min(1).optional(),
+  "password": zod.string().min(1)
+})
+})
+
+export const RegisterBusinessResponse = zod.object({
+  "token": zod.string(),
+  "user": zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "email": zod.string(),
+  "phone": zod.string().nullish(),
+  "role": zod.enum(['customer', 'mechanic', 'admin', 'shop_owner']),
+  "status": zod.enum(['active', 'suspended', 'pending']),
+  "avatarUrl": zod.string().nullish(),
+  "referralCode": zod.string().nullish(),
+  "mechanicTier": zod.enum(['detailer', 'technician', 'senior', 'advanced', 'master']).nullish(),
+  "certifications": zod.string().nullish(),
+  "loyaltyPoints": zod.number().optional(),
+  "mechanicPoints": zod.number().optional(),
+  "address": zod.string().nullish(),
+  "city": zod.string().nullish(),
+  "region": zod.string().nullish(),
+  "zipCode": zod.string().nullish(),
+  "homeLat": zod.number().nullish(),
+  "homeLng": zod.number().nullish(),
+  "serviceRadiusMiles": zod.number().nullish(),
+  "createdAt": zod.coerce.date()
+}),
+  "organization": zod.object({
+  "id": zod.number(),
+  "primaryOwnerId": zod.number(),
+  "legalName": zod.string().nullable(),
+  "name": zod.string(),
+  "subtype": zod.enum(['shop', 'dealership', 'fleet', 'commercial_business']),
+  "contactName": zod.string().nullable(),
+  "phone": zod.string(),
+  "email": zod.string().email(),
+  "address": zod.string(),
+  "city": zod.string(),
+  "region": zod.string(),
+  "zipCode": zod.string().nullable(),
+  "status": zod.enum(['active', 'inactive']),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+})
+
+
+/**
  * @summary Login
  */
 export const LoginBody = zod.object({
@@ -1597,6 +1678,66 @@ export const ReleasePaymentResponse = zod.object({
 
 
 /**
+ * The organization ID is explicit and the request body accepts no Stripe or payout fields.
+ * @summary Create or resume an organization's Express payout onboarding
+ */
+
+
+
+export const BeginBusinessOrganizationPayoutOnboardingParams = zod.object({
+  "organizationId": zod.coerce.number().min(1)
+})
+
+export const BeginBusinessOrganizationPayoutOnboardingBody = zod.object({
+
+}).describe('No client-owned Stripe or payout fields are accepted.')
+
+export const BeginBusinessOrganizationPayoutOnboardingResponse = zod.object({
+  "organizationId": zod.number(),
+  "accountId": zod.string(),
+  "ready": zod.boolean(),
+  "url": zod.string().url()
+})
+
+
+/**
+ * @summary Read an organization's Stripe Connect payout readiness
+ */
+
+
+
+export const GetBusinessOrganizationPayoutStatusParams = zod.object({
+  "organizationId": zod.coerce.number().min(1)
+})
+
+export const GetBusinessOrganizationPayoutStatusResponse = zod.object({
+  "organizationId": zod.number(),
+  "accountId": zod.string().nullable(),
+  "ready": zod.boolean(),
+  "chargesEnabled": zod.boolean(),
+  "payoutsEnabled": zod.boolean(),
+  "detailsSubmitted": zod.boolean()
+})
+
+
+/**
+ * @summary Create a Stripe Express dashboard login link for an organization
+ */
+
+
+
+export const GetBusinessOrganizationPayoutLoginLinkParams = zod.object({
+  "organizationId": zod.coerce.number().min(1)
+})
+
+export const GetBusinessOrganizationPayoutLoginLinkResponse = zod.object({
+  "organizationId": zod.number(),
+  "accountId": zod.string(),
+  "url": zod.string().url()
+})
+
+
+/**
  * @summary Customer dashboard summary
  */
 export const GetCustomerDashboardResponse = zod.object({
@@ -2054,6 +2195,7 @@ export const CreateShopResponse = zod.object({
 export const ListPartnerOrganizationsResponseItem = zod.object({
   "id": zod.number(),
   "primaryOwnerId": zod.number(),
+  "legalName": zod.string().nullable(),
   "name": zod.string(),
   "subtype": zod.enum(['shop', 'dealership', 'fleet', 'commercial_business']),
   "contactName": zod.string().nullable(),
@@ -2080,7 +2222,9 @@ export const ListPartnerOrganizationsResponse = zod.array(ListPartnerOrganizatio
 
 
 
+
 export const CreatePartnerOrganizationBody = zod.object({
+  "legalName": zod.string().min(1).optional(),
   "name": zod.string().min(1),
   "subtype": zod.enum(['shop', 'dealership', 'fleet', 'commercial_business']),
   "contactName": zod.string().optional(),
@@ -2095,6 +2239,7 @@ export const CreatePartnerOrganizationBody = zod.object({
 export const CreatePartnerOrganizationResponse = zod.object({
   "id": zod.number(),
   "primaryOwnerId": zod.number(),
+  "legalName": zod.string().nullable(),
   "name": zod.string(),
   "subtype": zod.enum(['shop', 'dealership', 'fleet', 'commercial_business']),
   "contactName": zod.string().nullable(),
@@ -2120,6 +2265,7 @@ export const GetPartnerOrganizationParams = zod.object({
 export const GetPartnerOrganizationResponse = zod.object({
   "id": zod.number(),
   "primaryOwnerId": zod.number(),
+  "legalName": zod.string().nullable(),
   "name": zod.string(),
   "subtype": zod.enum(['shop', 'dealership', 'fleet', 'commercial_business']),
   "contactName": zod.string().nullable(),
@@ -2149,7 +2295,9 @@ export const UpdatePartnerOrganizationParams = zod.object({
 
 
 
+
 export const UpdatePartnerOrganizationBody = zod.object({
+  "legalName": zod.string().min(1).nullish(),
   "name": zod.string().min(1).optional(),
   "subtype": zod.enum(['shop', 'dealership', 'fleet', 'commercial_business']).optional(),
   "contactName": zod.string().nullish(),
@@ -2165,6 +2313,7 @@ export const UpdatePartnerOrganizationBody = zod.object({
 export const UpdatePartnerOrganizationResponse = zod.object({
   "id": zod.number(),
   "primaryOwnerId": zod.number(),
+  "legalName": zod.string().nullable(),
   "name": zod.string(),
   "subtype": zod.enum(['shop', 'dealership', 'fleet', 'commercial_business']),
   "contactName": zod.string().nullable(),

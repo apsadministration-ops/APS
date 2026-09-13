@@ -24,6 +24,7 @@ import {
   handleTransferCreated, handleTransferFailed, handleTransferReversed,
   handlePayoutEvent,
 } from "../lib/payoutEventEngine";
+import { syncConnectAccountReadiness } from "../lib/businessConnect";
 import { notifyMechanicTipReceived } from "../lib/notifications";
 import { tipIdFromProviderMetadata, tipRefundableWhere } from "../lib/tipState";
 
@@ -490,10 +491,20 @@ async function handleEvent(event: Stripe.Event): Promise<void> {
     case "account.updated": {
       const account = event.data.object as Stripe.Account;
       const ready = (account.charges_enabled ?? false) && (account.payouts_enabled ?? false) && (account.details_submitted ?? false);
-      await db.update(usersTable)
-        .set({ stripeAccountReady: ready })
-        .where(eq(usersTable.stripeAccountId, account.id));
-      logger.info({ accountId: account.id, ready }, "Stripe Connect account updated");
+      const resolution = await syncConnectAccountReadiness(account.id, ready);
+      if (resolution.kind === "collision") {
+        logger.error(
+          { accountId: account.id, ready, reason: resolution.reason },
+          "Stripe Connect account.updated ownership collision — no row updated",
+        );
+      } else if (resolution.kind === "unknown") {
+        logger.warn({ accountId: account.id, ready }, "Stripe Connect account.updated has no APS owner");
+      } else {
+        logger.info(
+          { accountId: account.id, ready, ownerKind: resolution.kind, ownerId: resolution.id },
+          "Stripe Connect account updated",
+        );
+      }
       break;
     }
 

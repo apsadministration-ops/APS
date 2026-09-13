@@ -46,6 +46,7 @@ import { partnerVehicleContextKey } from "@/lib/partnerVehicleContext";
 import { buildPartnerVehicleIdentityPayload } from "@/lib/partnerVehicleOperationPayload";
 import {
   partnerOrganizationSubtypeLabel,
+  partnerOrganizationsQueryKey,
 } from "@/lib/partnerOrganization";
 import {
   partnerSubtypeCapability,
@@ -104,7 +105,7 @@ export default function PartnerVehiclesScreen() {
   } = useListPartnerOrganizations({
     query: {
       enabled,
-      queryKey: getListPartnerOrganizationsQueryKey(),
+      queryKey: partnerOrganizationsQueryKey(user?.id),
     },
   });
   const {

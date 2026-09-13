@@ -87,6 +87,31 @@ async function register(
   suffix: string,
 ): Promise<Identity> {
   const email = `shop-ghost-${Date.now()}-${suffix}@example.test`;
+  const password = "ShopGhostTest!2026";
+  if (role === "shop_owner") {
+    // Keep this suite's legacy unlinked-shop coverage on a pre-existing
+    // principal. Business-first signup remains the only person/business
+    // registration path.
+    const { hashPassword } = await import("../src/lib/auth.ts");
+    const [user] = await fixture.db.insert(fixture.usersTable).values({
+      name: `Shop Ghost ${suffix}`,
+      email,
+      phone: "+15550123456",
+      passwordHash: await hashPassword(password),
+      role: "shop_owner",
+      status: "active",
+      address: "100 Main Street",
+      city: "Brooklyn",
+      region: "NY",
+      zipCode: "11201",
+    }).returning({ id: fixture.usersTable.id });
+    const login = await api<{ token: string }>("/api/auth/login", {
+      method: "POST",
+      body: { email, password },
+    });
+    assert.equal(login.response.status, 200, JSON.stringify(login.body));
+    return { id: user.id, email, token: login.body.token };
+  }
   const result = await api<{ token: string; user: { id: number } }>(
     "/api/auth/register",
     {
@@ -94,7 +119,7 @@ async function register(
       body: {
         name: `Shop Ghost ${suffix}`,
         email,
-        password: "ShopGhostTest!2026",
+        password,
         role,
         phone: "+15550123456",
         address: "100 Main Street",
@@ -106,6 +131,60 @@ async function register(
   );
   assert.equal(result.response.status, 201);
   return { id: result.body.user.id, email, token: result.body.token };
+}
+
+async function cleanupPriorFixtures(): Promise<void> {
+  const { inArray, like, or } = await import("drizzle-orm");
+  const oldUsers = await fixture.db.select({ id: fixture.usersTable.id })
+    .from(fixture.usersTable)
+    .where(like(fixture.usersTable.email, "shop-ghost-%@example.test"));
+  const oldUserIds = oldUsers.map((row: { id: number }) => row.id);
+  if (oldUserIds.length === 0) return;
+
+  const oldShops = await fixture.db.select({ id: fixture.shopsTable.id })
+    .from(fixture.shopsTable)
+    .where(inArray(fixture.shopsTable.ownerId, oldUserIds));
+  const oldShopIds = oldShops.map((row: { id: number }) => row.id);
+  const oldJobs = await fixture.db.select({
+    id: fixture.jobsTable.id,
+    vehicleId: fixture.jobsTable.vehicleId,
+  }).from(fixture.jobsTable).where(or(
+    inArray(fixture.jobsTable.customerId, oldUserIds),
+    inArray(fixture.jobsTable.mechanicId, oldUserIds),
+  ));
+  const oldJobIds = oldJobs.map((row: { id: number }) => row.id);
+  const oldVehicleIds = oldJobs
+    .map((row: { vehicleId: number }) => row.vehicleId)
+    .filter((id): id is number => typeof id === "number");
+  const oldOrganizations = await fixture.db
+    .select({ id: fixture.partnerOrganizationsTable.id })
+    .from(fixture.partnerOrganizationsTable)
+    .where(inArray(fixture.partnerOrganizationsTable.primaryOwnerId, oldUserIds));
+  const oldOrganizationIds = oldOrganizations.map((row: { id: number }) => row.id);
+  if (oldJobIds.length || oldShopIds.length) {
+    const bookingWhere = [
+      oldJobIds.length ? inArray(fixture.bayBookingsTable.jobId, oldJobIds) : null,
+      oldShopIds.length ? inArray(fixture.bayBookingsTable.shopId, oldShopIds) : null,
+    ].filter((value): value is NonNullable<typeof value> => value !== null);
+    if (bookingWhere.length) {
+      await fixture.db.delete(fixture.bayBookingsTable).where(or(...bookingWhere));
+    }
+  }
+  if (oldJobIds.length) {
+    await fixture.db.delete(fixture.jobsTable).where(inArray(fixture.jobsTable.id, oldJobIds));
+  }
+  if (oldVehicleIds.length) {
+    await fixture.db.delete(fixture.vehiclesTable).where(inArray(fixture.vehiclesTable.id, oldVehicleIds));
+  }
+  if (oldShopIds.length) {
+    await fixture.db.delete(fixture.baysTable).where(inArray(fixture.baysTable.shopId, oldShopIds));
+    await fixture.db.delete(fixture.shopsTable).where(inArray(fixture.shopsTable.id, oldShopIds));
+  }
+  if (oldOrganizationIds.length) {
+    await fixture.db.delete(fixture.partnerOrganizationsTable)
+      .where(inArray(fixture.partnerOrganizationsTable.id, oldOrganizationIds));
+  }
+  await fixture.db.delete(fixture.usersTable).where(inArray(fixture.usersTable.id, oldUserIds));
 }
 
 async function createShop(token: string, partnerKind: string, suffix: string) {
@@ -198,6 +277,7 @@ before(async () => {
   fixture.jobsTable = database.jobsTable;
   fixture.vehiclesTable = database.vehiclesTable;
   fixture.partnerOrganizationsTable = database.partnerOrganizationsTable;
+  await cleanupPriorFixtures();
 
   const app = express();
   app.use(express.json());

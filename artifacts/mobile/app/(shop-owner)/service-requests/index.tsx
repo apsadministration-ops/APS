@@ -1,7 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import {
   getListPartnerOrganizationLocationsQueryKey,
-  getListPartnerOrganizationsQueryKey,
   getListPartnerServiceRequestsQueryKey,
   getListPartnerVehicleOperationsQueryKey,
   useListPartnerOrganizationLocations,
@@ -28,7 +27,10 @@ import {
   requestUrgencyTone,
   serviceRequestContextKey,
 } from "@/lib/partnerServiceRequest";
-import { partnerOrganizationSubtypeLabel } from "@/lib/partnerOrganization";
+import {
+  partnerOrganizationSubtypeLabel,
+  partnerOrganizationsQueryKey,
+} from "@/lib/partnerOrganization";
 import {
   isPartnerRouteActive,
   partnerRouteAccessibilityProps,
@@ -62,7 +64,7 @@ export default function ServiceRequestsListScreen() {
   const [contextResetKey, setContextResetKey] = useState("");
 
   const organizationsQuery = useListPartnerOrganizations({
-    query: { enabled, queryKey: getListPartnerOrganizationsQueryKey() },
+    query: { enabled, queryKey: partnerOrganizationsQueryKey(user?.id) },
   });
   const { selectedId, selectedOrganization, isSelectionReady } = useSelectedPartnerOrganization(
     user?.id,

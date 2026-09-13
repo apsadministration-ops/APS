@@ -77,6 +77,33 @@ async function register(
   suffix: string,
 ): Promise<Identity> {
   const email = `part4-${testVinStamp}-${suffix}@example.test`;
+  const password = "PartnerVehicleTest!2026";
+  if (role === "shop_owner") {
+    // This is deliberate legacy-owner coverage for unlinked locations. Seed a
+    // pre-existing principal and obtain its token through the normal login
+    // route; never weaken /auth/register back into person-only business signup.
+    const { hashPassword } = await import("../src/lib/auth.ts");
+    const [user] = await fixture.db.insert(fixture.usersTable).values({
+      name: `Part 4 ${testVinStamp}-${suffix}`,
+      email,
+      phone: "+15550123456",
+      passwordHash: await hashPassword(password),
+      role: "shop_owner",
+      status: "active",
+      address: "100 Main Street",
+      city: "Brooklyn",
+      region: "NY",
+      zipCode: "11201",
+    }).returning({ id: fixture.usersTable.id });
+    const login = await api<{ token: string }>("/api/auth/login", {
+      method: "POST",
+      body: { email, password },
+    });
+    assert.equal(login.response.status, 200, JSON.stringify(login.body));
+    const identity = { id: user.id, email, token: login.body.token };
+    fixture.users.push(identity);
+    return identity;
+  }
   const result = await api<{ token: string; user: { id: number } }>(
     "/api/auth/register",
     {
@@ -84,7 +111,7 @@ async function register(
       body: {
         name: `Part 4 ${testVinStamp}-${suffix}`,
         email,
-        password: "PartnerVehicleTest!2026",
+        password,
         role,
         phone: "+15550123456",
         address: "100 Main Street",
@@ -98,6 +125,64 @@ async function register(
   const identity = { id: result.body.user.id, email, token: result.body.token };
   fixture.users.push(identity);
   return identity;
+}
+
+async function cleanupPriorFixtures(): Promise<void> {
+  const { inArray, like } = await import("drizzle-orm");
+  const oldUsers = await fixture.db.select({ id: fixture.usersTable.id })
+    .from(fixture.usersTable)
+    .where(like(fixture.usersTable.email, "part4-%@example.test"));
+  const oldUserIds = oldUsers.map((row: { id: number }) => row.id);
+  if (oldUserIds.length === 0) return;
+
+  const oldOrganizations = await fixture.db
+    .select({ id: fixture.organizationsTable.id })
+    .from(fixture.organizationsTable)
+    .where(inArray(fixture.organizationsTable.primaryOwnerId, oldUserIds));
+  const oldOrganizationIds = oldOrganizations.map((row: { id: number }) => row.id);
+  const oldShops = await fixture.db.select({ id: fixture.shopsTable.id })
+    .from(fixture.shopsTable)
+    .where(inArray(fixture.shopsTable.ownerId, oldUserIds));
+  const oldShopIds = oldShops.map((row: { id: number }) => row.id);
+  const oldOperations = oldOrganizationIds.length
+    ? await fixture.db.select({ vehicleId: fixture.operationsTable.vehicleId })
+      .from(fixture.operationsTable)
+      .where(inArray(fixture.operationsTable.organizationId, oldOrganizationIds))
+    : [];
+  const operationVehicleIds = oldOperations
+    .map((row: { vehicleId: number }) => row.vehicleId)
+    .filter((id): id is number => typeof id === "number");
+  const oldOwnership = await fixture.db
+    .select({ vehicleId: fixture.ownershipTable.vehicleId })
+    .from(fixture.ownershipTable)
+    .where(inArray(fixture.ownershipTable.userId, oldUserIds));
+  const oldShopVehicles = oldShopIds.length
+    ? await fixture.db.select({ id: fixture.vehiclesTable.id })
+      .from(fixture.vehiclesTable)
+      .where(inArray(fixture.vehiclesTable.ownerShopId, oldShopIds))
+    : [];
+  const oldVehicleIds = [...new Set([
+    ...operationVehicleIds,
+    ...oldOwnership.map((row: { vehicleId: number }) => row.vehicleId),
+    ...oldShopVehicles.map((row: { id: number }) => row.id),
+  ])];
+  if (oldVehicleIds.length) {
+    await fixture.db.delete(fixture.ownershipTable)
+      .where(inArray(fixture.ownershipTable.vehicleId, oldVehicleIds));
+    await fixture.db.delete(fixture.operationsTable)
+      .where(inArray(fixture.operationsTable.vehicleId, oldVehicleIds));
+    await fixture.db.delete(fixture.vehiclesTable)
+      .where(inArray(fixture.vehiclesTable.id, oldVehicleIds));
+  }
+  if (oldShopIds.length) {
+    await fixture.db.delete(fixture.shopsTable)
+      .where(inArray(fixture.shopsTable.id, oldShopIds));
+  }
+  if (oldOrganizationIds.length) {
+    await fixture.db.delete(fixture.organizationsTable)
+      .where(inArray(fixture.organizationsTable.id, oldOrganizationIds));
+  }
+  await fixture.db.delete(fixture.usersTable).where(inArray(fixture.usersTable.id, oldUserIds));
 }
 
 async function createOrganization(
@@ -212,6 +297,7 @@ before(async () => {
   fixture.ownershipTable = database.ownershipTable;
   fixture.organizationsTable = database.partnerOrganizationsTable;
   fixture.operationsTable = database.partnerVehicleOperationsTable;
+  await cleanupPriorFixtures();
 
   const app = express();
   app.use(express.json());

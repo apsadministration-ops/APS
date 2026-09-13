@@ -69,12 +69,40 @@ async function api<T = unknown>(
 }
 
 async function register(role: "shop_owner" | "customer" | "mechanic", suffix: string): Promise<Identity> {
+  const email = `part6-${Date.now()}-${suffix}@example.test`;
+  const password = "PartSixTest!2026";
+  if (role === "shop_owner") {
+    // This suite intentionally covers the pre-existing unlinked shop-owner
+    // workflow. Seed that legacy principal directly instead of using the
+    // person-only registration endpoint, which now correctly redirects to
+    // business-first signup.
+    const { hashPassword } = await import("../src/lib/auth.ts");
+    const [user] = await fixture.db.insert(fixture.usersTable).values({
+      name: `Part 6 ${suffix}`,
+      email,
+      phone: "+15550123456",
+      passwordHash: await hashPassword(password),
+      role: "shop_owner",
+      status: "active",
+      address: "100 Main Street",
+      city: "Brooklyn",
+      region: "NY",
+      zipCode: "11201",
+    }).returning({ id: fixture.usersTable.id });
+    fixture.userIds.push(user.id);
+    const login = await api<{ token: string }>("/api/auth/login", {
+      method: "POST",
+      body: { email, password },
+    });
+    assert.equal(login.response.status, 200, JSON.stringify(login.body));
+    return { id: user.id, token: login.body.token };
+  }
   const result = await api<{ token: string; user: { id: number } }>("/api/auth/register", {
     method: "POST",
     body: {
       name: `Part 6 ${suffix}`,
-      email: `part6-${Date.now()}-${suffix}@example.test`,
-      password: "PartSixTest!2026",
+      email,
+      password,
       role,
       phone: "+15550123456",
       address: "100 Main Street",
@@ -86,6 +114,50 @@ async function register(role: "shop_owner" | "customer" | "mechanic", suffix: st
   assert.equal(result.response.status, 201);
   fixture.userIds.push(result.body.user.id);
   return { id: result.body.user.id, token: result.body.token };
+}
+
+async function cleanupPriorFixtures(): Promise<void> {
+  const { inArray, like, or } = await import("drizzle-orm");
+  const oldUsers = await fixture.db.select({ id: fixture.usersTable.id })
+    .from(fixture.usersTable)
+    .where(like(fixture.usersTable.email, "part6-%@example.test"));
+  const oldUserIds = oldUsers.map((row: { id: number }) => row.id);
+  if (oldUserIds.length === 0) return;
+  const oldShops = await fixture.db.select({ id: fixture.shopsTable.id })
+    .from(fixture.shopsTable)
+    .where(inArray(fixture.shopsTable.ownerId, oldUserIds));
+  const oldShopIds = oldShops.map((row: { id: number }) => row.id);
+  const oldJobs = await fixture.db.select({
+    id: fixture.jobsTable.id,
+    vehicleId: fixture.jobsTable.vehicleId,
+  }).from(fixture.jobsTable).where(or(
+    inArray(fixture.jobsTable.customerId, oldUserIds),
+    inArray(fixture.jobsTable.mechanicId, oldUserIds),
+  ));
+  const oldJobIds = oldJobs.map((row: { id: number }) => row.id);
+  const oldVehicleIds = oldJobs
+    .map((row: { vehicleId: number }) => row.vehicleId)
+    .filter((id): id is number => typeof id === "number");
+  if (oldJobIds.length || oldShopIds.length) {
+    const bookingWhere = [
+      oldJobIds.length ? inArray(fixture.bookingsTable.jobId, oldJobIds) : null,
+      oldShopIds.length ? inArray(fixture.bookingsTable.shopId, oldShopIds) : null,
+    ].filter((value): value is NonNullable<typeof value> => value !== null);
+    if (bookingWhere.length) {
+      await fixture.db.delete(fixture.bookingsTable).where(or(...bookingWhere));
+    }
+  }
+  if (oldJobIds.length) {
+    await fixture.db.delete(fixture.jobsTable).where(inArray(fixture.jobsTable.id, oldJobIds));
+  }
+  if (oldVehicleIds.length) {
+    await fixture.db.delete(fixture.vehiclesTable).where(inArray(fixture.vehiclesTable.id, oldVehicleIds));
+  }
+  if (oldShopIds.length) {
+    await fixture.db.delete(fixture.baysTable).where(inArray(fixture.baysTable.shopId, oldShopIds));
+    await fixture.db.delete(fixture.shopsTable).where(inArray(fixture.shopsTable.id, oldShopIds));
+  }
+  await fixture.db.delete(fixture.usersTable).where(inArray(fixture.usersTable.id, oldUserIds));
 }
 
 async function createJob(
@@ -135,6 +207,7 @@ before(async () => {
   fixture.bookingsTable = database.bayBookingsTable;
   fixture.jobsTable = database.jobsTable;
   fixture.vehiclesTable = database.vehiclesTable;
+  await cleanupPriorFixtures();
   const app = express();
   app.use(express.json());
   app.use("/api", router);

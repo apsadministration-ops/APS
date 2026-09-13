@@ -106,6 +106,16 @@ export default function ShopOwnerTabLayout() {
         }}
       />
       <Tabs.Screen
+        name="payouts"
+        options={{
+          title: "Business payouts",
+          // Payouts are organization-scoped and reachable from the selected
+          // business profile; do not add them as a global owner destination.
+          tabBarButton: () => null,
+          tabBarIcon: ({ color }) => <Feather name="credit-card" size={22} color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="partner-vehicles"
         options={{
           title: "Partner operations",

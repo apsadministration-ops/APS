@@ -2,6 +2,7 @@ import { pgTable, serial, integer, real, text, timestamp, index } from "drizzle-
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { jobsTable } from "./jobs";
+import { partnerOrganizationsTable } from "./partnerOrganizations";
 
 // Status flow with Stripe:
 //   pending          → Checkout session created, awaiting customer payment
@@ -58,6 +59,12 @@ export const paymentsTable = pgTable("payments", {
   shopId: integer("shop_id"),
   shopSplitPct: integer("shop_split_pct"),
   shopPayoutCents: integer("shop_payout_cents"),
+  // Immutable destination snapshot captured before provider checkout. These
+  // remain nullable for historical payments; existing rows are never
+  // backfilled or reassigned to a new organization/account.
+  payoutOrganizationId: integer("payout_organization_id")
+    .references(() => partnerOrganizationsTable.id),
+  payoutAccountId: text("payout_account_id"),
 
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
@@ -65,6 +72,8 @@ export const paymentsTable = pgTable("payments", {
 }, (t) => [
   index("payments_job_id_idx").on(t.jobId),
   index("payments_provider_intent_idx").on(t.providerPaymentIntentId),
+  index("payments_payout_organization_idx").on(t.payoutOrganizationId),
+  index("payments_payout_account_idx").on(t.payoutAccountId),
   index("payments_status_idx").on(t.status),
   index("payments_hold_release_idx").on(t.holdReleaseAt),
 ]);
