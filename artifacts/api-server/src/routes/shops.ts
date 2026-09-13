@@ -4,6 +4,7 @@ import { db, shopsTable, baysTable } from "@workspace/db";
 import { CreateShopBody, UpdateShopBody } from "@workspace/api-zod";
 import { authenticate, requireShopOwner, type AuthRequest } from "../middlewares/authenticate";
 import { parsePositiveSafeInteger } from "../lib/validation";
+import { formatBayAvailabilityConfig } from "../lib/bayAvailability";
 
 const router: IRouter = Router();
 
@@ -31,6 +32,7 @@ function formatBay(b: typeof baysTable.$inferSelect) {
     equipment: (b.equipment as string[]) ?? [],
     allowedJobCategories: (b.allowedJobCategories as string[]) ?? [],
     minMechanicTier: b.minMechanicTier, autoApprove: b.autoApprove,
+    availabilityConfig: formatBayAvailabilityConfig(b.availabilityConfig),
     status: b.status, createdAt: b.createdAt,
   };
 }

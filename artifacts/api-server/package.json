@@ -10,7 +10,9 @@
     "test:partner-organizations": "tsx --test tests/partner-organizations.integration.test.ts",
     "test:partner-vehicle-operations": "tsx --test tests/partner-vehicle-operations.integration.test.ts",
     "test:partner-service-requests": "tsx --test tests/partner-service-requests.integration.test.ts",
+    "test:partner-commercial": "tsx --test tests/partner-commercial.integration.test.ts",
     "test:shops-ghost-garage": "tsx --test tests/shops-ghost-garage.integration.test.ts",
+    "test:partner-part6-bays": "tsx --test tests/partner-part6-bays.integration.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

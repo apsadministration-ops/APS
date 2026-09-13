@@ -41,4 +41,8 @@ export interface PartnerServiceRequest {
   /** @nullable */
   cancelledAt: Date | null;
   updatedAt: Date;
+  /** @nullable */
+  linkedApsJobId: number | null;
+  /** @nullable */
+  linkedAt: Date | null;
 }

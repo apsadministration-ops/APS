@@ -5,6 +5,7 @@ import { useColors } from "@/hooks/useColors";
 import { Feather } from "@expo/vector-icons";
 import { Link } from "expo-router";
 import { StatusBadge } from "./StatusBadge";
+import { CommercialJobContext } from "@/components/partner/CommercialJobIntegration";
 
 interface JobCardProps {
   job: Job;
@@ -27,6 +28,7 @@ export function JobCard({ job, showCustomer = false }: JobCardProps) {
           <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
             {job.jobType.toUpperCase()}
           </Text>
+          <CommercialJobContext job={job} compact />
         </View>
 
         <View style={styles.details}>

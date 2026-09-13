@@ -11,4 +11,14 @@ import type { ListAvailableBaysMinTier } from "./listAvailableBaysMinTier";
 export type ListAvailableBaysParams = {
   jobCategory?: ListAvailableBaysJobCategory;
   minTier?: ListAvailableBaysMinTier;
+  /**
+   * @minimum 1
+   */
+  jobId?: number;
+  startsAt?: Date;
+  /**
+   * @maximum 24
+   * @exclusiveMinimum 0
+   */
+  durationHours?: number;
 };

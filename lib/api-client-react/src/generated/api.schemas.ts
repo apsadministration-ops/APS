@@ -205,6 +205,64 @@ export interface OwnershipRecord {
   transferVerified: boolean;
 }
 
+export type JobApprovalStatus =
+  (typeof JobApprovalStatus)[keyof typeof JobApprovalStatus];
+
+export const JobApprovalStatus = {
+  pending: "pending",
+  approved: "approved",
+  declined: "declined",
+  auto_approved: "auto_approved",
+  expired: "expired",
+} as const;
+
+export type ApprovalMechanicCategoriesAvg = { [key: string]: unknown };
+
+export interface ApprovalMechanic {
+  id: number;
+  name: string;
+  /** @nullable */
+  avatarUrl: string | null;
+  /** @nullable */
+  mechanicTier: string | null;
+  /** @nullable */
+  bio: string | null;
+  /** @nullable */
+  yearsExperience: number | null;
+  overallAvg: number;
+  reviewCount: number;
+  categoriesAvg: ApprovalMechanicCategoriesAvg;
+  trustScore: number;
+  completionRate: number;
+  repeatCustomerRate: number;
+  badges: string[];
+}
+
+export interface JobApproval {
+  id: number;
+  jobId: number;
+  status: JobApprovalStatus;
+  expiresAt: string;
+  /** @minimum 0 */
+  secondsRemaining?: number;
+  /** @nullable */
+  respondedAt: string | null;
+  /** @nullable */
+  declineReason: string | null;
+  mechanic?: ApprovalMechanic | null;
+}
+
+export interface JobApprovalDecisionResponse {
+  ok: boolean;
+  approval: JobApproval;
+  jobStatus: string;
+}
+
+export interface DeclineJobApprovalBody {
+  /** @maxLength 500 */
+  reason?: string;
+}
+
 export type JobJobType = (typeof JobJobType)[keyof typeof JobJobType];
 
 export const JobJobType = {
@@ -219,6 +277,7 @@ export type JobStatus = (typeof JobStatus)[keyof typeof JobStatus];
 export const JobStatus = {
   REQUESTED: "REQUESTED",
   OFFERED: "OFFERED",
+  PENDING_APPROVAL: "PENDING_APPROVAL",
   ACCEPTED: "ACCEPTED",
   EN_ROUTE: "EN_ROUTE",
   IN_PROGRESS: "IN_PROGRESS",
@@ -268,6 +327,23 @@ export const JobUrgency = {
   urgent: "urgent",
 } as const;
 
+export type CommercialJobSourceSubtype =
+  (typeof CommercialJobSourceSubtype)[keyof typeof CommercialJobSourceSubtype];
+
+export const CommercialJobSourceSubtype = {
+  dealership: "dealership",
+  fleet: "fleet",
+} as const;
+
+export interface CommercialJobSource {
+  /** @nullable */
+  organizationId: number | null;
+  /** @nullable */
+  serviceRequestId: number | null;
+  subtype: CommercialJobSourceSubtype;
+  requestedWork: string;
+}
+
 export interface Job {
   id: number;
   vehicleId: number;
@@ -315,6 +391,11 @@ export interface Job {
   juniorVisibleAt?: string | null;
   /** Bulk/recurring service group id for consolidated invoicing. */
   recurringGroupId?: string | null;
+  /** Source organization for an explicitly linked dealership/fleet request. */
+  sourceOrganizationId: number | null;
+  /** Source partner service request for an explicitly linked APS job. */
+  sourceServiceRequestId: number | null;
+  commercialSource: CommercialJobSource | null;
 }
 
 /**
@@ -1449,6 +1530,68 @@ export interface PartnerServiceRequestTransitionInput {
   note?: string | null;
 }
 
+/**
+ * Optional free-text fallback category when no serviceSlug is selected.
+ * @nullable
+ */
+export type SendPartnerServiceRequestToApsInputJobType =
+  | (typeof SendPartnerServiceRequestToApsInputJobType)[keyof typeof SendPartnerServiceRequestToApsInputJobType]
+  | null;
+
+export const SendPartnerServiceRequestToApsInputJobType = {
+  repair: "repair",
+  diagnostic: "diagnostic",
+  maintenance: "maintenance",
+  detailing: "detailing",
+} as const;
+
+export interface SendPartnerServiceRequestToApsInput {
+  /** @minimum 0 */
+  expectedVersion: number;
+  /**
+   * Optional catalog slug; server derives job type, tier, and price.
+   * @minLength 1
+   * @nullable
+   */
+  serviceSlug?: string | null;
+  /**
+   * Optional free-text fallback category when no serviceSlug is selected.
+   * @nullable
+   */
+  jobType?: SendPartnerServiceRequestToApsInputJobType;
+}
+
+export type PartnerLinkedWorklogProjectionServiceCategory =
+  (typeof PartnerLinkedWorklogProjectionServiceCategory)[keyof typeof PartnerLinkedWorklogProjectionServiceCategory];
+
+export const PartnerLinkedWorklogProjectionServiceCategory = {
+  repair: "repair",
+  diagnostic: "diagnostic",
+  maintenance: "maintenance",
+  detailing: "detailing",
+} as const;
+
+export interface PartnerLinkedWorklogProjection {
+  id: number;
+  jobId: number;
+  vehicleId: number;
+  vin: string;
+  mechanicId: number;
+  serviceCategory: PartnerLinkedWorklogProjectionServiceCategory;
+  serviceDescription: string;
+  mileageAtService: number;
+  laborCost: number;
+  partsCost: number;
+  totalCost: number;
+  createdAt: string;
+}
+
+export interface PartnerLinkedProgress {
+  apsJob: Job;
+  worklogs: PartnerLinkedWorklogProjection[];
+  completion: boolean;
+}
+
 export type PartnerServiceRequestSourceSubtype =
   (typeof PartnerServiceRequestSourceSubtype)[keyof typeof PartnerServiceRequestSourceSubtype];
 
@@ -1486,6 +1629,16 @@ export interface PartnerServiceRequest {
   /** @nullable */
   cancelledAt: string | null;
   updatedAt: string;
+  /** @nullable */
+  linkedApsJobId: number | null;
+  /** @nullable */
+  linkedAt: string | null;
+}
+
+export interface SendPartnerServiceRequestToApsResponse {
+  request: PartnerServiceRequest;
+  job: Job;
+  replay: boolean;
 }
 
 /**
@@ -1518,6 +1671,7 @@ export interface PartnerServiceRequestStatusHistory {
 export interface PartnerServiceRequestDetail {
   request: PartnerServiceRequest;
   statusHistory: PartnerServiceRequestStatusHistory[];
+  linkedProgress: PartnerLinkedProgress | null;
 }
 
 export type CreateShopBodyPartnerKind =
@@ -1604,6 +1758,30 @@ export const BayStatus = {
   inactive: "inactive",
 } as const;
 
+export type BayAvailabilityConfigTimezone =
+  (typeof BayAvailabilityConfigTimezone)[keyof typeof BayAvailabilityConfigTimezone];
+
+export const BayAvailabilityConfigTimezone = {
+  UTC: "UTC",
+} as const;
+
+export interface BayAvailabilityWindow {
+  /**
+   * @minimum 0
+   * @maximum 6
+   */
+  dayOfWeek: number;
+  /** @pattern ^([01][0-9]|2[0-3]):[0-5][0-9]$ */
+  open: string;
+  /** @pattern ^([01][0-9]|2[0-3]):[0-5][0-9]$ */
+  close: string;
+}
+
+export interface BayAvailabilityConfig {
+  timezone: BayAvailabilityConfigTimezone;
+  weekly: BayAvailabilityWindow[];
+}
+
 export interface Bay {
   id: number;
   shopId: number;
@@ -1613,6 +1791,7 @@ export interface Bay {
   allowedJobCategories: BayAllowedJobCategoriesItem[];
   minMechanicTier: BayMinMechanicTier;
   autoApprove: boolean;
+  availabilityConfig: BayAvailabilityConfig;
   status: BayStatus;
   createdAt: string;
 }
@@ -1654,6 +1833,7 @@ export interface CreateBayBody {
   allowedJobCategories: CreateBayBodyAllowedJobCategoriesItem[];
   minMechanicTier: CreateBayBodyMinMechanicTier;
   autoApprove?: boolean;
+  availabilityConfig?: BayAvailabilityConfig;
 }
 
 export type UpdateBayBodyAllowedJobCategoriesItem =
@@ -1693,6 +1873,7 @@ export interface UpdateBayBody {
   allowedJobCategories?: UpdateBayBodyAllowedJobCategoriesItem[];
   minMechanicTier?: UpdateBayBodyMinMechanicTier;
   autoApprove?: boolean;
+  availabilityConfig?: BayAvailabilityConfig;
   status?: UpdateBayBodyStatus;
 }
 
@@ -1700,11 +1881,127 @@ export type BayBookingStatus =
   (typeof BayBookingStatus)[keyof typeof BayBookingStatus];
 
 export const BayBookingStatus = {
+  pending: "pending",
+  rejected: "rejected",
   reserved: "reserved",
   active: "active",
   completed: "completed",
   cancelled: "cancelled",
 } as const;
+
+export type BayBookingJobLinkJobType =
+  (typeof BayBookingJobLinkJobType)[keyof typeof BayBookingJobLinkJobType];
+
+export const BayBookingJobLinkJobType = {
+  repair: "repair",
+  diagnostic: "diagnostic",
+  maintenance: "maintenance",
+  detailing: "detailing",
+} as const;
+
+export interface BayBookingJobLink {
+  id: number;
+  status: string;
+  vehicleId: number;
+  mechanicId: number | null;
+  customerId: number;
+  jobType: BayBookingJobLinkJobType;
+  requiresGhostGarage: boolean;
+  customerTransportApproved: boolean;
+  postedByShopId: number | null;
+  partnerKindSnapshot: string | null;
+}
+
+export interface BayBookingVehicleLink {
+  id: number;
+  vin: string;
+  make: string;
+  model: string;
+  year: number;
+  trim: string | null;
+  color: string | null;
+}
+
+export type BayBookingBayLinkStatus =
+  (typeof BayBookingBayLinkStatus)[keyof typeof BayBookingBayLinkStatus];
+
+export const BayBookingBayLinkStatus = {
+  active: "active",
+  inactive: "inactive",
+} as const;
+
+export interface BayBookingBayLink {
+  id: number;
+  shopId: number;
+  name: string;
+  hourlyRate: number;
+  equipment: string[];
+  allowedJobCategories: string[];
+  minMechanicTier: string;
+  autoApprove: boolean;
+  availabilityConfig: BayAvailabilityConfig;
+  status: BayBookingBayLinkStatus;
+}
+
+export type BayBookingLocationLinkStatus =
+  (typeof BayBookingLocationLinkStatus)[keyof typeof BayBookingLocationLinkStatus];
+
+export const BayBookingLocationLinkStatus = {
+  active: "active",
+  inactive: "inactive",
+} as const;
+
+export interface BayBookingLocationLink {
+  id: number;
+  ownerId: number;
+  organizationId: number | null;
+  name: string;
+  address: string;
+  city: string;
+  region: string;
+  zipCode: string;
+  status: BayBookingLocationLinkStatus;
+}
+
+export type BayBookingOrganizationLinkSubtype =
+  (typeof BayBookingOrganizationLinkSubtype)[keyof typeof BayBookingOrganizationLinkSubtype];
+
+export const BayBookingOrganizationLinkSubtype = {
+  shop: "shop",
+  dealership: "dealership",
+  fleet: "fleet",
+  commercial_business: "commercial_business",
+} as const;
+
+export type BayBookingOrganizationLinkStatus =
+  (typeof BayBookingOrganizationLinkStatus)[keyof typeof BayBookingOrganizationLinkStatus];
+
+export const BayBookingOrganizationLinkStatus = {
+  active: "active",
+  inactive: "inactive",
+} as const;
+
+export interface BayBookingOrganizationLink {
+  id: number;
+  name: string;
+  subtype: BayBookingOrganizationLinkSubtype;
+  status: BayBookingOrganizationLinkStatus;
+}
+
+export type BayBookingShopLinkStatus =
+  (typeof BayBookingShopLinkStatus)[keyof typeof BayBookingShopLinkStatus];
+
+export const BayBookingShopLinkStatus = {
+  active: "active",
+  inactive: "inactive",
+} as const;
+
+export interface BayBookingShopLink {
+  id: number;
+  name: string;
+  organizationId: number | null;
+  status: BayBookingShopLinkStatus;
+}
 
 export interface BayBooking {
   id: number;
@@ -1722,12 +2019,41 @@ export interface BayBooking {
   status: BayBookingStatus;
   cancellationReason?: string | null;
   createdAt: string;
+  job: BayBookingJobLink;
+  vehicle: BayBookingVehicleLink;
+  bay: BayBookingBayLink;
+  location: BayBookingLocationLink;
+  organization: BayBookingOrganizationLink | null;
+  shop: BayBookingShopLink;
+}
+
+export interface ApproveBayBookingBody {
+  [key: string]: unknown;
+}
+
+export interface RejectBayBookingBody {
+  /** @maxLength 500 */
+  reason?: string;
+}
+
+export interface SetJobLiftRequirementBody {
+  requiresGhostGarage: boolean;
+}
+
+export interface JobLiftRequirementResponse {
+  jobId: number;
+  requiresGhostGarage: boolean;
+  customerTransportApproved: boolean;
+  status: string;
 }
 
 export interface CreateBayBookingBody {
   jobId: number;
   startTime: string;
-  /** @minimum 0.25 */
+  /**
+   * @maximum 24
+   * @exclusiveMinimum 0
+   */
   estimatedHours: number;
 }
 
@@ -2507,6 +2833,16 @@ export type ListShopVehicles200Item = Vehicle & {
 export type ListAvailableBaysParams = {
   jobCategory?: ListAvailableBaysJobCategory;
   minTier?: ListAvailableBaysMinTier;
+  /**
+   * @minimum 1
+   */
+  jobId?: number;
+  startsAt?: string;
+  /**
+   * @maximum 24
+   * @exclusiveMinimum 0
+   */
+  durationHours?: number;
 };
 
 export type ListAvailableBaysJobCategory =

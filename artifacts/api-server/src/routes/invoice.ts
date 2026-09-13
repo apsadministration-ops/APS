@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { db, jobsTable, paymentsTable, workLogsTable, partsItemsTable, vehiclesTable, usersTable } from "@workspace/db";
 import { authenticate, type AuthRequest } from "../middlewares/authenticate";
 import { customerView as installedPartsCustomerView } from "../lib/partsOrderEngine";
+import { isCommercialJobOwner } from "../lib/commercialJobAccess";
 
 const router: IRouter = Router();
 
@@ -24,8 +25,10 @@ router.get("/jobs/:jobId/invoice", authenticate, async (req: AuthRequest, res): 
   const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, jobId));
   if (!job) { res.status(404).json({ error: "Job not found" }); return; }
   // IDOR: customer of this job, mechanic on this job, or admin.
-  const isOwner = job.customerId === req.userId;
-  const isMechanic = job.mechanicId === req.userId;
+  const isOwner =
+    (req.userRole === "customer" && job.customerId === req.userId) ||
+    (req.userRole === "shop_owner" && await isCommercialJobOwner(job, req.userId!));
+  const isMechanic = req.userRole === "mechanic" && job.mechanicId === req.userId;
   if (!(req.userRole === "admin" || isOwner || isMechanic)) {
     res.status(403).json({ error: "Forbidden" });
     return;

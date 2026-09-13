@@ -24,6 +24,7 @@ import {
   sweepExpiredApprovals, applyApprovalDecision, fireApprovalAcceptedNotifications,
 } from "../lib/customerApprovalEngine";
 import { notifyMechanicApprovalDeclined } from "../lib/notifications";
+import { isCommercialJobOwner } from "../lib/commercialJobAccess";
 
 const router: IRouter = Router();
 
@@ -32,7 +33,11 @@ router.get("/approvals/job/:jobId", authenticate, async (req: AuthRequest, res: 
   if (!Number.isInteger(jobId)) { res.status(400).json({ error: "Bad jobId" }); return; }
   const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, jobId));
   if (!job) { res.status(404).json({ error: "Not found" }); return; }
-  if (req.userRole !== "admin" && req.userId !== job.customerId && req.userId !== job.mechanicId) {
+  const isCommercialOwner = req.userRole === "shop_owner" &&
+    await isCommercialJobOwner(job, req.userId!);
+  const isCustomerPrincipal = req.userRole === "customer" && req.userId === job.customerId;
+  const isAssignedMechanic = req.userRole === "mechanic" && req.userId === job.mechanicId;
+  if (req.userRole !== "admin" && !isCustomerPrincipal && !isCommercialOwner && !isAssignedMechanic) {
     res.status(403).json({ error: "Forbidden" }); return;
   }
 
@@ -78,8 +83,21 @@ router.get("/approvals/job/:jobId", authenticate, async (req: AuthRequest, res: 
 router.post("/approvals/:jobId/approve", authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
   const jobId = Number(req.params.jobId);
   if (!Number.isInteger(jobId)) { res.status(400).json({ error: "Bad jobId" }); return; }
+  const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, jobId));
+  if (!job) { res.status(404).json({ error: "Job not found" }); return; }
+  const commercialOwnerAuthorized =
+    req.userRole === "shop_owner" && await isCommercialJobOwner(job, req.userId!);
+  const isPrincipal =
+    req.userRole === "admin" ||
+    (req.userRole === "customer" && req.userId === job.customerId) ||
+    commercialOwnerAuthorized;
+  if (!isPrincipal) { res.status(403).json({ error: "Only the job's owner can respond to this approval." }); return; }
   const result = await applyApprovalDecision({
-    jobId, viewerId: req.userId!, viewerRole: req.userRole!, decision: "approved",
+    jobId,
+    viewerId: req.userId!,
+    viewerRole: req.userRole!,
+    commercialOwnerAuthorized,
+    decision: "approved",
   });
   if (!result.ok) { res.status(result.status).json({ error: result.error }); return; }
   // Centralized so the same notifications fire from manual approve,
@@ -95,8 +113,20 @@ router.post("/approvals/:jobId/decline", authenticate, async (req: AuthRequest, 
   if (!Number.isInteger(jobId)) { res.status(400).json({ error: "Bad jobId" }); return; }
   const parsed = declineSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, jobId));
+  if (!job) { res.status(404).json({ error: "Job not found" }); return; }
+  const commercialOwnerAuthorized =
+    req.userRole === "shop_owner" && await isCommercialJobOwner(job, req.userId!);
+  const isPrincipal =
+    req.userRole === "admin" ||
+    (req.userRole === "customer" && req.userId === job.customerId) ||
+    commercialOwnerAuthorized;
+  if (!isPrincipal) { res.status(403).json({ error: "Only the job's owner can respond to this approval." }); return; }
   const result = await applyApprovalDecision({
-    jobId, viewerId: req.userId!, viewerRole: req.userRole!,
+    jobId,
+    viewerId: req.userId!,
+    viewerRole: req.userRole!,
+    commercialOwnerAuthorized,
     decision: "declined", reason: parsed.data.reason,
   });
   if (!result.ok) { res.status(result.status).json({ error: result.error }); return; }

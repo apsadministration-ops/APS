@@ -5,6 +5,7 @@
  * APS - Automotive Platform System API
  * OpenAPI spec version: 0.1.0
  */
+import type { CommercialJobSource } from "./commercialJobSource";
 import type { JobJobType } from "./jobJobType";
 import type { JobPartnerKindSnapshot } from "./jobPartnerKindSnapshot";
 import type { JobRequiredTier } from "./jobRequiredTier";
@@ -59,4 +60,9 @@ export interface Job {
   juniorVisibleAt?: Date | null;
   /** Bulk/recurring service group id for consolidated invoicing. */
   recurringGroupId?: string | null;
+  /** Source organization for an explicitly linked dealership/fleet request. */
+  sourceOrganizationId: number | null;
+  /** Source partner service request for an explicitly linked APS job. */
+  sourceServiceRequestId: number | null;
+  commercialSource: CommercialJobSource | null;
 }

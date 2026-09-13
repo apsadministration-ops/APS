@@ -41,6 +41,8 @@ import partnerJobsRouter from "./partnerJobs";
 import partnerOrganizationsRouter from "./partnerOrganizations";
 import partnerVehicleOperationsRouter from "./partnerVehicleOperations";
 import partnerServiceRequestsRouter from "./partnerServiceRequests";
+import commercialServiceRequestsRouter from "./commercialServiceRequests";
+import jobLiftRequirementsRouter from "./jobLiftRequirements";
 
 const router: IRouter = Router();
 
@@ -81,6 +83,8 @@ router.use(invoiceRouter);
 router.use(partnerOrganizationsRouter);
 router.use(partnerVehicleOperationsRouter);
 router.use(partnerServiceRequestsRouter);
+router.use(commercialServiceRequestsRouter);
+router.use(jobLiftRequirementsRouter);
 router.use(adminFinanceRouter);
 router.use(partsRouter);
 router.use(mediaRouter);

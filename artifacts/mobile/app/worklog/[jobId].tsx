@@ -14,6 +14,7 @@ import { CapabilityNotice } from "@/components/CapabilityNotice";
 import { openAppSettings, pickImageLibrary } from "@/lib/deviceCapabilities";
 
 const SERVICE_CATEGORIES = ["repair", "diagnostic", "maintenance", "detailing"] as const;
+const WORKLOG_BOOKING_STATUSES = new Set(["reserved", "active", "completed"]);
 
 export default function WorkLogScreen() {
   const colors = useColors();
@@ -25,7 +26,7 @@ export default function WorkLogScreen() {
   const { data: myBookings } = useListMyBookings();
   const createMutation = useCreateWorkLog();
 
-  const [category, setCategory] = useState<string>("repair");
+  const [category, setCategory] = useState<(typeof SERVICE_CATEGORIES)[number]>("repair");
   const [description, setDescription] = useState("");
   const [mileageAtService, setMileageAtService] = useState("");
   const [laborCost, setLaborCost] = useState("");
@@ -64,7 +65,12 @@ export default function WorkLogScreen() {
     canAskAgain: boolean;
   } | null>(null);
 
-  const matchingBooking = (myBookings ?? []).find((b) => b.jobId === jid);
+  // A work log can only be linked to a booking that reached a usable
+  // lifecycle state. Pending/rejected/cancelled requests must never satisfy
+  // the Ghost Garage gate or be submitted as the booking association.
+  const matchingBooking = (myBookings ?? []).find(
+    (b) => b.jobId === jid && WORKLOG_BOOKING_STATUSES.has(b.status),
+  );
   const requiresGhost = job?.requiresGhostGarage === true;
 
   const addDtc = () => {
@@ -147,31 +153,30 @@ export default function WorkLogScreen() {
     }));
 
     const hoursNum = parseFloat(laborHours);
+    const workLogData = {
+      jobId: jid,
+      serviceCategory: category,
+      serviceDescription: description,
+      mileageAtService: mileageNum,
+      laborCost: parseFloat(laborCost) || 0,
+      partsCost,
+      partsUsed,
+      notes: notes || undefined,
+      beforeImages,
+      afterImages,
+      laborHours: Number.isFinite(hoursNum) && hoursNum >= 0 ? hoursNum : undefined,
+      diagnosticCodes: diagnosticCodes.length > 0 ? diagnosticCodes : undefined,
+      rootCauseDiagnosis: rootCauseDiagnosis.trim() || undefined,
+      repairSteps: repairSteps.trim() || undefined,
+      observedSymptoms: observedSymptoms.trim() || undefined,
+      recommendedMonitoring: recommendedMonitoring.trim() || undefined,
+      recurringIssueTags: recurringIssueTags.length > 0 ? recurringIssueTags : undefined,
+      bayBookingId: matchingBooking?.id,
+      ...(cleanPartsItems.length > 0 ? { partsItems: cleanPartsItems } : {}),
+    };
     createMutation.mutate(
       {
-        data: {
-          jobId: jid,
-          serviceCategory: category as "repair" | "diagnostic" | "maintenance" | "detailing",
-          serviceDescription: description,
-          mileageAtService: mileageNum,
-          laborCost: parseFloat(laborCost) || 0,
-          partsCost,
-          partsUsed,
-          notes: notes || undefined,
-          beforeImages,
-          afterImages,
-          laborHours: Number.isFinite(hoursNum) && hoursNum >= 0 ? hoursNum : undefined,
-          diagnosticCodes: diagnosticCodes.length > 0 ? diagnosticCodes : undefined,
-          rootCauseDiagnosis: rootCauseDiagnosis.trim() || undefined,
-          repairSteps: repairSteps.trim() || undefined,
-          observedSymptoms: observedSymptoms.trim() || undefined,
-          recommendedMonitoring: recommendedMonitoring.trim() || undefined,
-          recurringIssueTags: recurringIssueTags.length > 0 ? recurringIssueTags : undefined,
-          bayBookingId: matchingBooking?.id,
-          // Itemized parts — server uses these as True Net Profit source of truth.
-          // Field is server-accepted and validated; not yet in OpenAPI schema.
-          ...(cleanPartsItems.length > 0 ? { partsItems: cleanPartsItems } : {}),
-        } as any,
+        data: workLogData,
       },
       {
         onSuccess: async () => {

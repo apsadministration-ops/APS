@@ -10,6 +10,8 @@ export type BayBookingStatus =
   (typeof BayBookingStatus)[keyof typeof BayBookingStatus];
 
 export const BayBookingStatus = {
+  pending: "pending",
+  rejected: "rejected",
   reserved: "reserved",
   active: "active",
   completed: "completed",

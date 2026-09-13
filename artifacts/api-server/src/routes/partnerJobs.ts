@@ -25,6 +25,46 @@ const JUNIOR_WINDOW_SEC: Record<"urgent" | "high" | "normal" | "low", number> = 
   low: 4 * 60 * 60,
 };
 
+export type PartnerJobPolicyInput = {
+  vehicle: Pick<typeof vehiclesTable.$inferSelect, "vin" | "make">;
+  serviceSlug?: string | null;
+  jobType?: string | null;
+  description: string;
+  urgency?: string | null;
+};
+
+/**
+ * Shared policy resolution for legacy partner posting and the Part 6
+ * service-request bridge. Both paths must derive catalog category, tier,
+ * server price, urgency visibility, and Ghost Garage state identically.
+ */
+export function resolvePartnerJobPolicy(input: PartnerJobPolicyInput) {
+  const catalogEntry = findServiceBySlug(input.serviceSlug);
+  if (input.serviceSlug && !catalogEntry) {
+    return { error: `Unknown serviceSlug: ${input.serviceSlug}` } as const;
+  }
+  const finalJobType = (catalogEntry?.category ?? input.jobType ?? "repair") as ServiceCategory;
+  if (!["repair", "diagnostic", "maintenance", "detailing"].includes(finalJobType)) {
+    return { error: "Invalid jobType." } as const;
+  }
+  const finalRequiredTier: TierKey = catalogEntry?.tier ?? "technician";
+  const urgency = (input.urgency ?? "normal") as keyof typeof JUNIOR_WINDOW_SEC;
+  if (!(urgency in JUNIOR_WINDOW_SEC)) {
+    return { error: "Invalid urgency." } as const;
+  }
+  const isEuropean = isEuropeanVehicle({ vin: input.vehicle.vin, make: input.vehicle.make });
+  const quote = catalogEntry ? quoteForService(catalogEntry, { isEuropean }) : null;
+  return {
+    catalogEntry,
+    finalJobType,
+    finalRequiredTier,
+    derivedPrice: quote?.bookedTotal ?? null,
+    urgency,
+    juniorVisibleAt: new Date(Date.now() + JUNIOR_WINDOW_SEC[urgency] * 1000),
+    ghostGarage: requiresLiftFromDescription(input.description),
+  } as const;
+}
+
 /**
  * POST /partner/jobs — Fleet & Commercial Partner job posting.
  *
@@ -81,30 +121,26 @@ router.post("/partner/jobs", authenticate, requireShopOwner, async (req: AuthReq
 
   // Catalog: prefer serviceSlug for tier derivation. If missing, treat as a
   // free-text technician-tier repair job (sensible default for fleet ops).
-  const catalogEntry = findServiceBySlug(body.serviceSlug);
-  if (body.serviceSlug && !catalogEntry) {
-    res.status(400).json({ error: `Unknown serviceSlug: ${body.serviceSlug}` });
+  const policy = resolvePartnerJobPolicy({
+    vehicle,
+    serviceSlug: body.serviceSlug,
+    jobType: body.jobType,
+    description: body.description,
+    urgency: body.urgency,
+  });
+  if ("error" in policy) {
+    res.status(400).json({ error: policy.error });
     return;
   }
-  const finalJobType = (catalogEntry?.category ?? body.jobType ?? "repair") as ServiceCategory;
-  if (!["repair", "diagnostic", "maintenance", "detailing"].includes(finalJobType)) {
-    res.status(400).json({ error: "Invalid jobType." });
-    return;
-  }
-  const finalRequiredTier: TierKey = catalogEntry?.tier ?? "technician";
-
-  // Server-derived pricing (same path as customer-posted jobs).
-  const isEuropean = isEuropeanVehicle({ vin: vehicle.vin, make: vehicle.make });
-  const quote = catalogEntry ? quoteForService(catalogEntry, { isEuropean }) : null;
-  const derivedPrice: number | null = quote ? quote.bookedTotal : null;
-
-  // Urgency + priority window.
-  const urgency = (body.urgency ?? "normal") as keyof typeof JUNIOR_WINDOW_SEC;
-  if (!(urgency in JUNIOR_WINDOW_SEC)) {
-    res.status(400).json({ error: "Invalid urgency." });
-    return;
-  }
-  const juniorVisibleAt = new Date(Date.now() + JUNIOR_WINDOW_SEC[urgency] * 1000);
+  const {
+    catalogEntry,
+    finalJobType,
+    finalRequiredTier,
+    derivedPrice,
+    urgency,
+    juniorVisibleAt,
+    ghostGarage,
+  } = policy;
 
   // Commission override: shop-level setting wins, otherwise flat 15%.
   // Defense-in-depth clamp: the DB CHECK on `shops.commission_override_pct`
@@ -112,9 +148,6 @@ router.post("/partner/jobs", authenticate, requireShopOwner, async (req: AuthReq
   // schema change can never push a malformed value into jobs.
   const rawPct = shop.commissionOverridePct ?? 15;
   const commissionPctOverride = Math.max(0, Math.min(100, Math.round(rawPct)));
-
-  // Lift requirement (same keyword detector as customer-posted jobs).
-  const ghostGarage = requiresLiftFromDescription(body.description);
 
   // For partner-posted jobs the customer of record is the shop's owner — we
   // need a customerId on the row for the existing IDOR/auth surface to keep

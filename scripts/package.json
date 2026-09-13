@@ -12,6 +12,9 @@
     "migrate:partner-part4-vehicle-operations": "node ./src/migrate_partner_part4_vehicle_operations.mjs",
     "report:partner-part5-service-requests": "node ./src/report_partner_part5_service_requests.mjs",
     "migrate:partner-part5-service-requests": "node ./src/migrate_partner_part5_service_requests.mjs",
+    "migrate:partner-part6-commercial": "node ./src/migrate_partner_part6_commercial.mjs",
+    "migrate:partner-part6-bays": "node ./src/migrate_partner_part6_bays.mjs",
+    "migrate:partner-part6-bay-history": "node ./src/migrate_partner_part6_bay_booking_history.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {

@@ -9,6 +9,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
@@ -18,6 +19,7 @@ import { partnerVehicleOperationsTable } from "./partnerVehicleOperations";
 import { shopsTable } from "./shops";
 import { vehiclesTable } from "./vehicles";
 import { usersTable } from "./users";
+import { jobsTable } from "./jobs";
 
 export const PARTNER_SERVICE_REQUEST_STATUSES = [
   "draft",
@@ -88,6 +90,13 @@ export const partnerServiceRequestsTable = pgTable(
     creationFingerprint: text("creation_fingerprint").notNull(),
     version: integer("version").notNull().default(0),
 
+    // Set only by the explicit owner "Send to APS" bridge. A request may
+    // create at most one APS job; the unique index and transaction lock make
+    // retries return the original job rather than dispatching a duplicate.
+    linkedApsJobId: integer("linked_aps_job_id").references(() => jobsTable.id),
+    linkedAt: timestamp("linked_at", { withTimezone: true }),
+    sendToApsFingerprint: text("send_to_aps_fingerprint"),
+
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -120,6 +129,9 @@ export const partnerServiceRequestsTable = pgTable(
     unique("partner_service_requests_org_client_request_id_unique").on(
       table.organizationId,
       table.clientRequestId,
+    ),
+    uniqueIndex("partner_service_requests_linked_aps_job_unique").on(
+      table.linkedApsJobId,
     ),
     index("partner_service_requests_org_idx").on(table.organizationId),
     index("partner_service_requests_operation_idx").on(table.operationId),

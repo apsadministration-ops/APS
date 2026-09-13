@@ -5,10 +5,12 @@
  * APS - Automotive Platform System API
  * OpenAPI spec version: 0.1.0
  */
+import type { PartnerLinkedProgress } from "./partnerLinkedProgress";
 import type { PartnerServiceRequest } from "./partnerServiceRequest";
 import type { PartnerServiceRequestStatusHistory } from "./partnerServiceRequestStatusHistory";
 
 export interface PartnerServiceRequestDetail {
   request: PartnerServiceRequest;
   statusHistory: PartnerServiceRequestStatusHistory[];
+  linkedProgress: PartnerLinkedProgress | null;
 }

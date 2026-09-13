@@ -447,10 +447,18 @@ export default function ServiceRequestsListScreen() {
                         Request #{request.id} · {location?.name ?? `Location #${request.locationId}`}
                       </Text>
                     </View>
-                    <View style={[styles.statusPill, { backgroundColor: requestStatusTone(request.status) + "18" }]}>
-                      <Text style={[styles.statusText, { color: requestStatusTone(request.status) }]}>
-                        {REQUEST_STATUS_LABELS[request.status]}
-                      </Text>
+                    <View style={styles.pillColumn}>
+                      <View style={[styles.statusPill, { backgroundColor: requestStatusTone(request.status) + "18" }]}>
+                        <Text style={[styles.statusText, { color: requestStatusTone(request.status) }]}>
+                          {REQUEST_STATUS_LABELS[request.status]}
+                        </Text>
+                      </View>
+                      {request.linkedApsJobId != null ? (
+                        <View style={[styles.linkedPill, { backgroundColor: colors.primary + "14", borderColor: colors.primary + "55" }]}>
+                          <Feather name="link" size={10} color={colors.primary} />
+                          <Text style={[styles.linkedText, { color: colors.primary }]}>APS linked</Text>
+                        </View>
+                      ) : null}
                     </View>
                   </View>
                   <Text style={[styles.requestWork, { color: colors.foreground }]} numberOfLines={2}>
@@ -507,8 +515,11 @@ const styles = StyleSheet.create({
   requestCopy: { flex: 1, minWidth: 0 },
   requestTitle: { fontSize: 15, fontWeight: "800" },
   requestMeta: { fontSize: 11, marginTop: 3 },
+  pillColumn: { alignItems: "flex-end", gap: 4 },
   statusPill: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5 },
   statusText: { fontSize: 10, fontWeight: "800" },
+  linkedPill: { alignItems: "center", borderRadius: 8, borderWidth: 1, flexDirection: "row", gap: 3, paddingHorizontal: 6, paddingVertical: 4 },
+  linkedText: { fontSize: 9, fontWeight: "800" },
   requestWork: { fontSize: 13, lineHeight: 18 },
   requestFooter: { alignItems: "center", flexDirection: "row", gap: 8 },
 });

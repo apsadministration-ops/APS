@@ -1,11 +1,11 @@
 import {
-  View, Text, StyleSheet, ScrollView, ActivityIndicator, RefreshControl, Pressable,
+  View, Text, StyleSheet, ScrollView, ActivityIndicator, RefreshControl, Pressable, TextInput,
 } from "react-native";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import {
   useListMyBookings, getListMyBookingsQueryKey,
-  useCancelBayBooking,
+  useCancelBayBooking, useApproveBayBooking, useRejectBayBooking,
   useListMyShops, getListMyShopsQueryKey, getGetShopQueryOptions, getGetShopQueryKey,
   getListAvailableBaysQueryKey,
 } from "@workspace/api-client-react";
@@ -15,9 +15,11 @@ import { confirm, alertMessage } from "@/utils/confirm";
 import { useState } from "react";
 
 const STATUS_COLOR: Record<string, string> = {
+  pending: "#F59E0B",
   reserved: "#F59E0B",
   active: "#0EA5E9",
   completed: "#22C55E",
+  rejected: "#EF4444",
   cancelled: "#EF4444",
 };
 
@@ -40,7 +42,11 @@ export default function ShopOwnerBookingsScreen() {
     ),
   });
   const cancelMutation = useCancelBayBooking();
+  const approveMutation = useApproveBayBooking();
+  const rejectMutation = useRejectBayBooking();
   const [selectedLocationId, setSelectedLocationId] = useState<number | null>(null);
+  const [rejectingBookingId, setRejectingBookingId] = useState<number | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
 
   const onCancel = async (bookingId: number) => {
     const ok = await confirm({
@@ -59,6 +65,36 @@ export default function ShopOwnerBookingsScreen() {
           void alertMessage("Cancelled", "The booking has been cancelled.");
         },
         onError: (e: any) => void alertMessage("Couldn't cancel", e?.message ?? "Try again."),
+      },
+    );
+  };
+
+  const onApprove = (bookingId: number) => {
+    approveMutation.mutate(
+      { bookingId, data: {} },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getListMyBookingsQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getListAvailableBaysQueryKey() });
+          void alertMessage("Booking approved", "The mechanic can use the scheduled bay interval.");
+        },
+        onError: (e: any) => void alertMessage("Couldn't approve", e?.message ?? "Try again."),
+      },
+    );
+  };
+
+  const onReject = (bookingId: number) => {
+    rejectMutation.mutate(
+      { bookingId, data: { reason: rejectReason.trim() || undefined } },
+      {
+        onSuccess: () => {
+          setRejectingBookingId(null);
+          setRejectReason("");
+          queryClient.invalidateQueries({ queryKey: getListMyBookingsQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getListAvailableBaysQueryKey() });
+          void alertMessage("Booking rejected", "The mechanic can choose another bay and time.");
+        },
+        onError: (e: any) => void alertMessage("Couldn't reject", e?.message ?? "Try again."),
       },
     );
   };
@@ -182,6 +218,59 @@ export default function ShopOwnerBookingsScreen() {
                     Rate ${b.hourlyRateSnapshot.toFixed(2)}/hr · est. {b.estimatedHours}h
                     {b.totalCost != null ? ` · billed $${b.totalCost.toFixed(2)}` : ""}
                   </Text>
+                   {b.status === "pending" ? (
+                     <View style={[styles.approvalBox, { borderColor: colors.primary + "66", backgroundColor: colors.primary + "0D" }]}>
+                       <Text style={[styles.line, { color: colors.primary }]}>
+                         Review this request before the scheduled interval is reserved.
+                       </Text>
+                       {rejectingBookingId === b.id ? (
+                         <>
+                           <TextInput
+                             value={rejectReason}
+                             onChangeText={setRejectReason}
+                             placeholder="Reason (optional)"
+                             placeholderTextColor={colors.mutedForeground}
+                             style={[styles.reasonInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.background }]}
+                             maxLength={500}
+                           />
+                           <View style={styles.approvalActions}>
+                             <Pressable
+                               style={[styles.approveBtn, { backgroundColor: colors.destructive }, rejectMutation.isPending && { opacity: 0.6 }]}
+                               onPress={() => onReject(b.id)}
+                               disabled={rejectMutation.isPending}
+                             >
+                               <Text style={styles.actionText}>Confirm Reject</Text>
+                             </Pressable>
+                             <Pressable
+                               style={[styles.secondaryBtn, { borderColor: colors.border }]}
+                               onPress={() => { setRejectingBookingId(null); setRejectReason(""); }}
+                             >
+                               <Text style={{ color: colors.foreground, fontWeight: "700", fontSize: 12 }}>Back</Text>
+                             </Pressable>
+                           </View>
+                         </>
+                       ) : (
+                         <View style={styles.approvalActions}>
+                           <Pressable
+                             style={[styles.approveBtn, { backgroundColor: colors.primary }, approveMutation.isPending && { opacity: 0.6 }]}
+                             onPress={() => onApprove(b.id)}
+                             disabled={approveMutation.isPending || rejectMutation.isPending}
+                           >
+                             <Feather name="check" size={14} color="white" />
+                             <Text style={styles.actionText}>Approve</Text>
+                           </Pressable>
+                           <Pressable
+                             style={[styles.rejectBtn, { borderColor: colors.destructive }]}
+                             onPress={() => { setRejectingBookingId(b.id); setRejectReason(""); }}
+                             disabled={approveMutation.isPending || rejectMutation.isPending}
+                           >
+                             <Feather name="x" size={14} color={colors.destructive} />
+                             <Text style={[styles.actionText, { color: colors.destructive }]}>Reject</Text>
+                           </Pressable>
+                         </View>
+                       )}
+                     </View>
+                   ) : null}
                   {b.cancellationReason ? (
                     <Text style={[styles.line, { color: colors.destructive }]}>
                       Reason: {b.cancellationReason}
@@ -234,4 +323,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   cancelBtnText: { fontSize: 12, fontWeight: "700" },
+  approvalBox: { marginTop: 8, padding: 10, borderWidth: 1, borderRadius: 10, gap: 8 },
+  approvalActions: { flexDirection: "row", gap: 8 },
+  approveBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 9 },
+  rejectBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, borderRadius: 8, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 8 },
+  secondaryBtn: { alignItems: "center", justifyContent: "center", borderRadius: 8, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 8 },
+  actionText: { color: "white", fontSize: 12, fontWeight: "700" },
+  reasonInput: { minHeight: 40, borderWidth: 1, borderRadius: 8, paddingHorizontal: 9, paddingVertical: 7, fontSize: 13 },
 });

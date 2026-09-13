@@ -13,6 +13,7 @@ import { z } from "zod";
 import { db, workConfirmationsTable, jobsTable, paymentsTable } from "@workspace/db";
 import { authenticate, requireRole, type AuthRequest } from "../middlewares/authenticate";
 import { applyWorkDecision, sweepExpiredConfirmations } from "../lib/payoutHoldEngine";
+import { isCommercialJobOwner } from "../lib/commercialJobAccess";
 
 const router: IRouter = Router();
 
@@ -21,7 +22,11 @@ router.get("/work-confirmations/job/:jobId", authenticate, async (req: AuthReque
   if (!Number.isInteger(jobId)) { res.status(400).json({ error: "Bad jobId" }); return; }
   const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, jobId));
   if (!job) { res.status(404).json({ error: "Not found" }); return; }
-  if (req.userRole !== "admin" && req.userId !== job.customerId && req.userId !== job.mechanicId) {
+  const isCustomer = req.userRole === "customer" && req.userId === job.customerId;
+  const isCommercialOwner = req.userRole === "shop_owner" &&
+    await isCommercialJobOwner(job, req.userId!);
+  const isMechanic = req.userRole === "mechanic" && req.userId === job.mechanicId;
+  if (req.userRole !== "admin" && !isCustomer && !isCommercialOwner && !isMechanic) {
     res.status(403).json({ error: "Forbidden" }); return;
   }
   const [conf] = await db.select().from(workConfirmationsTable)
@@ -49,6 +54,13 @@ router.get("/work-confirmations/job/:jobId", authenticate, async (req: AuthReque
 router.post("/work-confirmations/:jobId/confirm", authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
   const jobId = Number(req.params.jobId);
   if (!Number.isInteger(jobId)) { res.status(400).json({ error: "Bad jobId" }); return; }
+  const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, jobId));
+  if (!job) { res.status(404).json({ error: "Job not found" }); return; }
+  const principal =
+    req.userRole === "admin" ||
+    (req.userRole === "customer" && req.userId === job.customerId) ||
+    (req.userRole === "shop_owner" && await isCommercialJobOwner(job, req.userId!));
+  if (!principal) { res.status(403).json({ error: "Only the job's owner can confirm work." }); return; }
   const result = await applyWorkDecision({
     jobId, viewerId: req.userId!, viewerRole: req.userRole!, decision: "confirmed",
   });
@@ -63,6 +75,13 @@ router.post("/work-confirmations/:jobId/dispute", authenticate, async (req: Auth
   if (!Number.isInteger(jobId)) { res.status(400).json({ error: "Bad jobId" }); return; }
   const parsed = disputeSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Reason is required" }); return; }
+  const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, jobId));
+  if (!job) { res.status(404).json({ error: "Job not found" }); return; }
+  const principal =
+    req.userRole === "admin" ||
+    (req.userRole === "customer" && req.userId === job.customerId) ||
+    (req.userRole === "shop_owner" && await isCommercialJobOwner(job, req.userId!));
+  if (!principal) { res.status(403).json({ error: "Only the job's owner can dispute work." }); return; }
   const result = await applyWorkDecision({
     jobId, viewerId: req.userId!, viewerRole: req.userRole!,
     decision: "disputed", reason: parsed.data.reason,

@@ -6,6 +6,7 @@ import type {
   PartnerServiceRequestTransitionInput,
   PartnerServiceRequestUrgency,
   PartnerServiceRequestUpdateInput,
+  SendPartnerServiceRequestToApsInputJobType,
 } from "@workspace/api-client-react";
 
 export const PARTNER_SERVICE_REQUEST_STATUSES = [
@@ -55,6 +56,38 @@ export const REQUEST_URGENCY_LABELS: Record<PartnerServiceRequestUrgency, string
   high: "High",
   urgent: "Urgent",
 };
+
+export const APS_JOB_TYPE_LABELS: Record<
+  Exclude<SendPartnerServiceRequestToApsInputJobType, null>,
+  string
+> = {
+  repair: "Repair",
+  diagnostic: "Diagnostic",
+  maintenance: "Maintenance",
+  detailing: "Detailing",
+};
+
+/**
+ * Categories with a known APS equivalent can be sent without a catalog
+ * selection. "Other" deliberately has no implicit mapping and must be
+ * resolved by a catalog slug or an explicit fallback job type in the UI.
+ */
+export function apsJobTypeForRequestCategory(
+  category: PartnerServiceRequestCategory,
+): Exclude<SendPartnerServiceRequestToApsInputJobType, null> | null {
+  switch (category) {
+    case "inspection":
+    case "diagnostics":
+      return "diagnostic";
+    case "maintenance":
+      return "maintenance";
+    case "repair":
+    case "recall":
+      return "repair";
+    case "other":
+      return null;
+  }
+}
 
 const STATUS_TRANSITIONS: Record<PartnerServiceRequestStatus, readonly PartnerServiceRequestStatus[]> = {
   draft: ["submitted", "cancelled"],

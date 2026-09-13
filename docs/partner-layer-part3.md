@@ -1,5 +1,9 @@
 # Commercial Partner expansion — Part 3
 
+> This document records Part 3 behavior. Scheduled availability and the later
+> working owner approval/rejection flow are documented in
+> `partner-layer-part6.md`.
+
 ## Scope
 
 Strengthen the existing Shop/Ghost Garage management experience within the

@@ -45,6 +45,12 @@ interface DecisionInput {
   jobId: number;
   viewerId: number;
   viewerRole: string;
+  /**
+   * The route may authorize a linked dealership/fleet primary owner through
+   * the strict commercial job-link helper. Keep that proof scoped to this
+   * decision; do not treat every shop_owner as a customer globally.
+   */
+  commercialOwnerAuthorized?: boolean;
   decision: "approved" | "declined";
   reason?: string;
 }
@@ -58,10 +64,22 @@ export async function applyApprovalDecision(input: DecisionInput): Promise<Decis
     const lockedRows = await tx.execute(sql`
       SELECT * FROM customer_approvals WHERE job_id = ${input.jobId} FOR UPDATE
     `);
-    const approval = (lockedRows.rows[0] ?? null) as typeof customerApprovalsTable.$inferSelect | null;
+    // The raw lock query returns snake_case PostgreSQL column names. Read the
+    // locked row through Drizzle as well so the decision state uses the
+    // schema's camelCase fields (and retains the row lock in this transaction).
+    const [approval] = lockedRows.rows[0]
+      ? await tx
+        .select()
+        .from(customerApprovalsTable)
+        .where(eq(customerApprovalsTable.jobId, input.jobId))
+      : [];
     if (!approval) return { ok: false, status: 404, error: "No approval pending for this job." } as DecisionResult;
 
-    if (input.viewerRole !== "admin" && approval.customerId !== input.viewerId) {
+    if (
+      input.viewerRole !== "admin" &&
+      approval.customerId !== input.viewerId &&
+      !input.commercialOwnerAuthorized
+    ) {
       return { ok: false, status: 403, error: "Only the customer can respond to this approval." } as DecisionResult;
     }
     if (approval.status !== "pending") {

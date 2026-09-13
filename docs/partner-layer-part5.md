@@ -1,5 +1,9 @@
 # Commercial Partner expansion — Part 5
 
+> This document records the Part 5 boundary. The later explicit bridge into
+> standard APS jobs is documented in `partner-layer-part6.md`; existing
+> internal-only requests are not automatically converted.
+
 ## Scope and prerequisite
 
 Part 4 was audited and its ownership-removal, date/numeric validation, and

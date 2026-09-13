@@ -9,35 +9,18 @@
  * server-side auto_approved flip and we route to the live job view.
  */
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, TextInput } from "react-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useColors } from "@/hooks/useColors";
 import { confirm } from "@/utils/confirm";
-import { getApiUrl } from "@/lib/apiConfig";
-
-interface ApprovalDto {
-  id: number;
-  jobId: number;
-  status: "pending" | "approved" | "declined" | "auto_approved" | "expired";
-  expiresAt: string;
-  secondsRemaining: number;
-  mechanic: null | {
-    id: number;
-    name: string;
-    avatarUrl: string | null;
-    mechanicTier: string | null;
-    overallAvg: number;
-    reviewCount: number;
-    categoriesAvg: Record<string, number>;
-    trustScore: number;
-    completionRate: number;
-    repeatCustomerRate: number;
-    badges: string[];
-  };
-}
+import {
+  useGetJobApproval, useApproveJobApproval, useDeclineJobApproval,
+  getGetJobApprovalQueryKey, getGetJobQueryKey, getListJobsQueryKey, getJob,
+} from "@workspace/api-client-react";
+import { useAuth } from "@/context/AuthContext";
 
 const CATEGORY_LABELS: Record<string, string> = {
   professionalism: "Professionalism",
@@ -60,94 +43,95 @@ const BADGE_LABELS: Record<string, string> = {
 
 export default function ApproveMechanicScreen() {
   const colors = useColors();
+  const { user } = useAuth();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { id } = useLocalSearchParams<{ id: string }>();
   const jobId = Number(id);
 
-  const [approval, setApproval] = useState<ApprovalDto | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { data: approval, isLoading, dataUpdatedAt } = useGetJobApproval(jobId, {
+    query: {
+      enabled: Number.isInteger(jobId),
+      queryKey: getGetJobApprovalQueryKey(jobId),
+      refetchInterval: 10_000,
+    },
+  });
+  const approveMutation = useApproveJobApproval();
+  const declineMutation = useDeclineJobApproval();
   const [submitting, setSubmitting] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState<number>(60);
   const [declineReason, setDeclineReason] = useState("");
   const [showDecline, setShowDecline] = useState(false);
-  const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const fetchApproval = useCallback(async () => {
+  const navigationHandled = useRef(false);
+  const finishNavigation = useCallback(async (declined: boolean) => {
+    if (navigationHandled.current) return;
+    navigationHandled.current = true;
     try {
-      const token = await AsyncStorage.getItem("auth_token");
-      const res = await fetch(getApiUrl(`/approvals/job/${jobId}`), {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      // The job screen redirects PENDING_APPROVAL back here. Refresh its exact
+      // generated cache key before returning, including timeout auto-approval.
+      await queryClient.fetchQuery({
+        queryKey: getGetJobQueryKey(jobId),
+        queryFn: () => getJob(jobId),
+        staleTime: 0,
       });
-      if (res.ok) {
-        const data = (await res.json()) as ApprovalDto;
-        setApproval(data);
-        setSecondsLeft(data.secondsRemaining);
-        // If the server has already finalized this approval, leave the screen.
-        if (data.status !== "pending") {
-          // Approved / auto_approved → live job. Declined → home.
-          router.replace(data.status === "declined" ? "/(customer)" : `/job/${jobId}`);
-        }
-      }
-    } catch { /* non-fatal — keep last good state */ }
-    finally { setLoading(false); }
-  }, [jobId, router]);
-
-  useEffect(() => { fetchApproval(); }, [fetchApproval]);
-
-  // 1Hz local countdown; refetch from server every 10s as a heartbeat so we
-  // notice if the server auto-approved (or someone moved the job).
-  useEffect(() => {
-    tickRef.current = setInterval(() => {
-      setSecondsLeft((s) => Math.max(0, s - 1));
-    }, 1000);
-    const heartbeat = setInterval(() => { fetchApproval(); }, 10000);
-    return () => {
-      if (tickRef.current) clearInterval(tickRef.current);
-      clearInterval(heartbeat);
-    };
-  }, [fetchApproval]);
-
-  // When local countdown hits 0, immediately refetch — the server will have
-  // (or be about to) auto-approve and we want to follow through.
-  useEffect(() => {
-    if (secondsLeft === 0) {
-      fetchApproval();
-    }
-  }, [secondsLeft, fetchApproval]);
-
-  const submit = async (decision: "approve" | "decline") => {
-    if (submitting) return;
-    setSubmitting(true);
-    try {
-      const token = await AsyncStorage.getItem("auth_token");
-      const url = getApiUrl(`/approvals/${jobId}/${decision}`);
-      const body = decision === "decline" ? JSON.stringify({ reason: declineReason }) : undefined;
-      const res = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body,
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({})) as { error?: string };
-        await confirm({ title: "Couldn't submit", message: err.error ?? "Please try again.", confirmText: "OK" });
-        return;
-      }
-      router.replace(decision === "approve" ? `/job/${jobId}` : "/(customer)");
-    } catch {
-      await confirm({
-        title: "Couldn't submit",
-        message: "We couldn't reach the server. Please try again.",
+      void queryClient.invalidateQueries({ queryKey: getListJobsQueryKey() });
+      router.replace(declined
+        ? (user?.role === "shop_owner" ? "/(shop-owner)" : "/(customer)")
+        : `/job/${jobId}`);
+    } catch (error) {
+      navigationHandled.current = false;
+      setSubmitting(false);
+      void confirm({
+        title: "Couldn't refresh job",
+        message: error instanceof Error ? error.message : "The approval will be checked again shortly.",
         confirmText: "OK",
       });
-    } finally {
+    }
+  }, [jobId, queryClient, router, user?.role]);
+  // Keep the display responsive while the generated query polls the server.
+  useEffect(() => {
+    if (approval?.secondsRemaining != null) setSecondsLeft(approval.secondsRemaining);
+  }, [approval?.secondsRemaining]);
+
+  useEffect(() => {
+    const tick = setInterval(() => {
+      setSecondsLeft((s) => Math.max(0, s - 1));
+    }, 1000);
+    return () => clearInterval(tick);
+  }, []);
+
+  useEffect(() => {
+    if (!approval || approval.status === "pending" || navigationHandled.current) return;
+    void finishNavigation(approval.status === "declined");
+  }, [approval?.status, dataUpdatedAt, finishNavigation]);
+
+  const submit = (decision: "approve" | "decline") => {
+    if (submitting) return;
+    setSubmitting(true);
+    const onError = (error: Error) => {
       setSubmitting(false);
+      void confirm({ title: "Couldn't submit", message: error.message || "Please try again.", confirmText: "OK" });
+    };
+    if (decision === "approve") {
+      approveMutation.mutate(
+        { jobId },
+        {
+          onSuccess: () => finishNavigation(false),
+          onError,
+        },
+      );
+    } else {
+      declineMutation.mutate(
+        { jobId, data: { reason: declineReason.trim() || undefined } },
+        {
+          onSuccess: () => finishNavigation(true),
+          onError,
+        },
+      );
     }
   };
 
-  if (loading || !approval) {
+  if (isLoading || !approval) {
     return (
       <View style={[styles.center, { backgroundColor: colors.background }]}>
         <ActivityIndicator color={colors.primary} size="large" />
@@ -231,9 +215,9 @@ export default function ApproveMechanicScreen() {
               <View key={k} style={styles.catRow}>
                 <Text style={{ color: colors.foreground, flex: 1 }}>{CATEGORY_LABELS[k] ?? k}</Text>
                 <View style={[styles.catBarBg, { backgroundColor: colors.muted }]}>
-                  <View style={[styles.catBarFill, { backgroundColor: colors.primary, width: `${(v / 5) * 100}%` }]} />
+                  <View style={[styles.catBarFill, { backgroundColor: colors.primary, width: `${(Number(v) / 5) * 100}%` }]} />
                 </View>
-                <Text style={{ color: colors.mutedForeground, width: 36, textAlign: "right" }}>{v.toFixed(1)}</Text>
+                <Text style={{ color: colors.mutedForeground, width: 36, textAlign: "right" }}>{Number(v).toFixed(1)}</Text>
               </View>
             ))}
           </View>

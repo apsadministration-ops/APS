@@ -5,6 +5,7 @@
  * APS - Automotive Platform System API
  * OpenAPI spec version: 0.1.0
  */
+import type { BayAvailabilityConfig } from "./bayAvailabilityConfig";
 import type { CreateBayBodyAllowedJobCategoriesItem } from "./createBayBodyAllowedJobCategoriesItem";
 import type { CreateBayBodyMinMechanicTier } from "./createBayBodyMinMechanicTier";
 
@@ -16,4 +17,5 @@ export interface CreateBayBody {
   allowedJobCategories: CreateBayBodyAllowedJobCategoriesItem[];
   minMechanicTier: CreateBayBodyMinMechanicTier;
   autoApprove?: boolean;
+  availabilityConfig?: BayAvailabilityConfig;
 }

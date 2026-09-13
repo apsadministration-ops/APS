@@ -3,6 +3,21 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { shopsTable } from "./shops";
 
+/**
+ * Optional weekly opening windows for a bay. An empty object preserves the
+ * legacy behavior (a bay is available at any time while it and its shop are
+ * active). Times are UTC `HH:mm` values; the route layer validates and
+ * normalizes client input before it is written.
+ */
+export type BayAvailabilityConfig = {
+  timezone?: "UTC";
+  weekly?: Array<{
+    dayOfWeek: number;
+    open: string;
+    close: string;
+  }>;
+};
+
 // A rentable service bay inside a shop. Tier + job-category restrictions
 // are enforced server-side at booking time (see routes/bookings.ts).
 export const baysTable = pgTable("bays", {
@@ -22,6 +37,9 @@ export const baysTable = pgTable("bays", {
     enum: ["detailer", "technician", "senior", "advanced", "master"],
   }).notNull().default("detailer"),
   autoApprove: boolean("auto_approve").notNull().default(false),
+  // Legacy rows use an empty config, which means "available any time". The
+  // additive Part 6 migration adds this column without rewriting bay rows.
+  availabilityConfig: json("availability_config").$type<BayAvailabilityConfig>().notNull().default({}),
   status: text("status", { enum: ["active", "inactive"] }).notNull().default("active"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [

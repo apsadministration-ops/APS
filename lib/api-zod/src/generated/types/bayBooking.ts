@@ -5,7 +5,13 @@
  * APS - Automotive Platform System API
  * OpenAPI spec version: 0.1.0
  */
+import type { BayBookingBayLink } from "./bayBookingBayLink";
+import type { BayBookingJobLink } from "./bayBookingJobLink";
+import type { BayBookingLocationLink } from "./bayBookingLocationLink";
+import type { BayBookingOrganizationLink } from "./bayBookingOrganizationLink";
+import type { BayBookingShopLink } from "./bayBookingShopLink";
 import type { BayBookingStatus } from "./bayBookingStatus";
+import type { BayBookingVehicleLink } from "./bayBookingVehicleLink";
 
 export interface BayBooking {
   id: number;
@@ -23,4 +29,10 @@ export interface BayBooking {
   status: BayBookingStatus;
   cancellationReason?: string | null;
   createdAt: Date;
+  job: BayBookingJobLink;
+  vehicle: BayBookingVehicleLink;
+  bay: BayBookingBayLink;
+  location: BayBookingLocationLink;
+  organization: BayBookingOrganizationLink | null;
+  shop: BayBookingShopLink;
 }

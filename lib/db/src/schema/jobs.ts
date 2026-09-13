@@ -1,9 +1,10 @@
-import { pgTable, serial, integer, text, timestamp, real, boolean, index } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, timestamp, real, boolean, index, unique } from "drizzle-orm/pg-core";
 import { shopsTable } from "./shops";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
 import { vehiclesTable } from "./vehicles";
+import { partnerOrganizationsTable } from "./partnerOrganizations";
 
 export const jobsTable = pgTable("jobs", {
   id: serial("id").primaryKey(),
@@ -60,6 +61,13 @@ export const jobsTable = pgTable("jobs", {
   // Bulk/recurring service requests share a group id (e.g. monthly oil
   // changes across a 12-vehicle fleet); used for consolidated invoicing.
   recurringGroupId: text("recurring_group_id"),
+  // Commercial Part 6 source link. These fields identify an APS job that was
+  // explicitly sent from an owned dealership/fleet service request. They are
+  // separate from customer ownership: customerId remains the existing
+  // principal used by payment/approval flows and is never rewritten.
+  sourceOrganizationId: integer("source_organization_id")
+    .references(() => partnerOrganizationsTable.id),
+  sourceServiceRequestId: integer("source_service_request_id"),
   // Ghost Garage: set true when the job needs an indoor bay (lift, etc.).
   // When true, POST /worklogs is gated on pre+post inspections existing.
   requiresGhostGarage: boolean("requires_ghost_garage").notNull().default(false),
@@ -81,6 +89,8 @@ export const jobsTable = pgTable("jobs", {
   index("jobs_status_idx").on(t.status),
   index("jobs_posted_by_shop_id_idx").on(t.postedByShopId),
   index("jobs_recurring_group_id_idx").on(t.recurringGroupId),
+  index("jobs_source_organization_id_idx").on(t.sourceOrganizationId),
+  unique("jobs_source_org_request_unique").on(t.sourceOrganizationId, t.sourceServiceRequestId),
 ]);
 
 export const insertJobSchema = createInsertSchema(jobsTable).omit({ id: true, createdAt: true });

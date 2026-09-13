@@ -9,6 +9,9 @@
 export interface CreateBayBookingBody {
   jobId: number;
   startTime: Date;
-  /** @minimum 0.25 */
+  /**
+   * @maximum 24
+   * @exclusiveMinimum 0
+   */
   estimatedHours: number;
 }

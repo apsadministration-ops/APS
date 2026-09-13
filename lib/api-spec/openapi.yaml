@@ -1643,6 +1643,121 @@ paths:
         "404": { description: Request or organization not found }
         "409": { description: Stale version or invalid status transition }
 
+  /partner-organizations/{organizationId}/service-requests/{requestId}/send-to-aps:
+    parameters:
+      - name: organizationId
+        in: path
+        required: true
+        schema: { type: integer, minimum: 1 }
+      - name: requestId
+        in: path
+        required: true
+        schema: { type: integer, minimum: 1 }
+    post:
+      operationId: sendPartnerServiceRequestToAps
+      tags: [partner-service-requests]
+      summary: Explicitly send a submitted dealership/fleet request to APS
+      description: |
+        Owner-only, transactional bridge. The organization must be an active
+        dealership or fleet, the request must be submitted, and its active
+        operation and linked location must still match the canonical vehicle
+        and organization owner. Creates one ordinary REQUESTED APS job.
+        Retries with the same options return the original link; conflicting
+        options are rejected. No vehicle ownership or parallel lifecycle is
+        created.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendPartnerServiceRequestToApsInput"
+      responses:
+        "201":
+          description: APS job created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SendPartnerServiceRequestToApsResponse"
+        "200":
+          description: Matching idempotent retry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SendPartnerServiceRequestToApsResponse"
+        "400": { description: Invalid body or catalog selection }
+        "401": { description: Unauthorized }
+        "403": { description: Active owner of a dealership/fleet organization required }
+        "404": { description: Request or organization not found }
+        "409": { description: "Not submitted, stale version, inactive association, or conflicting retry" }
+
+  /approvals/job/{jobId}:
+    get:
+      operationId: getJobApproval
+      tags: [jobs]
+      summary: Read the mechanic acceptance approval for a job
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: Approval detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobApproval"
+        "403": { description: Job principal or assigned mechanic required }
+        "404": { description: Job or approval not found }
+
+  /approvals/{jobId}/approve:
+    post:
+      operationId: approveJobApproval
+      tags: [jobs]
+      summary: Approve a mechanic's acceptance request
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: Approval applied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobApprovalDecisionResponse"
+        "403": { description: Job principal required }
+        "409": { description: Approval is no longer pending }
+
+  /approvals/{jobId}/decline:
+    post:
+      operationId: declineJobApproval
+      tags: [jobs]
+      summary: Decline a mechanic's acceptance request
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeclineJobApprovalBody"
+      responses:
+        "200":
+          description: Approval declined
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobApprovalDecisionResponse"
+        "403": { description: Job principal required }
+        "409": { description: Approval is no longer pending }
+
   /shops/mine:
     get:
       operationId: listMyShops
@@ -1736,7 +1851,7 @@ paths:
 
   /shops/{shopId}/bays:
     post:
-      operationId: createBay
+      operationId: createShopBay
       tags: [bays]
       summary: Add a bay to a shop (owner only)
       parameters:
@@ -1796,6 +1911,18 @@ paths:
           schema:
             type: string
             enum: [detailer, technician, senior, advanced, master]
+        - name: jobId
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1 }
+        - name: startsAt
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+        - name: durationHours
+          in: query
+          required: false
+          schema: { type: number, exclusiveMinimum: 0, maximum: 24 }
       responses:
         "200":
           description: OK
@@ -1887,6 +2014,78 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/BayBooking"
+
+  /bookings/{bookingId}:
+    get:
+      operationId: getBayBooking
+      tags: [bookings]
+      summary: Get one bay booking with canonical job and location links
+      parameters:
+        - name: bookingId
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BayBooking"
+
+  /bookings/{bookingId}/approve:
+    patch:
+      operationId: approveBayBooking
+      tags: [bookings]
+      summary: Approve a pending bay booking (owning shop owner only)
+      parameters:
+        - name: bookingId
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApproveBayBookingBody"
+      responses:
+        "200":
+          description: Approved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BayBooking"
+
+  /bookings/{bookingId}/reject:
+    patch:
+      operationId: rejectBayBooking
+      tags: [bookings]
+      summary: Reject a pending bay booking (owning shop owner only)
+      parameters:
+        - name: bookingId
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RejectBayBookingBody"
+      responses:
+        "200":
+          description: Rejected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BayBooking"
 
   /bookings/{bookingId}/start:
     patch:
@@ -2016,6 +2215,50 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Job"
+
+  /jobs/{jobId}/lift-requirement:
+    get:
+      operationId: getJobLiftRequirement
+      tags: [jobs]
+      summary: Read the assigned mechanic's Ghost Garage lift requirement
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: Lift requirement
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobLiftRequirementResponse"
+    patch:
+      operationId: setJobLiftRequirement
+      tags: [jobs]
+      summary: Set the assigned mechanic's Ghost Garage lift requirement
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetJobLiftRequirementBody"
+      responses:
+        "200":
+          description: Lift requirement updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobLiftRequirementResponse"
 
   /jobs/{jobId}/transport:
     get:
@@ -2766,6 +3009,61 @@ components:
       required: [id, vehicleId, vin, userId, userName, startDate, transferVerified]
 
     # Jobs
+    JobApproval:
+      type: object
+      additionalProperties: false
+      properties:
+        id: { type: integer }
+        jobId: { type: integer }
+        status: { type: string, enum: [pending, approved, declined, auto_approved, expired] }
+        expiresAt: { type: string, format: date-time }
+        secondsRemaining: { type: integer, minimum: 0 }
+        respondedAt: { type: ["string", "null"], format: date-time }
+        declineReason: { type: ["string", "null"] }
+        mechanic:
+          oneOf:
+            - $ref: "#/components/schemas/ApprovalMechanic"
+            - type: "null"
+      required: [id, jobId, status, expiresAt, respondedAt, declineReason]
+
+    ApprovalMechanic:
+      type: object
+      additionalProperties: false
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        avatarUrl: { type: ["string", "null"] }
+        mechanicTier: { type: ["string", "null"] }
+        bio: { type: ["string", "null"] }
+        yearsExperience: { type: ["number", "null"] }
+        overallAvg: { type: number }
+        reviewCount: { type: integer }
+        categoriesAvg: { type: object, additionalProperties: true }
+        trustScore: { type: number }
+        completionRate: { type: number }
+        repeatCustomerRate: { type: number }
+        badges:
+          type: array
+          items: { type: string }
+      required: [id, name, avatarUrl, mechanicTier, bio, yearsExperience, overallAvg, reviewCount, categoriesAvg, trustScore, completionRate, repeatCustomerRate, badges]
+
+    JobApprovalDecisionResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        ok: { type: boolean }
+        approval: { $ref: "#/components/schemas/JobApproval" }
+        jobStatus: { type: string }
+      required: [ok, approval, jobStatus]
+
+    DeclineJobApprovalBody:
+      type: object
+      additionalProperties: false
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+
     Job:
       type: object
       properties:
@@ -2801,7 +3099,7 @@ components:
           nullable: true
         status:
           type: string
-          enum: [REQUESTED, OFFERED, ACCEPTED, EN_ROUTE, IN_PROGRESS, COMPLETED, PAID, CANCELLED]
+          enum: [REQUESTED, OFFERED, PENDING_APPROVAL, ACCEPTED, EN_ROUTE, IN_PROGRESS, COMPLETED, PAID, CANCELLED]
         estimatedPrice:
           type: number
           nullable: true
@@ -2887,7 +3185,30 @@ components:
           type: string
           nullable: true
           description: Bulk/recurring service group id for consolidated invoicing.
-      required: [id, vehicleId, vin, customerId, customerName, jobType, description, status, createdAt, urgency]
+        sourceOrganizationId:
+          type: integer
+          nullable: true
+          description: Source organization for an explicitly linked dealership/fleet request.
+        sourceServiceRequestId:
+          type: integer
+          nullable: true
+          description: Source partner service request for an explicitly linked APS job.
+        commercialSource:
+          nullable: true
+          oneOf:
+            - $ref: "#/components/schemas/CommercialJobSource"
+            - type: "null"
+      required: [id, vehicleId, vin, customerId, customerName, jobType, description, status, createdAt, urgency, sourceOrganizationId, sourceServiceRequestId, commercialSource]
+
+    CommercialJobSource:
+      type: object
+      additionalProperties: false
+      properties:
+        organizationId: { type: ["integer", "null"] }
+        serviceRequestId: { type: ["integer", "null"] }
+        subtype: { type: string, enum: [dealership, fleet] }
+        requestedWork: { type: string }
+      required: [organizationId, serviceRequestId, subtype, requestedWork]
 
     CreatePartnerJobBody:
       type: object
@@ -3955,6 +4276,59 @@ components:
         note: { type: ["string", "null"] }
       required: [expectedVersion, toStatus]
 
+    SendPartnerServiceRequestToApsInput:
+      type: object
+      additionalProperties: false
+      properties:
+        expectedVersion: { type: integer, minimum: 0, multipleOf: 1 }
+        serviceSlug:
+          type: ["string", "null"]
+          minLength: 1
+          description: Optional catalog slug; server derives job type, tier, and price.
+        jobType:
+          type: ["string", "null"]
+          enum: [repair, diagnostic, maintenance, detailing, null]
+          description: Optional free-text fallback category when no serviceSlug is selected.
+      required: [expectedVersion]
+
+    PartnerLinkedWorklogProjection:
+      type: object
+      additionalProperties: false
+      properties:
+        id: { type: integer }
+        jobId: { type: integer }
+        vehicleId: { type: integer }
+        vin: { type: string }
+        mechanicId: { type: integer }
+        serviceCategory: { type: string, enum: [repair, diagnostic, maintenance, detailing] }
+        serviceDescription: { type: string }
+        mileageAtService: { type: integer }
+        laborCost: { type: number }
+        partsCost: { type: number }
+        totalCost: { type: number }
+        createdAt: { type: string, format: date-time }
+      required: [id, jobId, vehicleId, vin, mechanicId, serviceCategory, serviceDescription, mileageAtService, laborCost, partsCost, totalCost, createdAt]
+
+    PartnerLinkedProgress:
+      type: object
+      additionalProperties: false
+      properties:
+        apsJob: { $ref: "#/components/schemas/Job" }
+        worklogs:
+          type: array
+          items: { $ref: "#/components/schemas/PartnerLinkedWorklogProjection" }
+        completion: { type: boolean }
+      required: [apsJob, worklogs, completion]
+
+    SendPartnerServiceRequestToApsResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        request: { $ref: "#/components/schemas/PartnerServiceRequest" }
+        job: { $ref: "#/components/schemas/Job" }
+        replay: { type: boolean }
+      required: [request, job, replay]
+
     PartnerServiceRequest:
       type: object
       additionalProperties: false
@@ -3987,11 +4361,13 @@ components:
         completedAt: { type: ["string", "null"], format: date-time }
         cancelledAt: { type: ["string", "null"], format: date-time }
         updatedAt: { type: string, format: date-time }
+        linkedApsJobId: { type: ["integer", "null"] }
+        linkedAt: { type: ["string", "null"], format: date-time }
       required:
         [id, organizationId, operationId, vehicleId, sourceSubtype, locationId,
          status, category, urgency, requestedWork, serviceNotes, creationContext,
          version, clientRequestId, createdAt, submittedAt, startedAt, completedAt,
-         cancelledAt, updatedAt]
+          cancelledAt, updatedAt, linkedApsJobId, linkedAt]
 
     PartnerServiceRequestStatusHistory:
       type: object
@@ -4019,7 +4395,11 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/PartnerServiceRequestStatusHistory"
-      required: [request, statusHistory]
+        linkedProgress:
+          oneOf:
+            - $ref: "#/components/schemas/PartnerLinkedProgress"
+            - type: "null"
+      required: [request, statusHistory, linkedProgress]
 
     CreateShopBody:
       type: object
@@ -4116,13 +4496,15 @@ components:
           enum: [detailer, technician, senior, advanced, master]
         autoApprove:
           type: boolean
+        availabilityConfig:
+          $ref: "#/components/schemas/BayAvailabilityConfig"
         status:
           type: string
           enum: [active, inactive]
         createdAt:
           type: string
           format: date-time
-      required: [id, shopId, name, hourlyRate, equipment, allowedJobCategories, minMechanicTier, autoApprove, status, createdAt]
+      required: [id, shopId, name, hourlyRate, equipment, allowedJobCategories, minMechanicTier, autoApprove, availabilityConfig, status, createdAt]
 
     ShopWithBays:
       allOf:
@@ -4166,6 +4548,8 @@ components:
           enum: [detailer, technician, senior, advanced, master]
         autoApprove:
           type: boolean
+        availabilityConfig:
+          $ref: "#/components/schemas/BayAvailabilityConfig"
       required: [name, hourlyRate, allowedJobCategories, minMechanicTier]
 
     UpdateBayBody:
@@ -4190,9 +4574,40 @@ components:
           enum: [detailer, technician, senior, advanced, master]
         autoApprove:
           type: boolean
+        availabilityConfig:
+          $ref: "#/components/schemas/BayAvailabilityConfig"
         status:
           type: string
           enum: [active, inactive]
+
+    BayAvailabilityConfig:
+      type: object
+      additionalProperties: false
+      properties:
+        timezone:
+          type: string
+          enum: [UTC]
+        weekly:
+          type: array
+          items:
+            $ref: "#/components/schemas/BayAvailabilityWindow"
+      required: [timezone, weekly]
+
+    BayAvailabilityWindow:
+      type: object
+      additionalProperties: false
+      properties:
+        dayOfWeek:
+          type: integer
+          minimum: 0
+          maximum: 6
+        open:
+          type: string
+          pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+        close:
+          type: string
+          pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+      required: [dayOfWeek, open, close]
 
     BayBooking:
       type: object
@@ -4230,14 +4645,146 @@ components:
           nullable: true
         status:
           type: string
-          enum: [reserved, active, completed, cancelled]
+          enum: [pending, rejected, reserved, active, completed, cancelled]
         cancellationReason:
           type: string
           nullable: true
         createdAt:
           type: string
           format: date-time
-      required: [id, bayId, jobId, mechanicId, shopId, startTime, estimatedEndTime, hourlyRateSnapshot, estimatedHours, status, createdAt]
+        job:
+          $ref: "#/components/schemas/BayBookingJobLink"
+        vehicle:
+          $ref: "#/components/schemas/BayBookingVehicleLink"
+        bay:
+          $ref: "#/components/schemas/BayBookingBayLink"
+        location:
+          $ref: "#/components/schemas/BayBookingLocationLink"
+        organization:
+          allOf:
+            - $ref: "#/components/schemas/BayBookingOrganizationLink"
+          nullable: true
+        shop:
+          $ref: "#/components/schemas/BayBookingShopLink"
+      required: [id, bayId, jobId, mechanicId, shopId, startTime, estimatedEndTime, hourlyRateSnapshot, estimatedHours, status, createdAt, job, vehicle, bay, location, organization, shop]
+
+    BayBookingJobLink:
+      type: object
+      additionalProperties: false
+      properties:
+        id: { type: integer }
+        status: { type: string }
+        vehicleId: { type: integer }
+        mechanicId: { type: integer, nullable: true }
+        customerId: { type: integer }
+        jobType:
+          type: string
+          enum: [repair, diagnostic, maintenance, detailing]
+        requiresGhostGarage: { type: boolean }
+        customerTransportApproved: { type: boolean }
+        postedByShopId: { type: integer, nullable: true }
+        partnerKindSnapshot: { type: string, nullable: true }
+      required: [id, status, vehicleId, mechanicId, customerId, jobType, requiresGhostGarage, customerTransportApproved, postedByShopId, partnerKindSnapshot]
+
+    BayBookingVehicleLink:
+      type: object
+      additionalProperties: false
+      properties:
+        id: { type: integer }
+        vin: { type: string }
+        make: { type: string }
+        model: { type: string }
+        year: { type: integer }
+        trim: { type: string, nullable: true }
+        color: { type: string, nullable: true }
+      required: [id, vin, make, model, year, trim, color]
+
+    BayBookingBayLink:
+      type: object
+      additionalProperties: false
+      properties:
+        id: { type: integer }
+        shopId: { type: integer }
+        name: { type: string }
+        hourlyRate: { type: number }
+        equipment:
+          type: array
+          items: { type: string }
+        allowedJobCategories:
+          type: array
+          items: { type: string }
+        minMechanicTier: { type: string }
+        autoApprove: { type: boolean }
+        availabilityConfig:
+          $ref: "#/components/schemas/BayAvailabilityConfig"
+        status: { type: string, enum: [active, inactive] }
+      required: [id, shopId, name, hourlyRate, equipment, allowedJobCategories, minMechanicTier, autoApprove, availabilityConfig, status]
+
+    BayBookingLocationLink:
+      type: object
+      additionalProperties: false
+      properties:
+        id: { type: integer }
+        ownerId: { type: integer }
+        organizationId: { type: integer, nullable: true }
+        name: { type: string }
+        address: { type: string }
+        city: { type: string }
+        region: { type: string }
+        zipCode: { type: string }
+        status: { type: string, enum: [active, inactive] }
+      required: [id, ownerId, organizationId, name, address, city, region, zipCode, status]
+
+    BayBookingOrganizationLink:
+      type: object
+      additionalProperties: false
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        subtype: { type: string, enum: [shop, dealership, fleet, commercial_business] }
+        status: { type: string, enum: [active, inactive] }
+      required: [id, name, subtype, status]
+
+    BayBookingShopLink:
+      type: object
+      additionalProperties: false
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        organizationId: { type: integer, nullable: true }
+        status: { type: string, enum: [active, inactive] }
+      required: [id, name, organizationId, status]
+
+    ApproveBayBookingBody:
+      type: object
+      additionalProperties: false
+      properties: {}
+
+    RejectBayBookingBody:
+      type: object
+      additionalProperties: false
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+
+    SetJobLiftRequirementBody:
+      type: object
+      additionalProperties: false
+      properties:
+        requiresGhostGarage:
+          type: boolean
+      required: [requiresGhostGarage]
+
+    JobLiftRequirementResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        jobId: { type: integer }
+        requiresGhostGarage: { type: boolean }
+        customerTransportApproved: { type: boolean }
+        status: { type: string }
+      required: [jobId, requiresGhostGarage, customerTransportApproved, status]
 
     CreateBayBookingBody:
       type: object
@@ -4249,7 +4796,8 @@ components:
           format: date-time
         estimatedHours:
           type: number
-          minimum: 0.25
+          exclusiveMinimum: 0
+          maximum: 24
       required: [jobId, startTime, estimatedHours]
 
     DamageChecklistItem:

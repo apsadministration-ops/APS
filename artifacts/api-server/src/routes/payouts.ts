@@ -24,8 +24,21 @@ import { manualRetryCapture } from "../lib/payoutHoldEngine";
 import { getUncachableStripeClient, StripeNotConfiguredError } from "../lib/stripeClient";
 import { getPublicBaseUrl } from "../lib/publicUrl";
 import { canManagePayoutDestination, canRetryCapture } from "../lib/authorization";
+import { isCommercialJobOwner, isPartnerJobOwner } from "../lib/commercialJobAccess";
 
 const router: IRouter = Router();
+
+function sanitizePayoutJobForMechanic(
+  job: typeof jobsTable.$inferSelect,
+  role?: string,
+) {
+  if (role !== "mechanic") return job;
+  return {
+    ...job,
+    sourceOrganizationId: null,
+    sourceServiceRequestId: null,
+  };
+}
 
 class DestinationAbort extends Error {
   constructor(
@@ -63,7 +76,7 @@ function windowStart(window: string): Date {
 
 /** Returns the set of job IDs whose payouts belong to the caller. */
 async function jobIdsForCaller(req: AuthRequest): Promise<Set<number>> {
-  const all = await db.select({ id: jobsTable.id, mechanicId: jobsTable.mechanicId, customerId: jobsTable.customerId })
+  const all = await db.select()
     .from(jobsTable);
   if (req.userRole === "admin") return new Set(all.map((j) => j.id));
   if (req.userRole === "mechanic") return new Set(all.filter((j) => j.mechanicId === req.userId).map((j) => j.id));
@@ -72,7 +85,18 @@ async function jobIdsForCaller(req: AuthRequest): Promise<Set<number>> {
     const shops = await db.select().from(shopsTable).where(eq(shopsTable.ownerId, req.userId!));
     const shopIds = new Set(shops.map((s) => s.id));
     const pmts = await db.select({ jobId: paymentsTable.jobId, shopId: paymentsTable.shopId }).from(paymentsTable);
-    return new Set(pmts.filter((p) => p.shopId !== null && shopIds.has(p.shopId)).map((p) => p.jobId));
+    const postedShopJobIds = pmts
+      .filter((p) => p.shopId !== null && shopIds.has(p.shopId))
+      .map((p) => p.jobId);
+    const linkedOwnerJobIds = await Promise.all(
+      all
+        .filter((j) => j.customerId === req.userId)
+        .map(async (j) => (await isPartnerJobOwner(j, req.userId!)) ? j.id : null),
+    );
+    return new Set([
+      ...postedShopJobIds,
+      ...linkedOwnerJobIds.filter((id): id is number => id !== null),
+    ]);
   }
   return new Set(all.filter((j) => j.customerId === req.userId).map((j) => j.id));
 }
@@ -164,7 +188,9 @@ router.get("/payouts/jobs", authenticate, async (req: AuthRequest, res: Response
   const jobById = new Map(jobs.map((j) => [j.id, j]));
   res.json(pmts.map((p) => ({
     ...p,
-    job: jobById.get(p.jobId) ?? null,
+    job: jobById.has(p.jobId)
+      ? sanitizePayoutJobForMechanic(jobById.get(p.jobId)!, req.userRole)
+      : null,
   })));
 });
 
@@ -173,7 +199,11 @@ router.get("/payouts/job/:jobId", authenticate, async (req: AuthRequest, res: Re
   if (!Number.isInteger(jobId)) { res.status(400).json({ error: "Bad jobId" }); return; }
   const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, jobId));
   if (!job) { res.status(404).json({ error: "Not found" }); return; }
-  if (req.userRole !== "admin" && req.userId !== job.customerId && req.userId !== job.mechanicId) {
+  const isCustomer = req.userRole === "customer" && req.userId === job.customerId;
+  const isCommercialOwner = req.userRole === "shop_owner" &&
+    await isCommercialJobOwner(job, req.userId!);
+  const isMechanic = req.userRole === "mechanic" && req.userId === job.mechanicId;
+  if (req.userRole !== "admin" && !isCustomer && !isCommercialOwner && !isMechanic) {
     res.status(403).json({ error: "Forbidden" }); return;
   }
   const [pmt] = await db.select().from(paymentsTable).where(eq(paymentsTable.jobId, jobId));
@@ -184,7 +214,13 @@ router.get("/payouts/job/:jobId", authenticate, async (req: AuthRequest, res: Re
         .where(eq(payoutEventsTable.paymentId, pmt.id))
         .orderBy(desc(payoutEventsTable.createdAt))
     : [];
-  res.json({ job, payment: pmt ?? null, confirmation: conf ?? null, tips, events });
+  res.json({
+    job: sanitizePayoutJobForMechanic(job, req.userRole),
+    payment: pmt ?? null,
+    confirmation: conf ?? null,
+    tips,
+    events,
+  });
 });
 
 router.get("/payouts/events", authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
@@ -363,10 +399,20 @@ router.patch("/payouts/job/:jobId/destination", authenticate, async (req: AuthRe
       // Stripe-bound destination one serialized operation per job.
       await tx.execute(sql`SELECT id FROM jobs WHERE id = ${jobId} FOR UPDATE`);
       const [job] = await tx.select({
+        id: jobsTable.id,
         customerId: jobsTable.customerId,
         postedByShopId: jobsTable.postedByShopId,
+        sourceOrganizationId: jobsTable.sourceOrganizationId,
+        sourceServiceRequestId: jobsTable.sourceServiceRequestId,
       }).from(jobsTable).where(eq(jobsTable.id, jobId));
       if (!job) abortDestination(404, { error: "Job not found" });
+      if (
+        req.userRole === "shop_owner" &&
+        (job.sourceOrganizationId != null || job.sourceServiceRequestId != null) &&
+        !(await isCommercialJobOwner(job, req.userId!))
+      ) {
+        abortDestination(403, { error: "You do not control this linked organization job." });
+      }
 
       let ownsPostedShop = false;
       if (req.userRole === "shop_owner" && job.postedByShopId != null) {

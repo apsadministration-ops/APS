@@ -1,13 +1,14 @@
 import { pgTable, serial, integer, text, timestamp, real, uniqueIndex, index } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { baysTable } from "./bays";
 import { jobsTable } from "./jobs";
 import { usersTable } from "./users";
 
-// One bay booking per job. The booking is the contract between the shop and
-// the mechanic for a specific time slot. hourlyRate is snapshotted at create
-// time so a later rate change on the bay can't retroactively reprice the
+// A job may retain rejected/cancelled/completed booking history, but may have
+// only one live request or reservation at a time. hourlyRate is snapshotted at
+// create time so a later rate change on the bay can't retroactively reprice a
 // booking.
 export const bayBookingsTable = pgTable("bay_bookings", {
   id: serial("id").primaryKey(),
@@ -23,14 +24,18 @@ export const bayBookingsTable = pgTable("bay_bookings", {
   estimatedHours: real("estimated_hours").notNull(),
   totalCost: real("total_cost"),
   status: text("status", {
-    enum: ["reserved", "active", "completed", "cancelled"],
+    // `pending` is a shop-owner approval request. It does not consume a bay
+    // interval. `reserved` is the approved/confirmed state and is the first
+    // state that participates in availability checks.
+    enum: ["pending", "rejected", "reserved", "active", "completed", "cancelled"],
   }).notNull().default("reserved"),
   cancellationReason: text("cancellation_reason"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
-  // One booking per job. Prevents double-booking the same job into multiple
-  // bays and matches the one-worklog-per-job invariant downstream.
-  uniqueIndex("bay_bookings_job_id_unique").on(t.jobId),
+  // Terminal rows are immutable history. A partial unique index preserves
+  // that history while preventing two live requests/reservations for a job.
+  uniqueIndex("bay_bookings_job_id_live_unique").on(t.jobId)
+    .where(sql`status IN ('pending', 'reserved', 'active')`),
   index("bay_bookings_bay_id_idx").on(t.bayId),
   index("bay_bookings_mechanic_id_idx").on(t.mechanicId),
   index("bay_bookings_shop_id_idx").on(t.shopId),

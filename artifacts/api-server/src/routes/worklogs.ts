@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray, desc } from "drizzle-orm";
 import { db, workLogsTable, jobsTable, usersTable, paymentsTable, vehiclesTable, ownershipTable, inspectionsTable, bayBookingsTable, partsItemsTable } from "@workspace/db";
 import { authenticate, requireActiveMechanic, type AuthRequest } from "../middlewares/authenticate";
 import { notifyCustomerJobComplete, notifyMechanicWorkUnderReview } from "../lib/notifications";
@@ -45,6 +45,40 @@ function cleanPartsItems(items: unknown): PartsItemInput[] {
 }
 
 const router: IRouter = Router();
+const CURRENT_WORKLOG_BOOKING_STATUSES = ["reserved", "active"] as const;
+
+type WorklogBookingResolution =
+  | { booking: typeof bayBookingsTable.$inferSelect }
+  | { error: "mismatch" | "terminal" | "stale"; status?: string };
+
+async function resolveCurrentWorklogBooking(
+  jobId: number,
+  mechanicId: number,
+  requestedBookingId: number,
+): Promise<WorklogBookingResolution> {
+  const [requested] = await db.select({
+    id: bayBookingsTable.id,
+    jobId: bayBookingsTable.jobId,
+    mechanicId: bayBookingsTable.mechanicId,
+    status: bayBookingsTable.status,
+  }).from(bayBookingsTable).where(eq(bayBookingsTable.id, requestedBookingId));
+  if (!requested || requested.jobId !== jobId || requested.mechanicId !== mechanicId) {
+    return { error: "mismatch" };
+  }
+  if (!CURRENT_WORKLOG_BOOKING_STATUSES.includes(requested.status as "reserved" | "active")) {
+    return { error: "terminal", status: requested.status };
+  }
+  const [current] = await db.select().from(bayBookingsTable)
+    .where(and(
+      eq(bayBookingsTable.jobId, jobId),
+      eq(bayBookingsTable.mechanicId, mechanicId),
+      inArray(bayBookingsTable.status, CURRENT_WORKLOG_BOOKING_STATUSES),
+    ))
+    .orderBy(desc(bayBookingsTable.createdAt), desc(bayBookingsTable.id))
+    .limit(1);
+  if (!current || current.id !== requestedBookingId) return { error: "stale" };
+  return { booking: current };
+}
 
 async function formatWorkLog(log: typeof workLogsTable.$inferSelect) {
   const [mechanic] = await db.select().from(usersTable).where(eq(usersTable.id, log.mechanicId));
@@ -123,6 +157,10 @@ router.post("/worklogs", authenticate, requireActiveMechanic, async (req: AuthRe
   const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, jobId));
   if (!job) { res.status(404).json({ error: "Job not found" }); return; }
   if (job.mechanicId !== req.userId) { res.status(403).json({ error: "You are not assigned to this job" }); return; }
+  if (job.requiresGhostGarage && !job.customerTransportApproved) {
+    res.status(409).json({ error: "Customer has not yet approved transport to a shop bay." });
+    return;
+  }
 
   // One worklog per job. Prevents duplicate submissions that would otherwise
   // trigger a second Stripe capture attempt on the same intent.
@@ -173,19 +211,37 @@ router.post("/worklogs", authenticate, requireActiveMechanic, async (req: AuthRe
       res.status(409).json({ error: "Ghost Garage jobs require a bayBookingId on the work log." });
       return;
     }
-    const [booking] = await db.select().from(bayBookingsTable).where(eq(bayBookingsTable.id, bayBookingId));
-    if (!booking || booking.jobId !== jobId || booking.mechanicId !== req.userId) {
-      res.status(400).json({ error: "Bay booking does not match this job/mechanic." });
+    const resolution = await resolveCurrentWorklogBooking(jobId, req.userId!, bayBookingId);
+    if ("error" in resolution && resolution.error === "terminal") {
+      res.status(409).json({ error: `A ${resolution.status} bay booking cannot be used for a work log.` });
       return;
     }
-    resolvedBayBookingId = booking.id;
+    if ("error" in resolution && resolution.error === "stale") {
+      res.status(409).json({ error: "The supplied bay booking is not the job's current confirmed booking." });
+      return;
+    }
+    if ("error" in resolution) {
+      res.status(400).json({ error: "Bay booking does not match this job's current confirmed booking." });
+      return;
+    }
+    resolvedBayBookingId = resolution.booking.id;
   } else if (bayBookingId) {
     // Optional bay booking on a non-ghost-garage job — still validate
-    // ownership before recording it.
-    const [booking] = await db.select().from(bayBookingsTable).where(eq(bayBookingsTable.id, bayBookingId));
-    if (booking && booking.jobId === jobId && booking.mechanicId === req.userId) {
-      resolvedBayBookingId = booking.id;
+    // ownership and approval before recording it.
+    const resolution = await resolveCurrentWorklogBooking(jobId, req.userId!, bayBookingId);
+    if ("error" in resolution && resolution.error === "terminal") {
+      res.status(409).json({ error: `A ${resolution.status} bay booking cannot be used for a work log.` });
+      return;
     }
+    if ("error" in resolution && resolution.error === "stale") {
+      res.status(409).json({ error: "The supplied bay booking is not the job's current confirmed booking." });
+      return;
+    }
+    if ("error" in resolution) {
+      res.status(400).json({ error: "Bay booking does not match this job's current confirmed booking." });
+      return;
+    }
+    resolvedBayBookingId = resolution.booking.id;
   }
 
   const totalCost = (laborCost ?? 0) + (partsCost ?? 0);

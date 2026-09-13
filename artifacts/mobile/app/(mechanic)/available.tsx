@@ -9,6 +9,7 @@ import {
 } from "@workspace/api-client-react";
 import { Feather } from "@expo/vector-icons";
 import { StatusBadge } from "@/components/StatusBadge";
+import { CommercialJobContext } from "@/components/partner/CommercialJobIntegration";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { useAuth } from "@/context/AuthContext";
@@ -67,6 +68,7 @@ function AvailableJobCard({ job, onAccept, isPending, myTier }: { job: Job; onAc
               <Text style={[styles.workDownTag, { color: "#B45309" }]}>· working down</Text>
             ) : null}
           </View>
+          <CommercialJobContext job={job} compact />
         </View>
 
         <Text style={[styles.desc, { color: colors.foreground }]} numberOfLines={2}>

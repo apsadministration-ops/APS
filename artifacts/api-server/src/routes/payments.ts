@@ -14,6 +14,7 @@ import {
 import { getPublicBaseUrl } from "../lib/publicUrl";
 import { commissionForJob, splitOnNetProfit, findServiceBySlug, partsCostCentsFor, defaultPartsCostPct, type TierKey, type ServiceCategory } from "@workspace/tier-catalog";
 import { isRefundablePayment } from "../lib/authorization";
+import { isPartnerJobOwner, isCommercialJobOwner } from "../lib/commercialJobAccess";
 
 const router: IRouter = Router();
 
@@ -64,7 +65,15 @@ router.get("/payments", authenticate, async (req: AuthRequest, res): Promise<voi
   }
   const userJobs = await db.select().from(jobsTable);
   const relevantJobIds = new Set(
-    userJobs.filter((j) => j.customerId === req.userId || j.mechanicId === req.userId).map((j) => j.id),
+    (await Promise.all(userJobs.map(async (j) => {
+      if (j.mechanicId === req.userId) return j.id;
+      if (req.userRole === "shop_owner") {
+        return j.customerId === req.userId && await isPartnerJobOwner(j, req.userId!)
+          ? j.id
+          : null;
+      }
+      return j.customerId === req.userId ? j.id : null;
+    }))).filter((id): id is number => id !== null),
   );
   res.json(payments.filter((p) => relevantJobIds.has(p.jobId)));
 });
@@ -96,6 +105,13 @@ router.post("/payments/jobs/:jobId/checkout", authenticate, checkoutCreationLimi
       const [job] = await tx.select().from(jobsTable).where(eq(jobsTable.id, jobId));
       if (!job) abortCheckout(404, { error: "Job not found" });
       if (job.customerId !== req.userId) abortCheckout(403, { error: "Not your job" });
+      if (
+        req.userRole === "shop_owner" &&
+        job.sourceOrganizationId != null &&
+        !(await isCommercialJobOwner(job, req.userId!))
+      ) {
+        abortCheckout(403, { error: "Not your linked organization job" });
+      }
       if (job.status !== "ACCEPTED") {
       abortCheckout(400, { error: `Cannot authorize payment on a job in status ${job.status}` });
       }

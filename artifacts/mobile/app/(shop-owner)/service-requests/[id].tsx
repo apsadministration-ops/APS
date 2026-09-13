@@ -1,16 +1,22 @@
 import { Feather } from "@expo/vector-icons";
 import {
   getGetPartnerServiceRequestQueryKey,
+  getGetJobQueryKey,
+  getGetTierCatalogQueryKey,
   getListPartnerOrganizationLocationsQueryKey,
   getListPartnerOrganizationsQueryKey,
   getListPartnerServiceRequestsQueryKey,
   getListPartnerVehicleOperationsQueryKey,
+  getListJobsQueryKey,
   useGetPartnerServiceRequest,
+  useGetTierCatalog,
   useListPartnerOrganizationLocations,
   useListPartnerOrganizations,
   useListPartnerVehicleOperations,
+  useSendPartnerServiceRequestToAps,
   useTransitionPartnerServiceRequest,
   useUpdatePartnerServiceRequest,
+  type SendPartnerServiceRequestToApsInputJobType,
   type PartnerServiceRequestCategory,
   type PartnerServiceRequestDealershipContext,
   type PartnerServiceRequestFleetContext,
@@ -37,6 +43,11 @@ import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { useSelectedPartnerOrganization } from "@/hooks/useSelectedPartnerOrganization";
 import {
+  CommercialJobContext,
+} from "@/components/partner/CommercialJobIntegration";
+import {
+  APS_JOB_TYPE_LABELS,
+  apsJobTypeForRequestCategory,
   buildServiceRequestTransitionPayload,
   buildServiceRequestUpdatePayload,
   REQUEST_CATEGORY_LABELS,
@@ -137,6 +148,10 @@ export default function ServiceRequestDetailScreen() {
   const [note, setNote] = useState("");
   const [screenNotice, setScreenNotice] = useState("");
   const [actionError, setActionError] = useState("");
+  const [showSendPanel, setShowSendPanel] = useState(false);
+  const [serviceSlug, setServiceSlug] = useState<string | null>(null);
+  const [fallbackJobType, setFallbackJobType] =
+    useState<Exclude<SendPartnerServiceRequestToApsInputJobType, null> | null>(null);
   const [contextResetKey, setContextResetKey] = useState("");
   const mutationContextRef = useRef("");
   const originRequestIdRef = useRef<number | null>(null);
@@ -184,6 +199,9 @@ export default function ServiceRequestDetailScreen() {
         "owner",
         user?.id ?? "signed-out",
       ],
+      refetchInterval: (query) =>
+        query.state.data?.request.linkedApsJobId != null ? 8000 : false,
+      refetchOnMount: true,
     },
   });
   const locationsQuery = useListPartnerOrganizationLocations(requestOrganizationId, {
@@ -212,8 +230,23 @@ export default function ServiceRequestDetailScreen() {
       queryKey: getListPartnerVehicleOperationsQueryKey(requestOrganizationId),
     },
   });
+  const tierCatalogQuery = useGetTierCatalog({
+    query: {
+      enabled:
+        enabled &&
+        isSelectionReady &&
+        routeFocused &&
+        requestOrganizationId > 0 &&
+        !organizationChanged &&
+        supported &&
+        contextReady,
+      queryKey: getGetTierCatalogQueryKey(),
+      staleTime: 5 * 60 * 1000,
+    },
+  });
   const updateMutation = useUpdatePartnerServiceRequest();
   const transitionMutation = useTransitionPartnerServiceRequest();
+  const sendMutation = useSendPartnerServiceRequestToAps();
 
   useEffect(() => {
     if (!routeFocused) {
@@ -225,6 +258,9 @@ export default function ServiceRequestDetailScreen() {
       setNote("");
       setScreenNotice("");
       setActionError("");
+      setShowSendPanel(false);
+      setServiceSlug(null);
+      setFallbackJobType(null);
       mutationContextRef.current = "";
       setContextResetKey("");
       router.dismissTo("/(shop-owner)/service-requests" as never);
@@ -234,6 +270,9 @@ export default function ServiceRequestDetailScreen() {
     setNote("");
     setScreenNotice("");
     setActionError("");
+    setShowSendPanel(false);
+    setServiceSlug(null);
+    setFallbackJobType(null);
     mutationContextRef.current = "";
     setContextResetKey(contextKey);
   }, [contextKey, organizationChanged, requestId, routeFocused, router]);
@@ -253,9 +292,27 @@ export default function ServiceRequestDetailScreen() {
   const operations = operationsQuery.data ?? [];
   const selectedLocation = locations.find((location) => location.id === request?.locationId);
   const operation = operations.find((candidate) => candidate.id === request?.operationId);
-  const transitionOptions = request ? requestTransitionOptions(request.status) : [];
+  const linkedProgress = detail?.linkedProgress ?? null;
+  const requestHasLinkedJob = request?.linkedApsJobId != null;
+  const transitionOptions =
+    request && !requestHasLinkedJob ? requestTransitionOptions(request.status) : [];
+  const hasActiveLinkedLocation =
+    selectedLocation?.status === "active";
+  const canSendToAps =
+    !!request &&
+    request.status === "submitted" &&
+    !requestHasLinkedJob &&
+    selectedOrganization?.status === "active" &&
+    supported &&
+    contextReady &&
+    hasActiveLinkedLocation;
+  const inferredJobType = request ? apsJobTypeForRequestCategory(request.category) : null;
+  const sendJobType = serviceSlug ? null : fallbackJobType ?? inferredJobType;
   const queryError =
-    organizationsQuery.error ?? detailQuery.error ?? locationsQuery.error ?? operationsQuery.error;
+    organizationsQuery.error ??
+    detailQuery.error ??
+    locationsQuery.error ??
+    operationsQuery.error;
 
   const invalidate = () => {
     if (requestOrganizationId <= 0) return;
@@ -373,6 +430,82 @@ export default function ServiceRequestDetailScreen() {
             void detailQuery.refetch();
           } else {
             setActionError(errorMessage(error, "Unable to change request status."));
+          }
+        },
+      },
+    );
+  };
+
+  const handleSendToAps = () => {
+    if (!request || requestOrganizationId <= 0 || !selectedOrganization) return;
+    setActionError("");
+    if (!canSendToAps) {
+      setActionError(
+        requestHasLinkedJob
+          ? "This request is already linked to an APS job."
+          : !hasActiveLinkedLocation
+            ? "Choose an active linked location before sending this request to APS."
+            : "Only submitted requests from an active organization can be sent to APS.",
+      );
+      return;
+    }
+    if (!serviceSlug && !sendJobType) {
+      setActionError("Choose a catalog service or an explicit APS job type for this request.");
+      return;
+    }
+
+    const originalContextKey = contextKey;
+    mutationContextRef.current = originalContextKey;
+    sendMutation.mutate(
+      {
+        organizationId: requestOrganizationId,
+        requestId: request.id,
+        data: {
+          expectedVersion: request.version,
+          ...(serviceSlug ? { serviceSlug } : { jobType: sendJobType }),
+        },
+      },
+      {
+        onSuccess: (response) => {
+          if (
+            !routeFocusedRef.current ||
+            mutationContextRef.current !== originalContextKey ||
+            contextKeyRef.current !== originalContextKey
+          ) {
+            return;
+          }
+          setShowSendPanel(false);
+          setServiceSlug(null);
+          setFallbackJobType(null);
+          setScreenNotice(
+            response.replay
+              ? `APS job #${response.job.id} is already linked to this request.`
+              : `Request sent to APS as job #${response.job.id}.`,
+          );
+          void queryClient.invalidateQueries({
+            queryKey: getGetPartnerServiceRequestQueryKey(requestOrganizationId, request.id),
+          });
+          void queryClient.invalidateQueries({
+            queryKey: getListPartnerServiceRequestsQueryKey(requestOrganizationId),
+          });
+          void queryClient.invalidateQueries({ queryKey: getGetJobQueryKey(response.job.id) });
+          void queryClient.invalidateQueries({ queryKey: getListJobsQueryKey() });
+        },
+        onError: (error) => {
+          if (
+            !routeFocusedRef.current ||
+            mutationContextRef.current !== originalContextKey ||
+            contextKeyRef.current !== originalContextKey
+          ) {
+            return;
+          }
+          if (isVersionConflict(error)) {
+            setActionError(
+              "This request changed elsewhere. The latest version was fetched; review it before sending again.",
+            );
+            void detailQuery.refetch();
+          } else {
+            setActionError(errorMessage(error, "Unable to send this request to APS."));
           }
         },
       },
@@ -523,7 +656,7 @@ export default function ServiceRequestDetailScreen() {
           </View>
         ) : null}
 
-        {editing && requestCanEdit(request.status) ? (
+        {editing && requestCanEdit(request.status) && !requestHasLinkedJob ? (
           <PartnerServiceRequestForm
             key={`${contextKey}:${request.id}:${request.version}`}
             subtype={request.sourceSubtype}
@@ -591,7 +724,7 @@ export default function ServiceRequestDetailScreen() {
                 </Text>
               </View>
             </View>
-            {requestCanEdit(request.status) && canWrite ? (
+            {requestCanEdit(request.status) && !requestHasLinkedJob && canWrite ? (
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Edit service request"
@@ -607,6 +740,239 @@ export default function ServiceRequestDetailScreen() {
             ) : null}
           </>
         )}
+
+        {requestHasLinkedJob ? (
+          <View style={[styles.actionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.linkedHeader}>
+              <View style={styles.headerCopy}>
+                <Text style={[styles.sectionTitle, { color: colors.foreground }]}>APS job progress</Text>
+                <Text style={[styles.muted, { color: colors.mutedForeground }]}>
+                  This request remains the submitted source record. Progress below is read from the linked APS job and its real work logs.
+                </Text>
+                <Text style={[styles.meta, { color: colors.mutedForeground }]}>
+                  Linked {formatDate(request.linkedAt)}
+                </Text>
+              </View>
+              <View style={[styles.linkedPill, { backgroundColor: colors.primary + "14", borderColor: colors.primary + "55" }]}>
+                <Feather name="link" size={11} color={colors.primary} />
+                <Text style={[styles.linkedText, { color: colors.primary }]}>Linked</Text>
+              </View>
+            </View>
+            {linkedProgress?.apsJob ? (
+              <>
+                <View style={styles.linkedJobRow}>
+                  <View style={styles.headerCopy}>
+                    <Text style={[styles.value, { color: colors.foreground }]}>
+                      APS job #{linkedProgress.apsJob.id}
+                    </Text>
+                    <Text style={[styles.meta, { color: colors.mutedForeground }]}>
+                      {linkedProgress.apsJob.status.replace(/_/g, " ")}
+                      {linkedProgress.completion ? " · Completed" : " · In progress"}
+                    </Text>
+                  </View>
+                  <CommercialJobContext job={linkedProgress.apsJob} compact />
+                </View>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Open linked APS job ${linkedProgress.apsJob.id}`}
+                  onPress={() => router.push(`/job/${linkedProgress.apsJob!.id}` as never)}
+                  style={[styles.outlineButton, { borderColor: colors.primary }]}
+                >
+                  <Feather name="external-link" size={15} color={colors.primary} />
+                  <Text style={[styles.outlineButtonText, { color: colors.primary }]}>Open APS job</Text>
+                </Pressable>
+                <View style={[styles.progressSummary, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                  <Text style={[styles.label, { color: colors.mutedForeground }]}>COMPLETION</Text>
+                  <Text style={[styles.value, { color: linkedProgress.completion ? colors.primary : colors.foreground }]}>
+                    {linkedProgress.completion ? "Completed with work log" : "Awaiting APS completion"}
+                  </Text>
+                </View>
+                {linkedProgress.worklogs.length > 0 ? (
+                  <View style={styles.worklogList}>
+                    <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
+                      {request.sourceSubtype === "fleet" ? "Fleet maintenance history" : "APS work logs"}
+                    </Text>
+                    {linkedProgress.worklogs.map((worklog) => (
+                      <View key={worklog.id} style={[styles.worklogCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                        <View style={styles.worklogHeader}>
+                          <Text style={[styles.value, { color: colors.foreground }]}>{worklog.serviceCategory}</Text>
+                          <Text style={[styles.meta, { color: colors.mutedForeground }]}>{formatDate(worklog.createdAt)}</Text>
+                        </View>
+                        <Text style={[styles.meta, { color: colors.foreground }]}>{worklog.serviceDescription}</Text>
+                        <Text style={[styles.meta, { color: colors.mutedForeground }]}>
+                          Mileage {worklog.mileageAtService.toLocaleString()} mi · Total ${worklog.totalCost.toFixed(2)}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <Text style={[styles.muted, { color: colors.mutedForeground }]}>
+                    No APS work log has been recorded yet.
+                  </Text>
+                )}
+              </>
+            ) : (
+              <View style={styles.inlineLoading}>
+                <ActivityIndicator color={colors.primary} />
+                <Text style={[styles.muted, { color: colors.mutedForeground }]}>Refreshing linked APS progress…</Text>
+              </View>
+            )}
+          </View>
+        ) : null}
+
+        {request.status === "submitted" && !requestHasLinkedJob && !hasActiveLinkedLocation ? (
+          <View style={[styles.notice, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+            <Feather name="map-pin" size={16} color={colors.mutedForeground} />
+            <Text style={[styles.noticeText, { color: colors.foreground }]}>
+              An active linked location is required before this request can be sent to APS. Choose one with Edit request, then return here.
+            </Text>
+          </View>
+        ) : null}
+
+        {canSendToAps ? (
+          <View style={[styles.actionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Send to APS</Text>
+            <Text style={[styles.muted, { color: colors.mutedForeground }]}>
+              Send this submitted request as one ordinary APS job. Mechanics will use the existing accept, approval, work-log, completion, and earnings workflow.
+            </Text>
+            {showSendPanel ? (
+              <>
+                <Text style={[styles.label, { color: colors.mutedForeground }]}>OPTIONAL SERVICE CATALOG</Text>
+                <Text style={[styles.muted, { color: colors.mutedForeground }]}>
+                  A catalog service lets APS derive the service type, tier, and quote. Leave it unselected to use the request category mapping.
+                </Text>
+                {tierCatalogQuery.error ? (
+                  <Text style={[styles.meta, { color: colors.destructive }]}>
+                    The service catalog is unavailable. You can still use the request category mapping or choose an explicit APS job type.
+                  </Text>
+                ) : null}
+                <View style={styles.chipRow}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Use request category mapping"
+                    accessibilityState={{ selected: serviceSlug == null }}
+                    onPress={() => setServiceSlug(null)}
+                    style={[
+                      styles.filterChip,
+                      {
+                        backgroundColor: serviceSlug == null ? colors.primary : colors.background,
+                        borderColor: serviceSlug == null ? colors.primary : colors.border,
+                      },
+                    ]}
+                  >
+                    <Text style={{ color: serviceSlug == null ? colors.primaryForeground : colors.foreground, fontSize: 11, fontWeight: "700" }}>
+                      Use category
+                    </Text>
+                  </Pressable>
+                  {(tierCatalogQuery.data?.services ?? []).map((service) => {
+                    const selected = serviceSlug === service.slug;
+                    return (
+                      <Pressable
+                        key={service.slug}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Catalog service: ${service.name}`}
+                        accessibilityState={{ selected }}
+                        onPress={() => {
+                          setServiceSlug(selected ? null : service.slug);
+                          setFallbackJobType(null);
+                        }}
+                        style={[
+                          styles.filterChip,
+                          {
+                            backgroundColor: selected ? colors.primary : colors.background,
+                            borderColor: selected ? colors.primary : colors.border,
+                          },
+                        ]}
+                      >
+                        <Text numberOfLines={1} style={{ color: selected ? colors.primaryForeground : colors.foreground, fontSize: 11, fontWeight: "700", maxWidth: 180 }}>
+                          {service.name}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                {!serviceSlug && inferredJobType ? (
+                  <Text style={[styles.meta, { color: colors.mutedForeground }]}>
+                    Request category maps to {APS_JOB_TYPE_LABELS[inferredJobType]}.
+                  </Text>
+                ) : null}
+                {!serviceSlug && !inferredJobType ? (
+                  <>
+                    <Text style={[styles.label, { color: colors.mutedForeground }]}>APS JOB TYPE REQUIRED FOR OTHER</Text>
+                    <View style={styles.chipRow}>
+                      {(Object.keys(APS_JOB_TYPE_LABELS) as Array<Exclude<SendPartnerServiceRequestToApsInputJobType, null>>).map((jobType) => {
+                        const selected = fallbackJobType === jobType;
+                        return (
+                          <Pressable
+                            key={jobType}
+                            accessibilityRole="button"
+                            accessibilityLabel={`APS job type: ${APS_JOB_TYPE_LABELS[jobType]}`}
+                            accessibilityState={{ selected }}
+                            onPress={() => setFallbackJobType(selected ? null : jobType)}
+                            style={[
+                              styles.filterChip,
+                              {
+                                backgroundColor: selected ? colors.primary : colors.background,
+                                borderColor: selected ? colors.primary : colors.border,
+                              },
+                            ]}
+                          >
+                            <Text style={{ color: selected ? colors.primaryForeground : colors.foreground, fontSize: 11, fontWeight: "700" }}>
+                              {APS_JOB_TYPE_LABELS[jobType]}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </>
+                ) : null}
+                <View style={styles.sendActions}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Cancel Send to APS"
+                    onPress={() => {
+                      setShowSendPanel(false);
+                      setActionError("");
+                    }}
+                    style={[styles.outlineButton, { borderColor: colors.border }]}
+                  >
+                    <Text style={[styles.outlineButtonText, { color: colors.mutedForeground }]}>Cancel</Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Send service request to APS"
+                    accessibilityState={{ disabled: sendMutation.isPending || (!serviceSlug && !sendJobType) }}
+                    onPress={handleSendToAps}
+                    disabled={sendMutation.isPending || (!serviceSlug && !sendJobType)}
+                    style={[styles.primaryActionButton, { backgroundColor: colors.primary, opacity: sendMutation.isPending || (!serviceSlug && !sendJobType) ? 0.5 : 1 }]}
+                  >
+                    {sendMutation.isPending ? (
+                      <ActivityIndicator color={colors.primaryForeground} />
+                    ) : (
+                      <>
+                        <Feather name="send" size={15} color={colors.primaryForeground} />
+                        <Text style={[styles.primaryActionText, { color: colors.primaryForeground }]}>Send to APS</Text>
+                      </>
+                    )}
+                  </Pressable>
+                </View>
+              </>
+            ) : (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Configure Send to APS"
+                onPress={() => {
+                  setActionError("");
+                  setShowSendPanel(true);
+                }}
+                style={[styles.primaryActionButton, { backgroundColor: colors.primary }]}
+              >
+                <Feather name="send" size={15} color={colors.primaryForeground} />
+                <Text style={[styles.primaryActionText, { color: colors.primaryForeground }]}>Configure send</Text>
+              </Pressable>
+            )}
+          </View>
+        ) : null}
 
         {transitionOptions.length > 0 ? (
           <View style={[styles.actionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -726,6 +1092,20 @@ const styles = StyleSheet.create({
   outlineButtonText: { fontSize: 13, fontWeight: "800" },
   actionCard: { borderRadius: 13, borderWidth: 1, gap: 8, padding: 14 },
   sectionTitle: { fontSize: 15, fontWeight: "800" },
+  linkedHeader: { alignItems: "flex-start", flexDirection: "row", gap: 8 },
+  linkedJobRow: { alignItems: "flex-start", flexDirection: "row", gap: 8 },
+  linkedPill: { alignItems: "center", borderRadius: 8, borderWidth: 1, flexDirection: "row", gap: 3, paddingHorizontal: 6, paddingVertical: 4 },
+  linkedText: { fontSize: 9, fontWeight: "800" },
+  progressSummary: { borderRadius: 9, borderWidth: 1, gap: 3, padding: 10 },
+  worklogList: { gap: 7, marginTop: 2 },
+  worklogCard: { borderRadius: 9, borderWidth: 1, gap: 3, padding: 10 },
+  worklogHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", gap: 8 },
+  inlineLoading: { alignItems: "center", flexDirection: "row", gap: 8 },
+  sendActions: { alignItems: "center", flexDirection: "row", gap: 8 },
+  primaryActionButton: { alignItems: "center", borderRadius: 9, flex: 1, flexDirection: "row", gap: 6, justifyContent: "center", minHeight: 42, paddingHorizontal: 12 },
+  primaryActionText: { fontSize: 13, fontWeight: "800" },
+  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
+  filterChip: { borderRadius: 8, borderWidth: 1, paddingHorizontal: 9, paddingVertical: 7 },
   noteInput: { borderRadius: 9, borderWidth: 1, fontSize: 13, minHeight: 56, padding: 10 },
   actionButton: { alignItems: "center", borderRadius: 9, borderWidth: 1, flexDirection: "row", gap: 7, justifyContent: "center", minHeight: 40, paddingHorizontal: 10 },
   actionButtonText: { fontSize: 12, fontWeight: "800" },

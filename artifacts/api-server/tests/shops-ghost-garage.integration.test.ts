@@ -500,13 +500,20 @@ test(
       body: { jobId: firstJob.id, startTime: start, estimatedHours: 2 },
     });
     assert.equal(ownerBookingAttempt.response.status, 403);
-    const firstBooking = await api<{ id: number }>(`/api/bays/${firstBay.id}/bookings`, {
+    const firstBooking = await api<{ id: number; status: string }>(`/api/bays/${firstBay.id}/bookings`, {
       method: "POST",
       token: fixture.mechanic.token,
       body: { jobId: firstJob.id, startTime: start, estimatedHours: 2 },
     });
     assert.equal(firstBooking.response.status, 201);
+    assert.equal(firstBooking.body.status, "pending");
     fixture.bookingIds.push(firstBooking.body.id);
+    const firstApproval = await api<{ status: string }>(`/api/bookings/${firstBooking.body.id}/approve`, {
+      method: "PATCH",
+      token: ownerA.token,
+    });
+    assert.equal(firstApproval.response.status, 200);
+    assert.equal(firstApproval.body.status, "reserved");
 
     // Existing reservations remain readable if the parent facility later
     // becomes inactive, but a stale client cannot create a new reservation.
@@ -553,12 +560,19 @@ test(
       token: fixture.customer.token,
     });
     assert.equal(overlapApproval.response.status, 200);
-    const overlap = await api(`/api/bays/${firstBay.id}/bookings`, {
+    const overlap = await api<{ id: number; status: string }>(`/api/bays/${firstBay.id}/bookings`, {
       method: "POST",
       token: fixture.mechanic.token,
       body: { jobId: overlapJob.id, startTime: "2099-02-01T11:00:00.000Z", estimatedHours: 2 },
     });
-    assert.equal(overlap.response.status, 409);
+    assert.equal(overlap.response.status, 201);
+    assert.equal(overlap.body.status, "pending");
+    fixture.bookingIds.push(overlap.body.id);
+    const overlapApproval = await api(`/api/bookings/${overlap.body.id}/approve`, {
+      method: "PATCH",
+      token: ownerA.token,
+    });
+    assert.equal(overlapApproval.response.status, 409);
 
     // Preserve existing booking lifecycle rules: reserved -> active ->
     // completed, with no owner permission to start/complete a booking.

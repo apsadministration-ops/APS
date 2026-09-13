@@ -17,6 +17,8 @@ import {
   partnerVehicleOperationsTable,
   shopsTable,
   vehiclesTable,
+  jobsTable,
+  workLogsTable,
 } from "@workspace/db";
 import {
   CreatePartnerServiceRequestBody,
@@ -38,6 +40,7 @@ import {
   requireShopOwner,
   type AuthRequest,
 } from "../middlewares/authenticate";
+import { formatJob } from "./jobs";
 
 const router: IRouter = Router();
 
@@ -90,7 +93,8 @@ class ServiceRequestError extends Error {
       | "IDEMPOTENCY_CONFLICT"
       | "STALE_VERSION"
       | "INVALID_TRANSITION"
-      | "TERMINAL_REQUEST",
+      | "TERMINAL_REQUEST"
+      | "LINKED_TO_APS",
   ) {
     super(code);
   }
@@ -262,6 +266,8 @@ function formatRequest(
     completedAt: request.completedAt ?? null,
     cancelledAt: request.cancelledAt ?? null,
     updatedAt: request.updatedAt,
+    linkedApsJobId: request.linkedApsJobId ?? null,
+    linkedAt: request.linkedAt ?? null,
   };
 }
 
@@ -276,6 +282,37 @@ function formatHistory(
     toStatus: history.toStatus,
     note: history.note ?? null,
     createdAt: history.createdAt,
+  };
+}
+
+async function formatLinkedProgress(jobId: number | null) {
+  if (jobId == null) return null;
+  const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, jobId));
+  if (!job) return null;
+  const logs = await db
+    .select()
+    .from(workLogsTable)
+    .where(eq(workLogsTable.jobId, job.id))
+    .orderBy(asc(workLogsTable.createdAt));
+  return {
+    apsJob: await formatJob(job),
+    worklogs: logs.map((log) => ({
+      id: log.id,
+      jobId: log.jobId,
+      vehicleId: log.vehicleId,
+      vin: log.vin,
+      mechanicId: log.mechanicId,
+      serviceCategory: log.serviceCategory,
+      serviceDescription: log.serviceDescription,
+      mileageAtService: log.mileageAtService,
+      laborCost: log.laborCost,
+      partsCost: log.partsCost,
+      totalCost: log.totalCost,
+      createdAt: log.createdAt,
+    })),
+    // Projection only: request progress comes from the real APS job/worklog,
+    // with no second lifecycle or copied completion state.
+    completion: (job.status === "COMPLETED" || job.status === "PAID") && logs.length > 0,
   };
 }
 
@@ -337,6 +374,9 @@ function errorResponse(
       return true;
     case "TERMINAL_REQUEST":
       res.status(409).json({ error: "Completed and cancelled service requests are immutable" });
+      return true;
+    case "LINKED_TO_APS":
+      res.status(409).json({ error: "Service request is linked to APS and can no longer be edited here" });
       return true;
   }
 }
@@ -524,7 +564,10 @@ router.get(
         .where(and(...filters))
         .orderBy(desc(partnerServiceRequestsTable.createdAt))
         .limit(query.data.limit ?? 50);
-      res.json(ListPartnerServiceRequestsResponse.parse(requests.map(formatRequest)));
+      // Keep additive APS linkage fields intact until the coordinated central
+      // OpenAPI/Zod generation pass (after the bay fragment) updates this
+      // validator's schema.
+      res.json(requests.map(formatRequest));
     } catch (error) {
       if (errorResponse(error, res)) return;
       throw error;
@@ -698,11 +741,15 @@ router.get(
           return {
             request: formatRequest(request),
             statusHistory: history.map(formatHistory),
+            linkedProgress: await formatLinkedProgress(request.linkedApsJobId),
           };
         },
         { isolationLevel: "repeatable read", accessMode: "read only" },
       );
-      res.json(GetPartnerServiceRequestResponse.parse(detail));
+      // This response gains the additive APS projection in Part 6. Keep it
+      // intact while the central OpenAPI/Zod output is regenerated after the
+      // bay agent's fragment lands.
+      res.json(detail);
     } catch (error) {
       if (errorResponse(error, res)) return;
       throw error;
@@ -776,6 +823,9 @@ router.patch(
         }
         if (current.status === "completed" || current.status === "cancelled") {
           throw new ServiceRequestError("TERMINAL_REQUEST");
+        }
+        if (current.linkedApsJobId != null) {
+          throw new ServiceRequestError("LINKED_TO_APS");
         }
         if (current.status !== "draft" && current.status !== "submitted") {
           throw new ServiceRequestError("INVALID_TRANSITION");
@@ -887,6 +937,9 @@ router.post(
         }
         if (current.status === "completed" || current.status === "cancelled") {
           throw new ServiceRequestError("TERMINAL_REQUEST");
+        }
+        if (current.linkedApsJobId != null) {
+          throw new ServiceRequestError("LINKED_TO_APS");
         }
         const association = await lockOperationAndVehicle(
           tx,

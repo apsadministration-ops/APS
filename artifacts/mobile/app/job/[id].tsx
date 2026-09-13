@@ -4,12 +4,15 @@ import { useColors } from "@/hooks/useColors";
 import {
   useGetJob, useRateJob, useCancelJob, useRateCustomer, useCreateFlag,
   useApproveJobTransport, useListJobInspections,
-  getGetJobQueryKey, getListJobInspectionsQueryKey,
+  useListMyBookings, useCancelBayBooking, useGetJobLiftRequirement, useSetJobLiftRequirement,
+  getGetJobQueryKey, getListJobInspectionsQueryKey, getListMyBookingsQueryKey,
+  getGetJobLiftRequirementQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams, useRouter, Stack } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { StatusBadge } from "@/components/StatusBadge";
+import { CommercialJobContext } from "@/components/partner/CommercialJobIntegration";
 import { useAuth } from "@/context/AuthContext";
 import { useState, useEffect } from "react";
 import * as Haptics from "expo-haptics";
@@ -18,7 +21,7 @@ import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getApiUrl } from "@/lib/apiConfig";
 
-const STATUS_ORDER = ["REQUESTED", "OFFERED", "ACCEPTED", "EN_ROUTE", "IN_PROGRESS", "COMPLETED", "PAID"];
+const STATUS_ORDER = ["REQUESTED", "OFFERED", "PENDING_APPROVAL", "ACCEPTED", "EN_ROUTE", "IN_PROGRESS", "COMPLETED", "PAID"];
 
 function TimelineStep({ label, active, done }: { label: string; active: boolean; done: boolean }) {
   const colors = useColors();
@@ -48,11 +51,32 @@ export default function JobDetailScreen() {
   const rateMutation = useRateJob();
   const rateCustomerMutation = useRateCustomer();
   const cancelMutation = useCancelJob();
+  const cancelBookingMutation = useCancelBayBooking();
+  const setLiftRequirementMutation = useSetJobLiftRequirement();
   const flagMutation = useCreateFlag();
   const approveTransportMutation = useApproveJobTransport();
   const queryClient = useQueryClient();
   const { data: inspections } = useListJobInspections(jobId, {
-    query: { enabled: Number.isFinite(jobId) && job?.requiresGhostGarage === true } as any,
+    query: {
+      enabled: Number.isFinite(jobId) && job?.requiresGhostGarage === true,
+      queryKey: getListJobInspectionsQueryKey(jobId),
+    },
+  });
+  const { data: linkedBookings } = useListMyBookings({
+    query: {
+      enabled: user?.role === "mechanic" && job?.mechanicId === user.id,
+      queryKey: getListMyBookingsQueryKey(),
+      // A shop owner can approve/reject a request while the mechanic is on
+      // this screen. Keep the linked booking status fresh without creating a
+      // second realtime transport channel.
+      refetchInterval: 10_000,
+    },
+  });
+  const { data: liftRequirement } = useGetJobLiftRequirement(jobId, {
+    query: {
+      enabled: user?.role === "mechanic" && job?.mechanicId === user.id,
+      queryKey: getGetJobLiftRequirementQueryKey(jobId),
+    },
   });
 
   const [rating, setRating] = useState(0);
@@ -60,16 +84,27 @@ export default function JobDetailScreen() {
   const [custRating, setCustRating] = useState(0);
   const [custReviewText, setCustReviewText] = useState("");
   const [payLoading, setPayLoading] = useState(false);
+  const isCommercialJob = Boolean(
+    job?.partnerKindSnapshot === "dealership" || job?.partnerKindSnapshot === "fleet",
+  ) && job?.sourceOrganizationId != null && job?.sourceServiceRequestId != null;
+  const isCommercialPrincipal = Boolean(
+    user?.role === "shop_owner" &&
+    job?.customerId === user.id &&
+    isCommercialJob,
+  );
 
   // Trust system: when a customer lands on a job that's still awaiting their
   // 60s approval of the assigned mechanic, route them straight to the
-  // approval screen. Mechanic and admin keep the regular detail view.
+  // approval screen. A commercial principal uses the same approval controls;
+  // mechanic and admin keep the regular detail view.
   useEffect(() => {
-    // Cast: openapi.yaml status enum hasn't been regenerated for PENDING_APPROVAL yet (tracked for Phase 3 codegen sweep).
-    if ((job?.status as string) === "PENDING_APPROVAL" && user?.role === "customer" && job?.customerId === user.id) {
+    if (
+      job?.status === "PENDING_APPROVAL" &&
+      ((user?.role === "customer" && job?.customerId === user.id) || isCommercialPrincipal)
+    ) {
       router.replace(`/job/${jobId}/approve`);
     }
-  }, [job?.status, job?.customerId, user?.role, user?.id, jobId, router]);
+  }, [job?.status, job?.customerId, user?.role, user?.id, jobId, router, isCommercialPrincipal]);
 
   const handlePay = async () => {
     setPayLoading(true);
@@ -118,6 +153,8 @@ export default function JobDetailScreen() {
 
   const isCustomer = user?.role === "customer";
   const isMechanic = user?.role === "mechanic";
+  const canApproveTransport = isCustomer || isCommercialPrincipal;
+  const liftRequired = liftRequirement?.requiresGhostGarage ?? job.requiresGhostGarage;
   const canCancel =
     (isCustomer && ["REQUESTED", "OFFERED"].includes(job.status)) ||
     (isMechanic && job.mechanicId === user?.id && ["ACCEPTED", "EN_ROUTE"].includes(job.status));
@@ -126,6 +163,9 @@ export default function JobDetailScreen() {
   const canSubmitWorklog = isMechanic && job.status === "IN_PROGRESS" && job.mechanicId === user?.id;
   const canFlagMechanic = isCustomer && job.mechanicId != null;
   const canFlagCustomer = isMechanic && job.mechanicId === user?.id;
+  const linkedBooking = (linkedBookings ?? [])
+    .filter((booking) => booking.jobId === job.id)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
 
   const currentStep = STATUS_ORDER.indexOf(job.status);
   const visibleStatuses = job.status === "CANCELLED"
@@ -196,6 +236,63 @@ export default function JobDetailScreen() {
     });
   };
 
+  const handleRequireLift = async () => {
+    const ok = await confirm({
+      title: "Require a shop lift?",
+      message: "This will require a customer transport approval, a scheduled bay, and pre/post inspections before the work log can be submitted.",
+      confirmText: "Require Lift",
+    });
+    if (!ok) return;
+    setLiftRequirementMutation.mutate(
+      { jobId, data: { requiresGhostGarage: true } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getGetJobQueryKey(jobId) });
+          queryClient.invalidateQueries({ queryKey: getGetJobLiftRequirementQueryKey(jobId) });
+          void alertMessage("Lift required", "The customer must approve transport before you schedule a bay.");
+        },
+        onError: (e: any) => void alertMessage("Couldn't require lift", e?.message ?? "Try again."),
+      },
+    );
+  };
+
+  const openBaySearch = (status?: string, reason?: string | null) => {
+    const query = status
+      ? `?bookingStatus=${encodeURIComponent(status)}${reason ? `&bookingReason=${encodeURIComponent(reason)}` : ""}`
+      : "";
+    router.push(`/bays/${jobId}${query}`);
+  };
+
+  const handleCancelBooking = async (bookingId: number, reschedule: boolean) => {
+    const ok = await confirm({
+      title: reschedule ? "Reschedule lift?" : "Cancel lift booking?",
+      message: reschedule
+        ? "The current bay request will be cancelled so you can choose a different interval."
+        : "The mechanic and shop will be notified that this bay request was cancelled.",
+      confirmText: reschedule ? "Cancel & Reschedule" : "Cancel Booking",
+      destructive: !reschedule,
+    });
+    if (!ok) return;
+    cancelBookingMutation.mutate(
+      {
+        bookingId,
+        data: { reason: reschedule ? "Mechanic requested reschedule" : "Cancelled by mechanic" },
+      },
+      {
+        onSuccess: (booking) => {
+          queryClient.invalidateQueries({ queryKey: getListMyBookingsQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getGetJobQueryKey(jobId) });
+          if (reschedule) {
+            openBaySearch(booking.status, booking.cancellationReason);
+          } else {
+            void alertMessage("Booking cancelled", "You can schedule another lift interval when ready.");
+          }
+        },
+        onError: (e: any) => void alertMessage("Couldn't cancel booking", e?.message ?? "Try again."),
+      },
+    );
+  };
+
   const handleFlag = async (kind: "mechanic" | "customer") => {
     const targetId = kind === "mechanic" ? job.mechanicId : job.customerId;
     if (!targetId) return;
@@ -249,6 +346,7 @@ export default function JobDetailScreen() {
               <StatusBadge status={job.status} />
             </View>
 
+            {isCommercialJob ? <CommercialJobContext job={job} /> : null}
             <Text style={[styles.desc, { color: colors.foreground }]}>{job.description}</Text>
 
             {job.locationAddress ? (
@@ -437,6 +535,28 @@ export default function JobDetailScreen() {
             </Pressable>
           )}
 
+          {/* Mechanic can add the existing Ghost Garage requirement without
+              creating inventory, billing, or a second job. */}
+          {isMechanic && job.mechanicId === user?.id &&
+            ["ACCEPTED", "EN_ROUTE", "IN_PROGRESS"].includes(job.status) &&
+            !liftRequired && (
+            <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Text style={[styles.cardTitle, { color: colors.foreground }]}>Need a lift?</Text>
+              <Text style={{ color: colors.mutedForeground, fontSize: 13, lineHeight: 18 }}>
+                Require an indoor bay for this job. The customer will be asked to approve transport before a bay can be reserved.
+              </Text>
+              <Pressable
+                style={[styles.primaryBtn, { backgroundColor: colors.primary }, setLiftRequirementMutation.isPending && { opacity: 0.6 }]}
+                onPress={() => { void handleRequireLift(); }}
+                disabled={setLiftRequirementMutation.isPending}
+              >
+                {setLiftRequirementMutation.isPending
+                  ? <ActivityIndicator color="white" />
+                  : <Text style={styles.primaryBtnText}>Require Lift</Text>}
+              </Pressable>
+            </View>
+          )}
+
           {/* Mechanic tools row */}
           {isMechanic && job.vehicleId && (
             <View style={styles.toolsRow}>
@@ -488,7 +608,7 @@ export default function JobDetailScreen() {
           )}
 
           {/* Ghost Garage: customer transport approval CTA */}
-          {isCustomer && job.requiresGhostGarage && !job.customerTransportApproved && (
+          {canApproveTransport && job.requiresGhostGarage && !job.customerTransportApproved && (
             <View style={[styles.card, { backgroundColor: colors.primary + "10", borderColor: colors.primary + "55" }]}>
               <Text style={[styles.cardTitle, { color: colors.primary }]}>Approve Transport to Shop Bay</Text>
               <Text style={{ color: colors.foreground, fontSize: 13, lineHeight: 18 }}>
@@ -552,16 +672,66 @@ export default function JobDetailScreen() {
             ["ACCEPTED", "EN_ROUTE", "IN_PROGRESS"].includes(job.status) && (() => {
               const hasPre = inspections?.some((i) => i.kind === "pre");
               const hasPost = inspections?.some((i) => i.kind === "post");
+              const canScheduleLift = !linkedBooking ||
+                linkedBooking.status === "rejected" ||
+                linkedBooking.status === "cancelled";
               return (
                 <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
                   <Text style={[styles.cardTitle, { color: colors.foreground }]}>Ghost Garage</Text>
-                  <Pressable
-                    style={[styles.partsBtn, { backgroundColor: colors.secondary, borderColor: colors.border, marginTop: 0 }]}
-                    onPress={() => router.push(`/bays/${job.id}`)}
-                  >
-                    <Feather name="home" size={16} color={colors.foreground} />
-                    <Text style={[styles.partsBtnText, { color: colors.foreground }]}>Find a Bay</Text>
-                  </Pressable>
+                  {linkedBooking ? (
+                    <View style={[styles.bookingStatus, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                      <View style={{ flex: 1, gap: 3 }}>
+                        <Text style={[styles.bookingStatusTitle, { color: colors.foreground }]}>
+                          Bay request · {String(linkedBooking.status).toUpperCase()}
+                        </Text>
+                        <Text style={[styles.bookingStatusDetail, { color: colors.mutedForeground }]}>
+                          {new Date(linkedBooking.startTime).toLocaleString()} · {linkedBooking.estimatedHours}h
+                        </Text>
+                        {linkedBooking.cancellationReason ? (
+                          <Text style={[styles.bookingStatusReason, { color: colors.destructive }]}>
+                            Reason: {linkedBooking.cancellationReason}
+                          </Text>
+                        ) : null}
+                        {["pending", "reserved", "active"].includes(linkedBooking.status) ? (
+                          <View style={styles.bookingActions}>
+                            <Pressable
+                              style={[styles.smallAction, { borderColor: colors.destructive }, cancelBookingMutation.isPending && { opacity: 0.6 }]}
+                              onPress={() => { void handleCancelBooking(linkedBooking.id, false); }}
+                              disabled={cancelBookingMutation.isPending}
+                            >
+                              <Text style={{ color: colors.destructive, fontSize: 12, fontWeight: "700" }}>Cancel</Text>
+                            </Pressable>
+                            {linkedBooking.status !== "active" ? (
+                              <Pressable
+                                style={[styles.smallAction, { borderColor: colors.primary }, cancelBookingMutation.isPending && { opacity: 0.6 }]}
+                                onPress={() => { void handleCancelBooking(linkedBooking.id, true); }}
+                                disabled={cancelBookingMutation.isPending}
+                              >
+                                <Text style={{ color: colors.primary, fontSize: 12, fontWeight: "700" }}>Reschedule</Text>
+                              </Pressable>
+                            ) : null}
+                          </View>
+                        ) : null}
+                      </View>
+                      {["rejected", "cancelled"].includes(String(linkedBooking.status)) ? (
+                        <Pressable
+                          style={[styles.smallAction, { borderColor: colors.primary }]}
+                          onPress={() => openBaySearch(linkedBooking.status, linkedBooking.cancellationReason)}
+                        >
+                          <Text style={{ color: colors.primary, fontSize: 12, fontWeight: "700" }}>Try another bay</Text>
+                        </Pressable>
+                      ) : null}
+                    </View>
+                  ) : null}
+                  {canScheduleLift ? (
+                    <Pressable
+                      style={[styles.partsBtn, { backgroundColor: colors.secondary, borderColor: colors.border, marginTop: 0 }]}
+                      onPress={() => router.push(`/bays/${job.id}`)}
+                    >
+                      <Feather name="home" size={16} color={colors.foreground} />
+                      <Text style={[styles.partsBtnText, { color: colors.foreground }]}>Schedule Lift</Text>
+                    </Pressable>
+                  ) : null}
                   <Pressable
                     style={[styles.partsBtn, { backgroundColor: hasPre ? colors.muted : colors.primary + "18", borderColor: colors.primary + "44" }]}
                     onPress={() => router.push(`/inspection/${job.id}?kind=pre`)}
@@ -705,4 +875,10 @@ const styles = StyleSheet.create({
   textarea: { minHeight: 80, padding: 12, borderRadius: 10, borderWidth: 1, fontSize: 14 },
   flagBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 12, borderRadius: 12, borderWidth: 1, marginTop: 12 },
   flagBtnText: { color: "#EF4444", fontWeight: "600", fontSize: 13 },
+  bookingStatus: { flexDirection: "row", alignItems: "center", gap: 10, padding: 10, borderRadius: 10, borderWidth: 1 },
+  bookingStatusTitle: { fontSize: 13, fontWeight: "700" },
+  bookingStatusDetail: { fontSize: 12 },
+  bookingStatusReason: { fontSize: 12, lineHeight: 17 },
+  bookingActions: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 5 },
+  smallAction: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 9, paddingVertical: 7 },
 });

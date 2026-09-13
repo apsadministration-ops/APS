@@ -4,6 +4,7 @@ import { useColors } from "@/hooks/useColors";
 import { useListJobs, useUpdateJobStatus, Job, UpdateJobStatusBodyStatus, getListJobsQueryKey } from "@workspace/api-client-react";
 import { Feather } from "@expo/vector-icons";
 import { StatusBadge } from "@/components/StatusBadge";
+import { CommercialJobContext } from "@/components/partner/CommercialJobIntegration";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
@@ -53,6 +54,7 @@ function ActiveJobCard({ job }: { job: Job }) {
             <StatusBadge status={job.status} />
           </View>
           <Text style={[styles.jobType, { color: colors.primary }]}>{job.jobType.toUpperCase()}</Text>
+          <CommercialJobContext job={job} compact />
         </View>
 
         <Text style={[styles.desc, { color: colors.foreground }]} numberOfLines={2}>{job.description}</Text>

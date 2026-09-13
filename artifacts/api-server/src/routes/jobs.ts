@@ -19,6 +19,7 @@ import {
   type ServiceCategory,
 } from "@workspace/tier-catalog";
 import { parsePositiveSafeInteger } from "../lib/validation";
+import { isPartnerJobOwner } from "../lib/commercialJobAccess";
 
 /**
  * If the job has an uncaptured Stripe authorization, void it so the
@@ -66,7 +67,10 @@ async function voidStripeAuthorizationForJob(jobId: number, log: { error: (o: ob
 
 const router: IRouter = Router();
 
-async function formatJob(job: typeof jobsTable.$inferSelect) {
+export async function formatJob(
+  job: typeof jobsTable.$inferSelect,
+  options: { sanitizeCommercial?: boolean } = {},
+) {
   const [customer] = await db.select().from(usersTable).where(eq(usersTable.id, job.customerId));
   const mechanic = job.mechanicId
     ? (await db.select().from(usersTable).where(eq(usersTable.id, job.mechanicId)))[0] ?? null
@@ -103,6 +107,18 @@ async function formatJob(job: typeof jobsTable.$inferSelect) {
     requiredTier: (job.requiredTier ?? null) as TierKey | null,
     postedByShopId: job.postedByShopId ?? null,
     partnerKindSnapshot: job.partnerKindSnapshot ?? null,
+    sourceOrganizationId: options.sanitizeCommercial ? null : (job.sourceOrganizationId ?? null),
+    sourceServiceRequestId: options.sanitizeCommercial ? null : (job.sourceServiceRequestId ?? null),
+    // The bridge stores requestedWork as the public job description. Private
+    // organization notes/context never enter this mechanic-facing formatter.
+    commercialSource: job.sourceOrganizationId != null && job.sourceServiceRequestId != null
+      ? {
+          organizationId: options.sanitizeCommercial ? null : job.sourceOrganizationId,
+          serviceRequestId: options.sanitizeCommercial ? null : job.sourceServiceRequestId,
+          subtype: job.partnerKindSnapshot === "fleet" ? "fleet" : "dealership",
+          requestedWork: job.description,
+        }
+      : null,
     urgency: job.urgency,
     juniorVisibleAt: job.juniorVisibleAt ?? null,
     recurringGroupId: job.recurringGroupId ?? null,
@@ -123,7 +139,13 @@ router.get("/jobs", authenticate, async (req: AuthRequest, res): Promise<void> =
   else if (req.userRole === "shop_owner") {
     // Partner job posting puts the shop owner on the job as customer-of-record.
     // They should only see their own jobs (NOT every job in the system).
-    allJobs = allJobs.filter((j) => j.customerId === req.userId);
+    const owned = await Promise.all(
+      allJobs
+        .filter((j) => j.customerId === req.userId)
+        .map(async (j) => (await isPartnerJobOwner(j, req.userId!)) ? j.id : null),
+    );
+    const ownedIds = new Set(owned.filter((id): id is number => id !== null));
+    allJobs = allJobs.filter((j) => ownedIds.has(j.id));
   }
   else if (req.userRole === "mechanic") {
     allJobs = allJobs.filter((j) =>
@@ -134,7 +156,9 @@ router.get("/jobs", authenticate, async (req: AuthRequest, res): Promise<void> =
   if (status) allJobs = allJobs.filter((j) => j.status === status);
   if (vehicleId) allJobs = allJobs.filter((j) => j.vehicleId === parseInt(vehicleId, 10));
   if (mechanicId) allJobs = allJobs.filter((j) => j.mechanicId === parseInt(mechanicId, 10));
-  res.json(await Promise.all(allJobs.map(formatJob)));
+  res.json(await Promise.all(allJobs.map((job) => formatJob(job, {
+    sanitizeCommercial: req.userRole === "mechanic",
+  }))));
 });
 
 router.get("/jobs/available", authenticate, async (req: AuthRequest, res): Promise<void> => {
@@ -185,7 +209,9 @@ router.get("/jobs/available", authenticate, async (req: AuthRequest, res): Promi
     });
   }
 
-  res.json(await Promise.all(jobs.map(formatJob)));
+  res.json(await Promise.all(jobs.map((job) => formatJob(job, {
+    sanitizeCommercial: req.userRole === "mechanic",
+  }))));
 });
 
 router.post("/jobs", authenticate, async (req: AuthRequest, res): Promise<void> => {
@@ -278,6 +304,7 @@ router.get("/jobs/:jobId", authenticate, async (req: AuthRequest, res): Promise<
   // requested-mechanic restriction, or matching the requested-mechanic-id)
   // may view a job.
   const isCustomer = req.userRole === "customer" && job.customerId === req.userId;
+  const isPartnerOwner = req.userRole === "shop_owner" && await isPartnerJobOwner(job, req.userId!);
   const isAssignedMechanic = req.userRole === "mechanic" && job.mechanicId === req.userId;
   // Pending/suspended mechanics must not see job details (location, customer
   // info) — only approved (active) mechanics can browse the bid pool.
@@ -285,10 +312,12 @@ router.get("/jobs/:jobId", authenticate, async (req: AuthRequest, res): Promise<
     && job.status === "REQUESTED"
     && (job.requestedMechanicId == null || job.requestedMechanicId === req.userId);
   const isAdmin = req.userRole === "admin";
-  if (!isCustomer && !isAssignedMechanic && !isEligibleBidder && !isAdmin) {
+  if (!isCustomer && !isPartnerOwner && !isAssignedMechanic && !isEligibleBidder && !isAdmin) {
     res.status(403).json({ error: "Forbidden" }); return;
   }
-  res.json(await formatJob(job));
+  res.json(await formatJob(job, {
+    sanitizeCommercial: req.userRole === "mechanic",
+  }));
 });
 
 router.patch("/jobs/:jobId/status", authenticate, async (req: AuthRequest, res): Promise<void> => {
@@ -327,7 +356,9 @@ router.patch("/jobs/:jobId/status", authenticate, async (req: AuthRequest, res):
   if (status === "COMPLETED") updates.completedAt = new Date();
   if (status === "ACCEPTED") updates.acceptedAt = new Date();
   const [updated] = await db.update(jobsTable).set(updates).where(eq(jobsTable.id, jobId)).returning();
-  res.json(await formatJob(updated));
+  res.json(await formatJob(updated, {
+    sanitizeCommercial: req.userRole === "mechanic",
+  }));
 });
 
 // Customer approves transport of their vehicle to a shop bay. Required for
@@ -337,7 +368,9 @@ router.post("/jobs/:jobId/transport-approval", authenticate, async (req: AuthReq
   if (isNaN(jobId)) { res.status(400).json({ error: "Invalid job ID" }); return; }
   const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, jobId));
   if (!job) { res.status(404).json({ error: "Job not found" }); return; }
-  if (req.userRole !== "customer" || job.customerId !== req.userId) {
+  const isCustomer = req.userRole === "customer" && job.customerId === req.userId;
+  const isPartnerOwner = req.userRole === "shop_owner" && await isPartnerJobOwner(job, req.userId!);
+  if (!isCustomer && !isPartnerOwner) {
     res.status(403).json({ error: "Only the job's customer can approve transport" }); return;
   }
   if (!job.requiresGhostGarage) {
@@ -421,7 +454,7 @@ router.post("/jobs/:jobId/accept", authenticate, requireActiveMechanic, async (r
   // `notifyCustomerJobAccepted` now fires from the approve handler, not here.
   void vehicle;
 
-  res.json(await formatJob(updated));
+  res.json(await formatJob(updated, { sanitizeCommercial: true }));
 });
 
 router.post("/jobs/:jobId/cancel", authenticate, async (req: AuthRequest, res): Promise<void> => {
@@ -457,7 +490,7 @@ router.post("/jobs/:jobId/cancel", authenticate, async (req: AuthRequest, res): 
     const [reopened] = await db.update(jobsTable)
       .set({ status: "REQUESTED", mechanicId: null, mechanicLat: null, mechanicLng: null, mechanicLocationUpdatedAt: null })
       .where(eq(jobsTable.id, jobId)).returning();
-    res.json(await formatJob(reopened));
+    res.json(await formatJob(reopened, { sanitizeCommercial: true }));
     return;
   }
   // Customer/admin cancellation: release any uncaptured Stripe hold so the
@@ -565,7 +598,7 @@ router.post("/jobs/:jobId/rate-customer", authenticate, async (req: AuthRequest,
   const [updated] = await db.update(jobsTable)
     .set({ customerRating: rating, customerReviewText: reviewText ?? null })
     .where(eq(jobsTable.id, jobId)).returning();
-  res.json(await formatJob(updated));
+  res.json(await formatJob(updated, { sanitizeCommercial: true }));
 });
 
 export default router;

@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { BayAllowedJobCategoriesItem } from "./bayAllowedJobCategoriesItem";
+import type { BayAvailabilityConfig } from "./bayAvailabilityConfig";
 import type { BayMinMechanicTier } from "./bayMinMechanicTier";
 import type { BayStatus } from "./bayStatus";
 
@@ -18,6 +19,7 @@ export interface Bay {
   allowedJobCategories: BayAllowedJobCategoriesItem[];
   minMechanicTier: BayMinMechanicTier;
   autoApprove: boolean;
+  availabilityConfig: BayAvailabilityConfig;
   status: BayStatus;
   createdAt: Date;
 }

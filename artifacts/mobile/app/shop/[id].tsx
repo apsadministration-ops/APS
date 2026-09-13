@@ -4,11 +4,11 @@ import {
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import {
-  useGetShop, useCreateBay, useUpdateShop, useUpdateBay,
+  useGetShop, useCreateShopBay, useUpdateShop, useUpdateBay,
   getGetShopQueryKey, getListMyShopsQueryKey, getListShopBaysQueryKey,
   getListAvailableBaysQueryKey, getListMyBookingsQueryKey,
   CreateBayBodyAllowedJobCategoriesItem, CreateBayBodyMinMechanicTier,
-  UpdateBayBodyStatus, UpdateShopBodyStatus, type Bay,
+  UpdateBayBodyStatus, UpdateShopBodyStatus, type Bay, type BayAvailabilityConfig,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams, Stack } from "expo-router";
@@ -19,6 +19,36 @@ import { alertMessage } from "@/utils/confirm";
 
 const CATEGORIES: CreateBayBodyAllowedJobCategoriesItem[] = ["repair", "diagnostic", "maintenance", "detailing"];
 const TIERS: CreateBayBodyMinMechanicTier[] = ["detailer", "technician", "senior", "advanced", "master"];
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+type AvailabilityWindow = {
+  dayOfWeek: number;
+  open: string;
+  close: string;
+  enabled: boolean;
+};
+
+function defaultAvailability(): AvailabilityWindow[] {
+  return WEEKDAYS.map((_, dayOfWeek) => ({
+    dayOfWeek,
+    open: "08:00",
+    close: "18:00",
+    enabled: false,
+  }));
+}
+
+function readAvailability(value: BayAvailabilityConfig): AvailabilityWindow[] {
+  const next = defaultAvailability();
+  for (const row of value.weekly) {
+    next[row.dayOfWeek] = {
+      dayOfWeek: row.dayOfWeek,
+      open: row.open,
+      close: row.close,
+      enabled: true,
+    };
+  }
+  return next;
+}
 
 export default function ShopDetailScreen() {
   const colors = useColors();
@@ -28,7 +58,7 @@ export default function ShopDetailScreen() {
   const queryClient = useQueryClient();
 
   const { data: shop, isLoading } = useGetShop(shopId);
-  const createBayMutation = useCreateBay();
+  const createBayMutation = useCreateShopBay();
   const updateShopMutation = useUpdateShop();
   const updateBayMutation = useUpdateBay();
 
@@ -40,6 +70,7 @@ export default function ShopDetailScreen() {
   const [allowedCats, setAllowedCats] = useState<CreateBayBodyAllowedJobCategoriesItem[]>(["repair", "maintenance"]);
   const [minTier, setMinTier] = useState<CreateBayBodyMinMechanicTier>("technician");
   const [autoApprove, setAutoApprove] = useState(false);
+  const [availability, setAvailability] = useState<AvailabilityWindow[]>(defaultAvailability);
   const [error, setError] = useState("");
   const [locationError, setLocationError] = useState("");
   const [editingBayId, setEditingBayId] = useState<number | null>(null);
@@ -115,6 +146,7 @@ export default function ShopDetailScreen() {
     setAllowedCats(["repair", "maintenance"]);
     setMinTier("technician");
     setAutoApprove(false);
+    setAvailability(defaultAvailability());
   };
 
   const openBayEdit = (bay: Bay) => {
@@ -127,6 +159,7 @@ export default function ShopDetailScreen() {
     setAllowedCats(bay.allowedJobCategories as CreateBayBodyAllowedJobCategoriesItem[]);
     setMinTier(bay.minMechanicTier as CreateBayBodyMinMechanicTier);
     setAutoApprove(bay.autoApprove);
+    setAvailability(readAvailability(bay.availabilityConfig));
     setBayStatus(bay.status);
   };
 
@@ -146,6 +179,10 @@ export default function ShopDetailScreen() {
     if (!Number.isFinite(rateNum) || rateNum < 0) { setError("Hourly rate must be a non-negative number."); return; }
     if (allowedCats.length === 0) { setError("Select at least one allowed job category."); return; }
     if (editingBayId == null) return;
+    const availabilityConfig: BayAvailabilityConfig = {
+      timezone: "UTC",
+      weekly: availability.filter((day) => day.enabled).map(({ dayOfWeek, open, close }) => ({ dayOfWeek, open, close })),
+    };
     updateBayMutation.mutate(
       {
         bayId: editingBayId,
@@ -157,7 +194,8 @@ export default function ShopDetailScreen() {
           minMechanicTier: minTier,
           autoApprove,
           status: bayStatus,
-        },
+            availabilityConfig,
+          },
       },
       {
         onSuccess: () => {
@@ -177,6 +215,10 @@ export default function ShopDetailScreen() {
     if (!Number.isFinite(rateNum) || rateNum < 0) { setError("Hourly rate must be a non-negative number."); return; }
     if (allowedCats.length === 0) { setError("Select at least one allowed job category."); return; }
     const equipList = equipment.split(",").map((s) => s.trim()).filter(Boolean);
+    const availabilityConfig: BayAvailabilityConfig = {
+      timezone: "UTC",
+      weekly: availability.filter((day) => day.enabled).map(({ dayOfWeek, open, close }) => ({ dayOfWeek, open, close })),
+    };
     createBayMutation.mutate(
       {
         shopId,
@@ -187,7 +229,8 @@ export default function ShopDetailScreen() {
           allowedJobCategories: allowedCats,
           minMechanicTier: minTier,
           autoApprove,
-        },
+            availabilityConfig,
+          },
       },
       {
         onSuccess: () => {
@@ -435,7 +478,7 @@ export default function ShopDetailScreen() {
                   )}
                   {b.autoApprove ? (
                     <Text style={[styles.bayLine, { color: colors.primary }]}>
-                      Legacy auto-approve metadata · no effect on reserved bookings
+                      Auto-confirm booking requests
                     </Text>
                   ) : null}
                 </View>
@@ -546,12 +589,67 @@ export default function ShopDetailScreen() {
               >
                 <Feather name={autoApprove ? "check-square" : "square"} size={20} color={autoApprove ? colors.primary : colors.mutedForeground} />
                 <Text style={[styles.toggleText, { color: colors.foreground }]}>
-                  Auto-approve metadata (legacy)
+                   Auto-confirm booking requests
                 </Text>
               </Pressable>
               <Text style={[styles.formHint, { color: colors.mutedForeground }]}>
-                This existing metadata does not change reserved booking behavior or create approval states.
+                 Requests for this active workspace are confirmed automatically when the scheduled slot is available.
               </Text>
+
+               <Text style={[styles.label, { color: colors.mutedForeground }]}>WEEKLY AVAILABILITY (UTC)</Text>
+               <Text style={[styles.formHint, { color: colors.mutedForeground }]}>
+                 Leave every day off for the existing always-available behavior. Enabled windows must contain the full scheduled lift interval.
+               </Text>
+               <View style={styles.availabilityList}>
+                 {availability.map((day) => (
+                   <View key={day.dayOfWeek} style={[styles.availabilityRow, { borderColor: colors.border }]}>
+                     <Pressable
+                       style={styles.dayToggle}
+                       onPress={() => setAvailability((prev) => prev.map((item) =>
+                         item.dayOfWeek === day.dayOfWeek ? { ...item, enabled: !item.enabled } : item,
+                       ))}
+                       accessibilityRole="button"
+                       accessibilityLabel={`${WEEKDAYS[day.dayOfWeek]} availability`}
+                     >
+                       <Feather
+                         name={day.enabled ? "check-square" : "square"}
+                         size={18}
+                         color={day.enabled ? colors.primary : colors.mutedForeground}
+                       />
+                       <Text style={[styles.dayLabel, { color: colors.foreground }]}>{WEEKDAYS[day.dayOfWeek]}</Text>
+                     </Pressable>
+                     {day.enabled ? (
+                       <View style={styles.availabilityTimes}>
+                         <TextInput
+                           style={[styles.timeInput, { backgroundColor: colors.background, color: colors.foreground, borderColor: colors.border }]}
+                           value={day.open}
+                           onChangeText={(open) => setAvailability((prev) => prev.map((item) =>
+                             item.dayOfWeek === day.dayOfWeek ? { ...item, open } : item,
+                           ))}
+                           placeholder="08:00"
+                           placeholderTextColor={colors.mutedForeground}
+                           keyboardType="numbers-and-punctuation"
+                           accessibilityLabel={`${WEEKDAYS[day.dayOfWeek]} opens`}
+                         />
+                         <Text style={{ color: colors.mutedForeground }}>–</Text>
+                         <TextInput
+                           style={[styles.timeInput, { backgroundColor: colors.background, color: colors.foreground, borderColor: colors.border }]}
+                           value={day.close}
+                           onChangeText={(close) => setAvailability((prev) => prev.map((item) =>
+                             item.dayOfWeek === day.dayOfWeek ? { ...item, close } : item,
+                           ))}
+                           placeholder="18:00"
+                           placeholderTextColor={colors.mutedForeground}
+                           keyboardType="numbers-and-punctuation"
+                           accessibilityLabel={`${WEEKDAYS[day.dayOfWeek]} closes`}
+                         />
+                       </View>
+                     ) : (
+                       <Text style={[styles.closedLabel, { color: colors.mutedForeground }]}>Closed</Text>
+                     )}
+                   </View>
+                 ))}
+               </View>
 
               {editingBayId != null ? (
                 <>
@@ -646,6 +744,13 @@ const styles = StyleSheet.create({
   chip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, borderWidth: 1.5 },
   toggle: { flexDirection: "row", alignItems: "center", gap: 10, padding: 12, borderRadius: 10, borderWidth: 1, marginTop: 8 },
   toggleText: { fontSize: 14, fontWeight: "600" },
+  availabilityList: { gap: 6, marginTop: 4 },
+  availabilityRow: { flexDirection: "row", alignItems: "center", borderBottomWidth: 1, paddingVertical: 7, gap: 8 },
+  dayToggle: { width: 72, flexDirection: "row", alignItems: "center", gap: 6 },
+  dayLabel: { fontSize: 13, fontWeight: "600" },
+  availabilityTimes: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 5 },
+  timeInput: { width: 74, height: 36, borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, fontSize: 13, textAlign: "center" },
+  closedLabel: { flex: 1, textAlign: "right", fontSize: 12 },
   error: { fontSize: 14, marginTop: 8 },
   submitBtn: { height: 52, borderRadius: 14, alignItems: "center", justifyContent: "center", marginTop: 12 },
   submitText: { color: "white", fontWeight: "700", fontSize: 16 },

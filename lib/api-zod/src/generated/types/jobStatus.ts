@@ -11,6 +11,7 @@ export type JobStatus = (typeof JobStatus)[keyof typeof JobStatus];
 export const JobStatus = {
   REQUESTED: "REQUESTED",
   OFFERED: "OFFERED",
+  PENDING_APPROVAL: "PENDING_APPROVAL",
   ACCEPTED: "ACCEPTED",
   EN_ROUTE: "EN_ROUTE",
   IN_PROGRESS: "IN_PROGRESS",
