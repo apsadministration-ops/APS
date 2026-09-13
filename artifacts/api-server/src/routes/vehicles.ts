@@ -6,6 +6,13 @@ import { lookupComponentSpecs } from "../lib/componentSpecs";
 import { lookupParts, type PartCategory } from "../lib/partsCatalog";
 import { generateRecommendations } from "../lib/recommendationsEngine";
 
+type VehicleAccessJobStatus =
+  | "ACCEPTED"
+  | "EN_ROUTE"
+  | "IN_PROGRESS"
+  | "COMPLETED"
+  | "PAID";
+
 /**
  * Returns true if `userId` may view the given vehicle's data:
  *  - admins always
@@ -23,15 +30,24 @@ async function canAccessVehicle(userId: number, role: string, vehicleId: number)
     // Only an ACTIVE working relationship grants access. Cancelled/refused
     // jobs do NOT — otherwise a mechanic who briefly held a job (or was
     // requested then cancelled) would retain VIN/history access forever.
-    const [job] = await db.select({ id: jobsTable.id }).from(jobsTable)
-      .where(and(
-        eq(jobsTable.vehicleId, vehicleId),
-        eq(jobsTable.mechanicId, userId),
-        inArray(jobsTable.status, ["ACCEPTED", "EN_ROUTE", "IN_PROGRESS", "COMPLETED", "PAID"]),
-      ));
+    const [job] = await findMechanicVehicleJob(userId, vehicleId,
+      ["ACCEPTED", "EN_ROUTE", "IN_PROGRESS", "COMPLETED", "PAID"]);
     if (job) return true;
   }
   return false;
+}
+
+async function findMechanicVehicleJob(
+  userId: number,
+  vehicleId: number,
+  statuses: readonly VehicleAccessJobStatus[],
+) {
+  return db.select({ id: jobsTable.id }).from(jobsTable)
+    .where(and(
+      eq(jobsTable.vehicleId, vehicleId),
+      eq(jobsTable.mechanicId, userId),
+      inArray(jobsTable.status, statuses),
+    ));
 }
 
 const router: IRouter = Router();
@@ -60,13 +76,15 @@ class VehicleRemovalError extends Error {
   }
 }
 
-function formatVehicle(
+export function formatVehicle(
   vehicle: typeof vehiclesTable.$inferSelect,
   ownership: typeof ownershipTable.$inferSelect | null,
   owner: typeof usersTable.$inferSelect | null,
   serviceCount: number,
   currentUserId: number,
+  options: { includeOwnerContact?: boolean } = {},
 ) {
+  const includeOwnerContact = options.includeOwnerContact === true;
   return {
     id: vehicle.id,
     vin: vehicle.vin,
@@ -85,8 +103,9 @@ function formatVehicle(
       ? {
           id: owner.id,
           name: owner.name,
-          email: owner.email,
-          phone: owner.phone ?? null,
+          ...(includeOwnerContact
+            ? { email: owner.email, phone: owner.phone ?? null }
+            : {}),
           role: owner.role,
           status: owner.status,
           avatarUrl: owner.avatarUrl ?? null,
@@ -110,7 +129,9 @@ router.get("/vehicles", authenticate, async (req: AuthRequest, res): Promise<voi
       if (!vehicle) return null;
       const [owner] = await db.select().from(usersTable).where(eq(usersTable.id, o.userId));
       const [sc] = await db.select({ c: count() }).from(workLogsTable).where(eq(workLogsTable.vehicleId, vehicle.id));
-      return formatVehicle(vehicle, o, owner ?? null, Number(sc?.c ?? 0), req.userId!);
+      return formatVehicle(vehicle, o, owner ?? null, Number(sc?.c ?? 0), req.userId!, {
+        includeOwnerContact: true,
+      });
     }),
   );
 
@@ -214,7 +235,9 @@ router.post("/vehicles", authenticate, async (req: AuthRequest, res): Promise<vo
 
       const [owner] = await db.select().from(usersTable).where(eq(usersTable.id, req.userId!));
       const [sc] = await db.select({ c: count() }).from(workLogsTable).where(eq(workLogsTable.vehicleId, claimed.vehicle.id));
-      res.status(201).json(formatVehicle(claimed.vehicle, claimed.ownership, owner ?? null, Number(sc?.c ?? 0), req.userId!));
+      res.status(201).json(formatVehicle(claimed.vehicle, claimed.ownership, owner ?? null, Number(sc?.c ?? 0), req.userId!, {
+        includeOwnerContact: true,
+      }));
     } catch (error) {
       if (error instanceof LegacyVehicleConflict) {
         res.status(409).json({ error: error.response });
@@ -298,7 +321,9 @@ router.post("/vehicles", authenticate, async (req: AuthRequest, res): Promise<vo
   }
 
   const [owner] = await db.select().from(usersTable).where(eq(usersTable.id, req.userId!));
-  res.status(201).json(formatVehicle(vehicle, ownership, owner ?? null, 0, req.userId!));
+  res.status(201).json(formatVehicle(vehicle, ownership, owner ?? null, 0, req.userId!, {
+    includeOwnerContact: true,
+  }));
 });
 
 router.delete("/vehicles/:vehicleId", authenticate, async (req: AuthRequest, res): Promise<void> => {
@@ -385,7 +410,14 @@ router.get("/vehicles/vin/:vin", authenticate, async (req: AuthRequest, res): Pr
     ? (await db.select().from(usersTable).where(eq(usersTable.id, activeOwnership.userId)))[0] ?? null
     : null;
   const [sc] = await db.select({ c: count() }).from(workLogsTable).where(eq(workLogsTable.vehicleId, vehicle.id));
-  res.json(formatVehicle(vehicle, activeOwnership ?? null, owner, Number(sc?.c ?? 0), req.userId!));
+  const isCurrentOwner = activeOwnership?.userId === req.userId;
+  const isAdmin = req.userRole === "admin";
+  const [activeJob] = req.userRole === "mechanic" && req.user?.status === "active"
+    ? await findMechanicVehicleJob(req.userId!, vehicle.id, ["ACCEPTED", "EN_ROUTE", "IN_PROGRESS"])
+    : [];
+  res.json(formatVehicle(vehicle, activeOwnership ?? null, owner, Number(sc?.c ?? 0), req.userId!, {
+    includeOwnerContact: isCurrentOwner || isAdmin || !!activeJob,
+  }));
 });
 
 router.get("/vehicles/:vehicleId", authenticate, async (req: AuthRequest, res): Promise<void> => {
@@ -405,7 +437,14 @@ router.get("/vehicles/:vehicleId", authenticate, async (req: AuthRequest, res): 
     ? (await db.select().from(usersTable).where(eq(usersTable.id, activeOwnership.userId)))[0] ?? null
     : null;
   const [sc] = await db.select({ c: count() }).from(workLogsTable).where(eq(workLogsTable.vehicleId, vehicleId));
-  res.json(formatVehicle(vehicle, activeOwnership ?? null, owner, Number(sc?.c ?? 0), req.userId!));
+  const isCurrentOwner = activeOwnership?.userId === req.userId;
+  const isAdmin = req.userRole === "admin";
+  const [activeJob] = req.userRole === "mechanic" && req.user?.status === "active"
+    ? await findMechanicVehicleJob(req.userId!, vehicleId, ["ACCEPTED", "EN_ROUTE", "IN_PROGRESS"])
+    : [];
+  res.json(formatVehicle(vehicle, activeOwnership ?? null, owner, Number(sc?.c ?? 0), req.userId!, {
+    includeOwnerContact: isCurrentOwner || isAdmin || !!activeJob,
+  }));
 });
 
 router.get("/vehicles/:vehicleId/history", authenticate, async (req: AuthRequest, res): Promise<void> => {

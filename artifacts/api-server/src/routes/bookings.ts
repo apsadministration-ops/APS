@@ -5,6 +5,7 @@ import { CreateBayBookingBody } from "@workspace/api-zod";
 import { authenticate, requireActiveMechanic, type AuthRequest } from "../middlewares/authenticate";
 import { parsePositiveSafeInteger } from "../lib/validation";
 import { formatBayAvailabilityConfig, isBayIntervalAvailable } from "../lib/bayAvailability";
+import { canCancelBooking } from "../lib/authorization";
 
 const router: IRouter = Router();
 
@@ -486,23 +487,35 @@ router.patch("/bookings/:bookingId/cancel", authenticate, async (req: AuthReques
   const [b] = await db.select().from(bayBookingsTable).where(eq(bayBookingsTable.id, bookingId));
   if (!b) { res.status(404).json({ error: "Booking not found" }); return; }
 
-  // Mechanic on the booking, or the shop owner of the bay's shop, may cancel.
-  let allowed = req.userRole === "admin";
-  if (!allowed && req.userRole === "mechanic" && b.mechanicId === req.userId) allowed = true;
-  if (!allowed && req.userRole === "shop_owner") {
+  // Mechanic on the booking, or the active shop owner of the bay's shop, may
+  // cancel. Resolve ownership through the bay relationship rather than the
+  // denormalized booking.shopId column.
+  let shopOwnerId: number | null = null;
+  if (req.userRole === "shop_owner") {
     const [shop] = await db.select({ ownerId: shopsTable.ownerId })
       .from(baysTable)
       .innerJoin(shopsTable, eq(baysTable.shopId, shopsTable.id))
       .where(eq(baysTable.id, b.bayId));
-    if (shop?.ownerId === req.userId) allowed = true;
+    shopOwnerId = shop?.ownerId ?? null;
   }
-  if (!allowed) { res.status(403).json({ error: "Forbidden" }); return; }
+  if (!canCancelBooking({
+    role: req.userRole,
+    status: req.user?.status,
+    userId: req.userId,
+    mechanicId: b.mechanicId,
+    shopOwnerId,
+  })) {
+    res.status(403).json({ error: "Forbidden" }); return;
+  }
   if (["completed", "cancelled"].includes(b.status)) {
     res.status(400).json({ error: `Cannot cancel a booking in status ${b.status}` }); return;
   }
-  const { reason } = (req.body as { reason?: string } | undefined) ?? {};
+  const reason = (req.body as { reason?: unknown } | undefined)?.reason;
+  if (reason !== undefined && (typeof reason !== "string" || reason.length > 500)) {
+    res.status(400).json({ error: "reason must be a string of at most 500 characters" }); return;
+  }
   const [updated] = await db.update(bayBookingsTable)
-    .set({ status: "cancelled", cancellationReason: reason ?? null })
+    .set({ status: "cancelled", cancellationReason: typeof reason === "string" ? reason : null })
     .where(eq(bayBookingsTable.id, bookingId)).returning();
   res.json(await formatBooking(updated));
 });

@@ -23,7 +23,8 @@ export const APS_CURATED_KEY = "aps-curated";
 class ApsCuratedAdapter implements SupplierAdapter {
   readonly key = APS_CURATED_KEY;
   readonly label = "APS Curated";
-  readonly supportsLiveOrders = true;
+  // Curated offers are local records; no external supplier order is placed.
+  readonly supportsLiveOrders = false;
 
   async searchOffers(catalogIds: number[]): Promise<SupplierOffer[]> {
     if (catalogIds.length === 0) return [];

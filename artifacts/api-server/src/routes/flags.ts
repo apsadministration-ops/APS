@@ -1,7 +1,9 @@
 import { Router, type IRouter } from "express";
 import { eq, desc } from "drizzle-orm";
-import { db, flagsTable, usersTable } from "@workspace/db";
+import { z } from "zod";
+import { db, flagsTable, usersTable, jobsTable } from "@workspace/db";
 import { authenticate, type AuthRequest } from "../middlewares/authenticate";
+import { canCreateJobFlag } from "../lib/authorization";
 
 const router: IRouter = Router();
 
@@ -36,13 +38,20 @@ router.get("/flags", authenticate, async (req: AuthRequest, res): Promise<void> 
 });
 
 router.post("/flags", authenticate, async (req: AuthRequest, res): Promise<void> => {
-  const { targetId, type, reason, jobId } = req.body as {
-    targetId: number; type: string; reason?: string; jobId?: number;
-  };
-  if (!targetId || !type) { res.status(400).json({ error: "targetId and type are required" }); return; }
-  const allowedTypes = ["scam", "rude", "no_show", "unsafe", "other"] as const;
-  if (!allowedTypes.includes(type as typeof allowedTypes[number])) {
-    res.status(400).json({ error: "Invalid type" }); return;
+  const parsed = z.object({
+    targetId: z.coerce.number().int().positive(),
+    type: z.enum(["scam", "rude", "no_show", "unsafe", "other"]),
+    reason: z.string().trim().max(2000).optional(),
+    jobId: z.coerce.number().int().positive().optional(),
+  }).safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid flag payload", issues: parsed.error.issues });
+    return;
+  }
+  const { targetId, type, reason, jobId } = parsed.data;
+  if (req.userRole === "mechanic" && req.user?.status !== "active") {
+    res.status(403).json({ error: "Your mechanic account is not active." });
+    return;
   }
   const [target] = await db.select().from(usersTable).where(eq(usersTable.id, targetId));
   if (!target || target.role === "admin") { res.status(404).json({ error: "Target not found" }); return; }
@@ -53,12 +62,28 @@ router.post("/flags", authenticate, async (req: AuthRequest, res): Promise<void>
   if (req.userRole === "mechanic" && target.role !== "customer") {
     res.status(403).json({ error: "Mechanics can only report customers" }); return;
   }
+  if (jobId !== undefined) {
+    const [job] = await db.select({
+      customerId: jobsTable.customerId,
+      mechanicId: jobsTable.mechanicId,
+    }).from(jobsTable).where(eq(jobsTable.id, jobId));
+    if (!job) { res.status(404).json({ error: "Job not found" }); return; }
+    if (!canCreateJobFlag({
+      role: req.userRole,
+      reporterId: req.userId!,
+      targetId,
+      job,
+    })) {
+      res.status(403).json({ error: "The reporter and target must be participants in the referenced job" });
+      return;
+    }
+  }
   const [row] = await db.insert(flagsTable).values({
     reporterId: req.userId!,
     targetId,
     targetRole: target.role as "customer" | "mechanic",
     jobId: jobId ?? null,
-    type: type as typeof allowedTypes[number],
+    type,
     reason: reason ?? null,
   }).returning();
   res.status(201).json(await decorate(row));

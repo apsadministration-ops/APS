@@ -1,0 +1,111 @@
+[
+  {
+    "scanner": "dependencies",
+    "status": "fulfilled",
+    "counts": {
+      "critical": 0,
+      "high": 4,
+      "info": 0,
+      "low": 1,
+      "moderate": 1
+    },
+    "findings": [
+      {
+        "id": "GHSA-vcc3-ghjq-m6fr@decode-uri-component-0.2.2",
+        "package": {
+          "ecosystem": "npm",
+          "name": "decode-uri-component",
+          "purl": "pkg:npm/decode-uri-component",
+          "version": "0.2.2"
+        },
+        "severity": "moderate",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "0.5.0"
+        },
+        "title": "decode-uri-component: Denial of service via exponential decoding of malformed percent-encoded input"
+      },
+      {
+        "id": "GHSA-g7r4-m6w7-qqqr@esbuild-0.27.3",
+        "package": {
+          "ecosystem": "npm",
+          "name": "esbuild",
+          "purl": "pkg:npm/esbuild",
+          "version": "0.27.3"
+        },
+        "severity": "low",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "0.28.1"
+        },
+        "title": "esbuild allows arbitrary file read when running the development server on Windows"
+      },
+      {
+        "id": "GHSA-5p2g-fcmc-qvqq@image-size-1.2.1",
+        "package": {
+          "ecosystem": "npm",
+          "name": "image-size",
+          "purl": "pkg:npm/image-size",
+          "version": "1.2.1"
+        },
+        "severity": "high",
+        "title": "image-size: JXL and HEIF parsers allow denial of service through infinite loops"
+      },
+      {
+        "id": "GHSA-w3rx-r6r6-pgpr@image-size-1.2.1",
+        "package": {
+          "ecosystem": "npm",
+          "name": "image-size",
+          "purl": "pkg:npm/image-size",
+          "version": "1.2.1"
+        },
+        "severity": "high",
+        "title": "image-size: ICNS parser allows denial of service through an infinite loop"
+      },
+      {
+        "id": "GHSA-w5hq-g745-h8pq@uuid-3.4.0",
+        "package": {
+          "ecosystem": "npm",
+          "name": "uuid",
+          "purl": "pkg:npm/uuid",
+          "version": "3.4.0"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": true,
+          "version": "11.1.1"
+        },
+        "title": "uuid: Missing buffer bounds check in v3/v5/v6 when buf is provided"
+      },
+      {
+        "id": "GHSA-w5hq-g745-h8pq@uuid-7.0.3",
+        "package": {
+          "ecosystem": "npm",
+          "name": "uuid",
+          "purl": "pkg:npm/uuid",
+          "version": "7.0.3"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": true,
+          "version": "11.1.1"
+        },
+        "title": "uuid: Missing buffer bounds check in v3/v5/v6 when buf is provided"
+      }
+    ]
+  },
+  {
+    "scanner": "sast",
+    "status": "rejected",
+    "error": "[object Object]"
+  },
+  {
+    "scanner": "privacy",
+    "status": "fulfilled",
+    "findings": []
+  }
+]

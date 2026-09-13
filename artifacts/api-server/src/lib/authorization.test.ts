@@ -2,6 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   canManagePayoutDestination,
+  canCancelBooking,
+  canCancelJob,
+  canCreateJobFlag,
   canResolveDispute,
   canRespondToWorkConfirmation,
   canRetryCapture,
@@ -131,6 +134,86 @@ test("confirmation, refund, and dispute state gates fail closed", () => {
   assert.equal(canManagePayoutDestination({
     role: "admin", status: "pending", userId: 99,
     customerId: 8, ownsPostedShop: false,
+  }), true);
+});
+
+test("job-linked flags require the reporter and target to match job participants", () => {
+  const job = { customerId: 7, mechanicId: 11 };
+  assert.equal(canCreateJobFlag({
+    role: "customer", reporterId: 7, targetId: 11, job,
+  }), true);
+  assert.equal(canCreateJobFlag({
+    role: "customer", reporterId: 7, targetId: 12, job,
+  }), false);
+  assert.equal(canCreateJobFlag({
+    role: "customer", reporterId: 8, targetId: 11, job,
+  }), false);
+  assert.equal(canCreateJobFlag({
+    role: "mechanic", reporterId: 11, targetId: 7, job,
+  }), true);
+  assert.equal(canCreateJobFlag({
+    role: "mechanic", reporterId: 12, targetId: 7, job,
+  }), false);
+  assert.equal(canCreateJobFlag({
+    role: "admin", reporterId: 99, targetId: 7, job,
+  }), true);
+  assert.equal(canCreateJobFlag({
+    role: "admin", reporterId: 99, targetId: 12, job,
+  }), false);
+  assert.equal(canCreateJobFlag({
+    role: "customer", reporterId: 7, targetId: 11, job: null,
+  }), false);
+});
+
+test("booking cancellation requires an active authorized actor", () => {
+  const base = { mechanicId: 11, shopOwnerId: 22 };
+  assert.equal(canCancelBooking({
+    ...base, role: "mechanic", status: "active", userId: 11,
+  }), true);
+  assert.equal(canCancelBooking({
+    ...base, role: "mechanic", status: "pending", userId: 11,
+  }), false);
+  assert.equal(canCancelBooking({
+    ...base, role: "mechanic", status: "active", userId: 12,
+  }), false);
+  assert.equal(canCancelBooking({
+    ...base, role: "shop_owner", status: "active", userId: 22,
+  }), true);
+  assert.equal(canCancelBooking({
+    ...base, role: "shop_owner", status: "suspended", userId: 22,
+  }), false);
+  assert.equal(canCancelBooking({
+    ...base, role: "shop_owner", status: "active", userId: 23,
+  }), false);
+  assert.equal(canCancelBooking({
+    ...base, role: "admin", status: "suspended", userId: 99,
+  }), true);
+});
+
+test("job cancellation denies pending mechanics before dispatch or payment mutation", () => {
+  const base = {
+    customerId: 7,
+    mechanicId: 11,
+    jobStatus: "ACCEPTED",
+  };
+  assert.equal(canCancelJob({
+    ...base, role: "mechanic", status: "active", userId: 11,
+  }), true);
+  assert.equal(canCancelJob({
+    ...base, role: "mechanic", status: "pending", userId: 11,
+  }), false);
+  assert.equal(canCancelJob({
+    ...base, role: "mechanic", status: "active", userId: 12,
+  }), false);
+  assert.equal(canCancelJob({
+    ...base, role: "customer", status: "active", userId: 7,
+    jobStatus: "REQUESTED",
+  }), true);
+  assert.equal(canCancelJob({
+    ...base, role: "customer", status: "active", userId: 7,
+  }), false);
+  assert.equal(canCancelJob({
+    ...base, role: "admin", status: "pending", userId: 99,
   }), true);
 });
 

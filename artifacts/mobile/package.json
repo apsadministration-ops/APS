@@ -11,10 +11,11 @@
     "test:partner-vehicles": "node --experimental-strip-types scripts/partner-vehicle-operations.test.mjs",
     "test:partner-service-requests": "node --experimental-strip-types scripts/partner-service-requests.test.mjs",
     "test:ghost-garage-ui": "node scripts/ghost-garage-ui.test.mjs",
+    "test:part7-security": "node scripts/part7-security-regression.test.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
-    "@babel/core": "^7.25.2",
+    "@babel/core": "^7.29.6",
     "@expo-google-fonts/inter": "^0.4.0",
     "@expo/cli": "54.0.23",
     "@expo/ngrok": "^4.1.0",

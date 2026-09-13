@@ -1,0 +1,1685 @@
+[
+  {
+    "scanner": "dependencies",
+    "status": "fulfilled",
+    "counts": {
+      "critical": 11,
+      "high": 59,
+      "info": 0,
+      "low": 6,
+      "moderate": 26
+    },
+    "findings": [
+      {
+        "id": "GHSA-4x5r-pxfx-6jf8@@babel/core-7.29.0",
+        "package": {
+          "ecosystem": "npm",
+          "name": "@babel/core",
+          "purl": "pkg:npm/%40babel/core",
+          "version": "7.29.0"
+        },
+        "severity": "low",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "7.29.6"
+        },
+        "title": "@babel/core: Arbitrary File Read via sourceMappingURL Comment"
+      },
+      {
+        "id": "GHSA-27p8-2357-5qqv@@xmldom/xmldom-0.8.13",
+        "package": {
+          "ecosystem": "npm",
+          "name": "@xmldom/xmldom",
+          "purl": "pkg:npm/%40xmldom/xmldom",
+          "version": "0.8.13"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "0.8.15"
+        },
+        "title": "xmldom: DocType `name` Injection Bypasses requireWellFormed"
+      },
+      {
+        "id": "GHSA-4w3w-2rp5-g8jm@@xmldom/xmldom-0.8.13",
+        "package": {
+          "ecosystem": "npm",
+          "name": "@xmldom/xmldom",
+          "purl": "pkg:npm/%40xmldom/xmldom",
+          "version": "0.8.13"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "0.8.14"
+        },
+        "title": "xmldom: Attribute name injection via setAttribute() bypasses requireWellFormed"
+      },
+      {
+        "id": "GHSA-6gmq-8vp8-gcm6@@xmldom/xmldom-0.8.13",
+        "package": {
+          "ecosystem": "npm",
+          "name": "@xmldom/xmldom",
+          "purl": "pkg:npm/%40xmldom/xmldom",
+          "version": "0.8.13"
+        },
+        "severity": "moderate",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "0.8.15"
+        },
+        "title": "xmldom: XML fragment injection via invalid EntityReference.nodeName during requireWellFormed serialization"
+      },
+      {
+        "id": "GHSA-6h8r-xr42-gp59@@xmldom/xmldom-0.8.13",
+        "package": {
+          "ecosystem": "npm",
+          "name": "@xmldom/xmldom",
+          "purl": "pkg:npm/%40xmldom/xmldom",
+          "version": "0.8.13"
+        },
+        "severity": "moderate",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "0.8.15"
+        },
+        "title": "xmldom: Parser silently accepts a not-well-formed end tag whose name is followed by a line break and trailing content"
+      },
+      {
+        "id": "GHSA-8344-3jmq-59r6@@xmldom/xmldom-0.8.13",
+        "package": {
+          "ecosystem": "npm",
+          "name": "@xmldom/xmldom",
+          "purl": "pkg:npm/%40xmldom/xmldom",
+          "version": "0.8.13"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "0.8.15"
+        },
+        "title": "xmldom: Quadratic-time attribute deduplication"
+      },
+      {
+        "id": "GHSA-93r5-fhx6-vmg9@@xmldom/xmldom-0.8.13",
+        "package": {
+          "ecosystem": "npm",
+          "name": "@xmldom/xmldom",
+          "purl": "pkg:npm/%40xmldom/xmldom",
+          "version": "0.8.13"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "0.8.15"
+        },
+        "title": "xmldom: Quadratic-time parsing via the malformed-input recovery path — `parseElementStartPart` re-scan and `normalize()` adjacent-text merge"
+      },
+      {
+        "id": "GHSA-965w-775f-mr7g@@xmldom/xmldom-0.8.13",
+        "package": {
+          "ecosystem": "npm",
+          "name": "@xmldom/xmldom",
+          "purl": "pkg:npm/%40xmldom/xmldom",
+          "version": "0.8.13"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "0.8.15"
+        },
+        "title": "xmldom: Quadratic-memory consumption"
+      },
+      {
+        "id": "GHSA-c7q8-3ch8-vqpv@@xmldom/xmldom-0.8.13",
+        "package": {
+          "ecosystem": "npm",
+          "name": "@xmldom/xmldom",
+          "purl": "pkg:npm/%40xmldom/xmldom",
+          "version": "0.8.13"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "0.8.15"
+        },
+        "title": "xmldom: Processing Instruction Target Injection Bypasses requireWellFormed"
+      },
+      {
+        "id": "GHSA-w2rr-34g9-rvrj@@xmldom/xmldom-0.8.13",
+        "package": {
+          "ecosystem": "npm",
+          "name": "@xmldom/xmldom",
+          "purl": "pkg:npm/%40xmldom/xmldom",
+          "version": "0.8.13"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "0.8.14"
+        },
+        "title": "xmldom: Element name injection via createElement() bypasses requireWellFormed"
+      },
+      {
+        "id": "GHSA-x4fp-j954-r2f4@@xmldom/xmldom-0.8.13",
+        "package": {
+          "ecosystem": "npm",
+          "name": "@xmldom/xmldom",
+          "purl": "pkg:npm/%40xmldom/xmldom",
+          "version": "0.8.13"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "0.8.15"
+        },
+        "title": "xmldom: End-tag Whitespace-Trim Regex ReDoS — quadratic backtracking in the 0.8.x end-tag parser"
+      },
+      {
+        "id": "GHSA-27p8-2357-5qqv@@xmldom/xmldom-0.9.10",
+        "package": {
+          "ecosystem": "npm",
+          "name": "@xmldom/xmldom",
+          "purl": "pkg:npm/%40xmldom/xmldom",
+          "version": "0.9.10"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "0.9.12"
+        },
+        "title": "xmldom: DocType `name` Injection Bypasses requireWellFormed"
+      },
+      {
+        "id": "GHSA-3px3-54cx-rmw9@@xmldom/xmldom-0.9.10",
+        "package": {
+          "ecosystem": "npm",
+          "name": "@xmldom/xmldom",
+          "purl": "pkg:npm/%40xmldom/xmldom",
+          "version": "0.9.10"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "0.9.12"
+        },
+        "title": "xmldom: Creation-time XML Name/QName validation is bypassable via an embedded line terminator, allowing injection on the default serialization path"
+      },
+      {
+        "id": "GHSA-4w3w-2rp5-g8jm@@xmldom/xmldom-0.9.10",
+        "package": {
+          "ecosystem": "npm",
+          "name": "@xmldom/xmldom",
+          "purl": "pkg:npm/%40xmldom/xmldom",
+          "version": "0.9.10"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "0.9.11"
+        },
+        "title": "xmldom: Attribute name injection via setAttribute() bypasses requireWellFormed"
+      },
+      {
+        "id": "GHSA-6gmq-8vp8-gcm6@@xmldom/xmldom-0.9.10",
+        "package": {
+          "ecosystem": "npm",
+          "name": "@xmldom/xmldom",
+          "purl": "pkg:npm/%40xmldom/xmldom",
+          "version": "0.9.10"
+        },
+        "severity": "moderate",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "0.9.12"
+        },
+        "title": "xmldom: XML fragment injection via invalid EntityReference.nodeName during requireWellFormed serialization"
+      },
+      {
+        "id": "GHSA-6h8r-xr42-gp59@@xmldom/xmldom-0.9.10",
+        "package": {
+          "ecosystem": "npm",
+          "name": "@xmldom/xmldom",
+          "purl": "pkg:npm/%40xmldom/xmldom",
+          "version": "0.9.10"
+        },
+        "severity": "moderate",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "0.9.12"
+        },
+        "title": "xmldom: Parser silently accepts a not-well-formed end tag whose name is followed by a line break and trailing content"
+      },
+      {
+        "id": "GHSA-6mj3-qw4j-hgrw@@xmldom/xmldom-0.9.10",
+        "package": {
+          "ecosystem": "npm",
+          "name": "@xmldom/xmldom",
+          "purl": "pkg:npm/%40xmldom/xmldom",
+          "version": "0.9.10"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "0.9.12"
+        },
+        "title": "xmldom: HTML raw-text closing-tag case mismatch causes output amplification"
+      },
+      {
+        "id": "GHSA-8344-3jmq-59r6@@xmldom/xmldom-0.9.10",
+        "package": {
+          "ecosystem": "npm",
+          "name": "@xmldom/xmldom",
+          "purl": "pkg:npm/%40xmldom/xmldom",
+          "version": "0.9.10"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "0.9.12"
+        },
+        "title": "xmldom: Quadratic-time attribute deduplication"
+      },
+      {
+        "id": "GHSA-93r5-fhx6-vmg9@@xmldom/xmldom-0.9.10",
+        "package": {
+          "ecosystem": "npm",
+          "name": "@xmldom/xmldom",
+          "purl": "pkg:npm/%40xmldom/xmldom",
+          "version": "0.9.10"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "0.9.12"
+        },
+        "title": "xmldom: Quadratic-time parsing via the malformed-input recovery path — `parseElementStartPart` re-scan and `normalize()` adjacent-text merge"
+      },
+      {
+        "id": "GHSA-965w-775f-mr7g@@xmldom/xmldom-0.9.10",
+        "package": {
+          "ecosystem": "npm",
+          "name": "@xmldom/xmldom",
+          "purl": "pkg:npm/%40xmldom/xmldom",
+          "version": "0.9.10"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "0.9.12"
+        },
+        "title": "xmldom: Quadratic-memory consumption"
+      },
+      {
+        "id": "GHSA-c7q8-3ch8-vqpv@@xmldom/xmldom-0.9.10",
+        "package": {
+          "ecosystem": "npm",
+          "name": "@xmldom/xmldom",
+          "purl": "pkg:npm/%40xmldom/xmldom",
+          "version": "0.9.10"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "0.9.12"
+        },
+        "title": "xmldom: Processing Instruction Target Injection Bypasses requireWellFormed"
+      },
+      {
+        "id": "GHSA-g53g-w8rj-fmg7@@xmldom/xmldom-0.9.10",
+        "package": {
+          "ecosystem": "npm",
+          "name": "@xmldom/xmldom",
+          "purl": "pkg:npm/%40xmldom/xmldom",
+          "version": "0.9.10"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "0.9.11"
+        },
+        "title": "xmldom PI grammar regex ReDoS: quadratic backtracking on unterminated processing instructions"
+      },
+      {
+        "id": "GHSA-vr34-hp96-76pp@@xmldom/xmldom-0.9.10",
+        "package": {
+          "ecosystem": "npm",
+          "name": "@xmldom/xmldom",
+          "purl": "pkg:npm/%40xmldom/xmldom",
+          "version": "0.9.10"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "0.9.12"
+        },
+        "title": "xmldom: requireWellFormed DocType publicId/systemId validation is bypassable via an embedded line terminator"
+      },
+      {
+        "id": "GHSA-w2rr-34g9-rvrj@@xmldom/xmldom-0.9.10",
+        "package": {
+          "ecosystem": "npm",
+          "name": "@xmldom/xmldom",
+          "purl": "pkg:npm/%40xmldom/xmldom",
+          "version": "0.9.10"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "0.9.11"
+        },
+        "title": "xmldom: Element name injection via createElement() bypasses requireWellFormed"
+      },
+      {
+        "id": "GHSA-w5vr-8v7q-w6rv@baseline-browser-mapping-2.10.0",
+        "package": {
+          "ecosystem": "npm",
+          "name": "baseline-browser-mapping",
+          "purl": "pkg:npm/baseline-browser-mapping",
+          "version": "2.10.0"
+        },
+        "severity": "moderate",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "2.11.0"
+        },
+        "title": "baseline-browser-mapping process termination on invalid input causes denial of service"
+      },
+      {
+        "id": "GHSA-v422-hmwv-36x6@body-parser-2.2.2",
+        "package": {
+          "ecosystem": "npm",
+          "name": "body-parser",
+          "purl": "pkg:npm/body-parser",
+          "version": "2.2.2"
+        },
+        "severity": "low",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "2.3.0"
+        },
+        "title": "body-parser vulnerable to denial of service when invalid limit value silently disables size enforcement"
+      },
+      {
+        "id": "GHSA-3jxr-9vmj-r5cp@brace-expansion-5.0.5",
+        "package": {
+          "ecosystem": "npm",
+          "name": "brace-expansion",
+          "purl": "pkg:npm/brace-expansion",
+          "version": "5.0.5"
+        },
+        "severity": "moderate",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "5.0.7"
+        },
+        "title": "brace-expansion: DoS via exponential-time expansion of consecutive non-expanding {} groups"
+      },
+      {
+        "id": "GHSA-jxxr-4gwj-5jf2@brace-expansion-5.0.5",
+        "package": {
+          "ecosystem": "npm",
+          "name": "brace-expansion",
+          "purl": "pkg:npm/brace-expansion",
+          "version": "5.0.5"
+        },
+        "severity": "moderate",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "5.0.6"
+        },
+        "title": "brace-expansion: Large numeric range defeats documented `max` DoS protection"
+      },
+      {
+        "id": "GHSA-mh99-v99m-4gvg@brace-expansion-5.0.5",
+        "package": {
+          "ecosystem": "npm",
+          "name": "brace-expansion",
+          "purl": "pkg:npm/brace-expansion",
+          "version": "5.0.5"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "5.0.8"
+        },
+        "title": "brace-expansion: DoS via unbounded expansion length causing an out-of-memory process crash"
+      },
+      {
+        "id": "GHSA-rgw5-rvv9-x895@brace-expansion-5.0.5",
+        "package": {
+          "ecosystem": "npm",
+          "name": "brace-expansion",
+          "purl": "pkg:npm/brace-expansion",
+          "version": "5.0.5"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "5.0.9"
+        },
+        "title": "brace-expansion: DoS via unbounded intermediate arrays, bypassing the CVE-2026-14257 mitigation"
+      },
+      {
+        "id": "GHSA-73wf-gq98-2v4g@browserslist-4.28.1",
+        "package": {
+          "ecosystem": "npm",
+          "name": "browserslist",
+          "purl": "pkg:npm/browserslist",
+          "version": "4.28.1"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "4.28.7"
+        },
+        "title": "Browserslist: Uncaught crash / prototype write via untrusted browserslist-stats.json custom stats (normalizeStats)"
+      },
+      {
+        "id": "GHSA-c83g-rgw3-j3cx@browserslist-4.28.1",
+        "package": {
+          "ecosystem": "npm",
+          "name": "browserslist",
+          "purl": "pkg:npm/browserslist",
+          "version": "4.28.1"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "4.28.7"
+        },
+        "title": "Browserslist: Unbounded memory growth (no cache eviction) via distinct query results, leading to eventual OOM"
+      },
+      {
+        "id": "GHSA-vcc3-ghjq-m6fr@decode-uri-component-0.2.2",
+        "package": {
+          "ecosystem": "npm",
+          "name": "decode-uri-component",
+          "purl": "pkg:npm/decode-uri-component",
+          "version": "0.2.2"
+        },
+        "severity": "moderate",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "0.5.0"
+        },
+        "title": "decode-uri-component: Denial of service via exponential decoding of malformed percent-encoded input"
+      },
+      {
+        "id": "GHSA-g7r4-m6w7-qqqr@esbuild-0.27.3",
+        "package": {
+          "ecosystem": "npm",
+          "name": "esbuild",
+          "purl": "pkg:npm/esbuild",
+          "version": "0.27.3"
+        },
+        "severity": "low",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "0.28.1"
+        },
+        "title": "esbuild allows arbitrary file read when running the development server on Windows"
+      },
+      {
+        "id": "GHSA-4c8g-83qw-93j6@fast-uri-3.1.2",
+        "package": {
+          "ecosystem": "npm",
+          "name": "fast-uri",
+          "purl": "pkg:npm/fast-uri",
+          "version": "3.1.2"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "3.1.3"
+        },
+        "title": "fast-uri vulnerable to host confusion via failed IDN canonicalization"
+      },
+      {
+        "id": "GHSA-7p8r-x3mc-p8w7@fast-uri-3.1.2",
+        "package": {
+          "ecosystem": "npm",
+          "name": "fast-uri",
+          "purl": "pkg:npm/fast-uri",
+          "version": "3.1.2"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "3.1.5"
+        },
+        "title": "fast-uri vulnerable to host confusion via backslash authority introducer"
+      },
+      {
+        "id": "GHSA-f65p-4m7j-42xc@fast-uri-3.1.2",
+        "package": {
+          "ecosystem": "npm",
+          "name": "fast-uri",
+          "purl": "pkg:npm/fast-uri",
+          "version": "3.1.2"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "3.1.6"
+        },
+        "title": "fast-uri vulnerable to server-side request forgery via malformed IPv6 normalization"
+      },
+      {
+        "id": "GHSA-fph4-wmhf-6fwf@fast-uri-3.1.2",
+        "package": {
+          "ecosystem": "npm",
+          "name": "fast-uri",
+          "purl": "pkg:npm/fast-uri",
+          "version": "3.1.2"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "3.1.6"
+        },
+        "title": "fast-uri vulnerable to server-side request forgery via repeated hostname percent-decoding"
+      },
+      {
+        "id": "GHSA-jqff-g426-hqxp@fast-uri-3.1.2",
+        "package": {
+          "ecosystem": "npm",
+          "name": "fast-uri",
+          "purl": "pkg:npm/fast-uri",
+          "version": "3.1.2"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "3.1.6"
+        },
+        "title": "fast-uri vulnerable to host confusion via percent-encoded scheme normalization"
+      },
+      {
+        "id": "GHSA-v2hh-gcrm-f6hx@fast-uri-3.1.2",
+        "package": {
+          "ecosystem": "npm",
+          "name": "fast-uri",
+          "purl": "pkg:npm/fast-uri",
+          "version": "3.1.2"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "3.1.4"
+        },
+        "title": "fast-uri vulnerable to host confusion via literal backslash authority delimiter"
+      },
+      {
+        "id": "GHSA-px8p-9vwx-vf98@fflate-0.6.10",
+        "package": {
+          "ecosystem": "npm",
+          "name": "fflate",
+          "purl": "pkg:npm/fflate",
+          "version": "0.6.10"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "0.6.11"
+        },
+        "title": "fflate unzipSync can enter an infinite loop when parsing malformed ZIP64 archives"
+      },
+      {
+        "id": "GHSA-px8p-9vwx-vf98@fflate-0.8.2",
+        "package": {
+          "ecosystem": "npm",
+          "name": "fflate",
+          "purl": "pkg:npm/fflate",
+          "version": "0.8.2"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "0.8.3"
+        },
+        "title": "fflate unzipSync can enter an infinite loop when parsing malformed ZIP64 archives"
+      },
+      {
+        "id": "GHSA-hmw2-7cc7-3qxx@form-data-4.0.5",
+        "package": {
+          "ecosystem": "npm",
+          "name": "form-data",
+          "purl": "pkg:npm/form-data",
+          "version": "4.0.5"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "4.0.6"
+        },
+        "title": "form-data: CRLF injection in form-data via unescaped multipart field names and filenames"
+      },
+      {
+        "id": "GHSA-5p2g-fcmc-qvqq@image-size-1.2.1",
+        "package": {
+          "ecosystem": "npm",
+          "name": "image-size",
+          "purl": "pkg:npm/image-size",
+          "version": "1.2.1"
+        },
+        "severity": "high",
+        "title": "image-size: JXL and HEIF parsers allow denial of service through infinite loops"
+      },
+      {
+        "id": "GHSA-w3rx-r6r6-pgpr@image-size-1.2.1",
+        "package": {
+          "ecosystem": "npm",
+          "name": "image-size",
+          "purl": "pkg:npm/image-size",
+          "version": "1.2.1"
+        },
+        "severity": "high",
+        "title": "image-size: ICNS parser allows denial of service through an infinite loop"
+      },
+      {
+        "id": "GHSA-22jq-vg5j-6vgg@ip-address-10.2.0",
+        "package": {
+          "ecosystem": "npm",
+          "name": "ip-address",
+          "purl": "pkg:npm/ip-address",
+          "version": "10.2.0"
+        },
+        "severity": "moderate",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "10.2.1"
+        },
+        "title": "ip-address: misclassification of IPv4-mapped/NAT64 IPv6 addresses can bypass SSRF and trust-boundary checks"
+      },
+      {
+        "id": "GHSA-4xrf-jv44-h6hh@ip-address-10.2.0",
+        "package": {
+          "ecosystem": "npm",
+          "name": "ip-address",
+          "purl": "pkg:npm/ip-address",
+          "version": "10.2.0"
+        },
+        "severity": "moderate",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "10.2.2"
+        },
+        "title": "ip-address: a CIDR suffix on the parsed address suppresses special-use classification and can bypass SSRF and trust-boundary checks"
+      },
+      {
+        "id": "GHSA-mwp4-54f8-5fhr@ip-address-10.2.0",
+        "package": {
+          "ecosystem": "npm",
+          "name": "ip-address",
+          "purl": "pkg:npm/ip-address",
+          "version": "10.2.0"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "10.3.1"
+        },
+        "title": "ip-address: Address4 decodes leading-zero octets as decimal while resolvers decode them as octal, allowing SSRF and trust-boundary bypass"
+      },
+      {
+        "id": "GHSA-2883-xcg3-v3hh@js-yaml-3.14.2",
+        "package": {
+          "ecosystem": "npm",
+          "name": "js-yaml",
+          "purl": "pkg:npm/js-yaml",
+          "version": "3.14.2"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "3.15.2"
+        },
+        "title": "js-yaml: maxTotalMergeKeys does not limit CPU use for empty merge sources"
+      },
+      {
+        "id": "GHSA-52cp-r559-cp3m@js-yaml-3.14.2",
+        "package": {
+          "ecosystem": "npm",
+          "name": "js-yaml",
+          "purl": "pkg:npm/js-yaml",
+          "version": "3.14.2"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "3.15.0"
+        },
+        "title": "js-yaml: YAML merge-key chains can force quadratic CPU consumption"
+      },
+      {
+        "id": "GHSA-5p4m-2wfm-xmqj@js-yaml-3.14.2",
+        "package": {
+          "ecosystem": "npm",
+          "name": "js-yaml",
+          "purl": "pkg:npm/js-yaml",
+          "version": "3.14.2"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "3.15.1"
+        },
+        "title": "JS-YAML: Quadratic CPU consumption in !!omap resolution (3.x and 4.x) — CVE-2026-59870 fix not backported"
+      },
+      {
+        "id": "GHSA-h67p-54hq-rp68@js-yaml-3.14.2",
+        "package": {
+          "ecosystem": "npm",
+          "name": "js-yaml",
+          "purl": "pkg:npm/js-yaml",
+          "version": "3.14.2"
+        },
+        "severity": "moderate",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "3.15.0"
+        },
+        "title": "JS-YAML: Quadratic-complexity DoS in merge key handling via repeated aliases"
+      },
+      {
+        "id": "GHSA-2883-xcg3-v3hh@js-yaml-4.1.1",
+        "package": {
+          "ecosystem": "npm",
+          "name": "js-yaml",
+          "purl": "pkg:npm/js-yaml",
+          "version": "4.1.1"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "4.3.2"
+        },
+        "title": "js-yaml: maxTotalMergeKeys does not limit CPU use for empty merge sources"
+      },
+      {
+        "id": "GHSA-52cp-r559-cp3m@js-yaml-4.1.1",
+        "package": {
+          "ecosystem": "npm",
+          "name": "js-yaml",
+          "purl": "pkg:npm/js-yaml",
+          "version": "4.1.1"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "4.3.0"
+        },
+        "title": "js-yaml: YAML merge-key chains can force quadratic CPU consumption"
+      },
+      {
+        "id": "GHSA-5p4m-2wfm-xmqj@js-yaml-4.1.1",
+        "package": {
+          "ecosystem": "npm",
+          "name": "js-yaml",
+          "purl": "pkg:npm/js-yaml",
+          "version": "4.1.1"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "4.3.1"
+        },
+        "title": "JS-YAML: Quadratic CPU consumption in !!omap resolution (3.x and 4.x) — CVE-2026-59870 fix not backported"
+      },
+      {
+        "id": "GHSA-h67p-54hq-rp68@js-yaml-4.1.1",
+        "package": {
+          "ecosystem": "npm",
+          "name": "js-yaml",
+          "purl": "pkg:npm/js-yaml",
+          "version": "4.1.1"
+        },
+        "severity": "moderate",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "4.2.0"
+        },
+        "title": "JS-YAML: Quadratic-complexity DoS in merge key handling via repeated aliases"
+      },
+      {
+        "id": "GHSA-2883-xcg3-v3hh@js-yaml-4.2.0",
+        "package": {
+          "ecosystem": "npm",
+          "name": "js-yaml",
+          "purl": "pkg:npm/js-yaml",
+          "version": "4.2.0"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "4.3.2"
+        },
+        "title": "js-yaml: maxTotalMergeKeys does not limit CPU use for empty merge sources"
+      },
+      {
+        "id": "GHSA-52cp-r559-cp3m@js-yaml-4.2.0",
+        "package": {
+          "ecosystem": "npm",
+          "name": "js-yaml",
+          "purl": "pkg:npm/js-yaml",
+          "version": "4.2.0"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "4.3.0"
+        },
+        "title": "js-yaml: YAML merge-key chains can force quadratic CPU consumption"
+      },
+      {
+        "id": "GHSA-5p4m-2wfm-xmqj@js-yaml-4.2.0",
+        "package": {
+          "ecosystem": "npm",
+          "name": "js-yaml",
+          "purl": "pkg:npm/js-yaml",
+          "version": "4.2.0"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "4.3.1"
+        },
+        "title": "JS-YAML: Quadratic CPU consumption in !!omap resolution (3.x and 4.x) — CVE-2026-59870 fix not backported"
+      },
+      {
+        "id": "GHSA-28wg-ghj8-5hjv@nanoid-3.3.11",
+        "package": {
+          "ecosystem": "npm",
+          "name": "nanoid",
+          "purl": "pkg:npm/nanoid",
+          "version": "3.3.11"
+        },
+        "severity": "moderate",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "3.3.16"
+        },
+        "title": "nanoid: non-secure generators can loop indefinitely with negative size"
+      },
+      {
+        "id": "GHSA-2v37-7h3g-55p8@nanoid-3.3.11",
+        "package": {
+          "ecosystem": "npm",
+          "name": "nanoid",
+          "purl": "pkg:npm/nanoid",
+          "version": "3.3.11"
+        },
+        "severity": "moderate",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "3.3.18"
+        },
+        "title": "nanoid: custom generators can loop indefinitely when size is zero"
+      },
+      {
+        "id": "GHSA-xwg4-73v4-xw9w@nanoid-3.3.11",
+        "package": {
+          "ecosystem": "npm",
+          "name": "nanoid",
+          "purl": "pkg:npm/nanoid",
+          "version": "3.3.11"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "3.3.12"
+        },
+        "title": "nanoid: Integer Overflow or Wraparound"
+      },
+      {
+        "id": "GHSA-2h9g-j24r-h63g@orval-8.5.3",
+        "package": {
+          "ecosystem": "npm",
+          "name": "orval",
+          "purl": "pkg:npm/orval",
+          "version": "8.5.3"
+        },
+        "severity": "critical",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "8.21.0"
+        },
+        "title": "Orval: Import-time RCE via array-items default -> zod module-level template literal"
+      },
+      {
+        "id": "GHSA-2w86-xfrc-g85r@orval-8.5.3",
+        "package": {
+          "ecosystem": "npm",
+          "name": "orval",
+          "purl": "pkg:npm/orval",
+          "version": "8.5.3"
+        },
+        "severity": "critical",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "8.21.0"
+        },
+        "title": "Orval: RCE via schema property name -> computed-property-key injection in the MSW mock generator"
+      },
+      {
+        "id": "GHSA-3575-w9fc-c2j6@orval-8.5.3",
+        "package": {
+          "ecosystem": "npm",
+          "name": "orval",
+          "purl": "pkg:npm/orval",
+          "version": "8.5.3"
+        },
+        "severity": "critical",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "8.21.0"
+        },
+        "title": "Orval: Import-time RCE via enum-typed default -> zod module-level template literal"
+      },
+      {
+        "id": "GHSA-6437-gxhq-pqv8@orval-8.5.3",
+        "package": {
+          "ecosystem": "npm",
+          "name": "orval",
+          "purl": "pkg:npm/orval",
+          "version": "8.5.3"
+        },
+        "severity": "critical",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "8.21.0"
+        },
+        "title": "Orval: Import-time RCE via header parameter name -> computed-property-key injection in the zod client"
+      },
+      {
+        "id": "GHSA-653q-5476-x79g@orval-8.5.3",
+        "package": {
+          "ecosystem": "npm",
+          "name": "orval",
+          "purl": "pkg:npm/orval",
+          "version": "8.5.3"
+        },
+        "severity": "critical",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "8.21.0"
+        },
+        "title": "Orval: Import-time RCE via query parameter name -> computed-property-key injection in the zod cli"
+      },
+      {
+        "id": "GHSA-6mr6-jvcr-2f25@orval-8.5.3",
+        "package": {
+          "ecosystem": "npm",
+          "name": "orval",
+          "purl": "pkg:npm/orval",
+          "version": "8.5.3"
+        },
+        "severity": "critical",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "8.21.0"
+        },
+        "title": "Orval: Import-time RCE via schema property name -> computed-property-key injection in the zod client"
+      },
+      {
+        "id": "GHSA-88f2-fpv8-89q2@orval-8.5.3",
+        "package": {
+          "ecosystem": "npm",
+          "name": "orval",
+          "purl": "pkg:npm/orval",
+          "version": "8.5.3"
+        },
+        "severity": "critical",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "8.21.0"
+        },
+        "title": "Orval: RCE via servers[].url -> unescaped request-URL template literal (with getBaseUrlFromSpecification)"
+      },
+      {
+        "id": "GHSA-8j6p-r8jg-mxqh@orval-8.5.3",
+        "package": {
+          "ecosystem": "npm",
+          "name": "orval",
+          "purl": "pkg:npm/orval",
+          "version": "8.5.3"
+        },
+        "severity": "critical",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "8.21.0"
+        },
+        "title": "Orval: Import-time RCE via header-parameter default -> zod module-level template literal"
+      },
+      {
+        "id": "GHSA-cxq5-97v7-87j8@orval-8.5.3",
+        "package": {
+          "ecosystem": "npm",
+          "name": "orval",
+          "purl": "pkg:npm/orval",
+          "version": "8.5.3"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "8.22.0"
+        },
+        "title": "Orval: Generation-time SSRF + remote/local file inclusion via unrestricted $ref"
+      },
+      {
+        "id": "GHSA-fg9p-mrxr-hvq7@orval-8.5.3",
+        "package": {
+          "ecosystem": "npm",
+          "name": "orval",
+          "purl": "pkg:npm/orval",
+          "version": "8.5.3"
+        },
+        "severity": "critical",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "8.21.0"
+        },
+        "title": "Orval: RCE via OpenAPI path -> unescaped request-URL template literal (backtick breakout)"
+      },
+      {
+        "id": "GHSA-p4cg-3328-rvfg@orval-8.5.3",
+        "package": {
+          "ecosystem": "npm",
+          "name": "orval",
+          "purl": "pkg:npm/orval",
+          "version": "8.5.3"
+        },
+        "severity": "critical",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "8.21.0"
+        },
+        "title": "Orval: Import-time RCE via query-parameter default -> zod module-level template literal"
+      },
+      {
+        "id": "GHSA-w727-8j6c-2rj4@orval-8.5.3",
+        "package": {
+          "ecosystem": "npm",
+          "name": "orval",
+          "purl": "pkg:npm/orval",
+          "version": "8.5.3"
+        },
+        "severity": "critical",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "8.21.0"
+        },
+        "title": "Orval: Import-time RCE via schema default -> zod module-level template literal"
+      },
+      {
+        "id": "GHSA-fxqj-rqcc-2cmp@postcss-8.5.14",
+        "package": {
+          "ecosystem": "npm",
+          "name": "postcss",
+          "purl": "pkg:npm/postcss",
+          "version": "8.5.14"
+        },
+        "severity": "moderate",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "8.5.23"
+        },
+        "title": "PostCSS: incomplete fix of GHSA-6g55-p6wh-862q — attacker-controlled sourceMappingURL reads arbitrary .map files when `from` is unset"
+      },
+      {
+        "id": "GHSA-r28c-9q8g-f849@postcss-8.5.14",
+        "package": {
+          "ecosystem": "npm",
+          "name": "postcss",
+          "purl": "pkg:npm/postcss",
+          "version": "8.5.14"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "8.5.18"
+        },
+        "title": "PostCSS: Path Traversal in Previous Source Map Auto-Loading (sourceMappingURL) leads to Arbitrary .map File Disclosure"
+      },
+      {
+        "id": "GHSA-4mjr-xmp4-gh2g@qs-6.15.0",
+        "package": {
+          "ecosystem": "npm",
+          "name": "qs",
+          "purl": "pkg:npm/qs",
+          "version": "6.15.0"
+        },
+        "severity": "moderate",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "6.16.0"
+        },
+        "title": "qs: Denial of Service via Attacker Controlled isBuffer"
+      },
+      {
+        "id": "GHSA-q8mj-m7cp-5q26@qs-6.15.0",
+        "package": {
+          "ecosystem": "npm",
+          "name": "qs",
+          "purl": "pkg:npm/qs",
+          "version": "6.15.0"
+        },
+        "severity": "moderate",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "6.15.2"
+        },
+        "title": "qs has a remotely triggerable DoS: qs.stringify crashes with TypeError on null/undefined entries in comma-format arrays when encodeValuesOnly is set"
+      },
+      {
+        "id": "GHSA-x5fp-wj9c-mxmx@qs-6.15.0",
+        "package": {
+          "ecosystem": "npm",
+          "name": "qs",
+          "purl": "pkg:npm/qs",
+          "version": "6.15.0"
+        },
+        "severity": "low",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "6.16.0"
+        },
+        "title": "qs array-limit bypass via bracket-key comma parsing"
+      },
+      {
+        "id": "GHSA-395f-4hp3-45gv@shell-quote-1.8.3",
+        "package": {
+          "ecosystem": "npm",
+          "name": "shell-quote",
+          "purl": "pkg:npm/shell-quote",
+          "version": "1.8.3"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "1.9.0"
+        },
+        "title": "shell-quote: Quadratic-complexity Denial of Service in `parse()` (CWE-407)"
+      },
+      {
+        "id": "GHSA-w7jw-789q-3m8p@shell-quote-1.8.3",
+        "package": {
+          "ecosystem": "npm",
+          "name": "shell-quote",
+          "purl": "pkg:npm/shell-quote",
+          "version": "1.8.3"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "1.8.4"
+        },
+        "title": "shell-quote quote() does not escape newlines in object .op values"
+      },
+      {
+        "id": "GHSA-23hp-3jrh-7fpw@tar-7.5.13",
+        "package": {
+          "ecosystem": "npm",
+          "name": "tar",
+          "purl": "pkg:npm/tar",
+          "version": "7.5.13"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "7.5.19"
+        },
+        "title": "node-tar: Decompression/parse DoS via unlimited input"
+      },
+      {
+        "id": "GHSA-8x88-c5mf-7j5w@tar-7.5.13",
+        "package": {
+          "ecosystem": "npm",
+          "name": "tar",
+          "purl": "pkg:npm/tar",
+          "version": "7.5.13"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "7.5.18"
+        },
+        "title": "node-tar: Negative tar entry size causes infinite loop in archive replace"
+      },
+      {
+        "id": "GHSA-gvwx-54wh-qm9j@tar-7.5.13",
+        "package": {
+          "ecosystem": "npm",
+          "name": "tar",
+          "purl": "pkg:npm/tar",
+          "version": "7.5.13"
+        },
+        "severity": "moderate",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "7.5.17"
+        },
+        "title": "node-tar: Uncaught Exception DoS via NUL byte in PAX path/linkpath records"
+      },
+      {
+        "id": "GHSA-r292-9mhp-454m@tar-7.5.13",
+        "package": {
+          "ecosystem": "npm",
+          "name": "tar",
+          "purl": "pkg:npm/tar",
+          "version": "7.5.13"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "7.5.21"
+        },
+        "title": "node-tar: Uncontrolled recursion in mapHas/filesFilter allows uncatchable stack-overflow DoS via crafted long-path tar with member selection"
+      },
+      {
+        "id": "GHSA-vmf3-w455-68vh@tar-7.5.13",
+        "package": {
+          "ecosystem": "npm",
+          "name": "tar",
+          "purl": "pkg:npm/tar",
+          "version": "7.5.13"
+        },
+        "severity": "moderate",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "7.5.16"
+        },
+        "title": "node-tar applies PAX size override to intermediary GNU long-name/long-link headers, causing tar parser interpretation differential (file smuggling)"
+      },
+      {
+        "id": "GHSA-w8wr-v893-vjvp@tar-7.5.13",
+        "package": {
+          "ecosystem": "npm",
+          "name": "tar",
+          "purl": "pkg:npm/tar",
+          "version": "7.5.13"
+        },
+        "severity": "moderate",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "7.5.18"
+        },
+        "title": "node-tar: Process crash via PAX numeric path type confusion"
+      },
+      {
+        "id": "GHSA-35p6-xmwp-9g52@undici-6.25.0",
+        "package": {
+          "ecosystem": "npm",
+          "name": "undici",
+          "purl": "pkg:npm/undici",
+          "version": "6.25.0"
+        },
+        "severity": "low",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "6.27.0"
+        },
+        "title": "undici vulnerable to HTTP response queue poisoning via keep-alive socket reuse"
+      },
+      {
+        "id": "GHSA-8xcm-r25x-g524@undici-6.25.0",
+        "package": {
+          "ecosystem": "npm",
+          "name": "undici",
+          "purl": "pkg:npm/undici",
+          "version": "6.25.0"
+        },
+        "severity": "moderate",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "6.28.0"
+        },
+        "title": "undici vulnerable to downstream response desynchronization via retry interceptor"
+      },
+      {
+        "id": "GHSA-g8m3-5g58-fq7m@undici-6.25.0",
+        "package": {
+          "ecosystem": "npm",
+          "name": "undici",
+          "purl": "pkg:npm/undici",
+          "version": "6.25.0"
+        },
+        "severity": "low",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "6.27.0"
+        },
+        "title": "undici vulnerable to Set-Cookie SameSite attribute downgrade via permissive substring matching"
+      },
+      {
+        "id": "GHSA-m8rv-5g2x-5cg5@undici-6.25.0",
+        "package": {
+          "ecosystem": "npm",
+          "name": "undici",
+          "purl": "pkg:npm/undici",
+          "version": "6.25.0"
+        },
+        "severity": "moderate",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "6.28.0"
+        },
+        "title": "undici vulnerable to CRLF Injection via blob-like body 'type' property"
+      },
+      {
+        "id": "GHSA-p88m-4jfj-68fv@undici-6.25.0",
+        "package": {
+          "ecosystem": "npm",
+          "name": "undici",
+          "purl": "pkg:npm/undici",
+          "version": "6.25.0"
+        },
+        "severity": "moderate",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "6.27.0"
+        },
+        "title": "undici vulnerable to HTTP header injection via Set-Cookie percent-decoding"
+      },
+      {
+        "id": "GHSA-v3r7-h72x-cjcm@undici-6.25.0",
+        "package": {
+          "ecosystem": "npm",
+          "name": "undici",
+          "purl": "pkg:npm/undici",
+          "version": "6.25.0"
+        },
+        "severity": "moderate",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "6.28.0"
+        },
+        "title": "undici vulnerable to cookie attribute injection via unsanitized domain and unparsed setCookie fields"
+      },
+      {
+        "id": "GHSA-vxpw-j846-p89q@undici-6.25.0",
+        "package": {
+          "ecosystem": "npm",
+          "name": "undici",
+          "purl": "pkg:npm/undici",
+          "version": "6.25.0"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "6.27.0"
+        },
+        "title": "undici WebSocket client vulnerable to denial of service via fragment count bypass"
+      },
+      {
+        "id": "GHSA-w5hq-g745-h8pq@uuid-3.4.0",
+        "package": {
+          "ecosystem": "npm",
+          "name": "uuid",
+          "purl": "pkg:npm/uuid",
+          "version": "3.4.0"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": true,
+          "version": "11.1.1"
+        },
+        "title": "uuid: Missing buffer bounds check in v3/v5/v6 when buf is provided"
+      },
+      {
+        "id": "GHSA-w5hq-g745-h8pq@uuid-7.0.3",
+        "package": {
+          "ecosystem": "npm",
+          "name": "uuid",
+          "purl": "pkg:npm/uuid",
+          "version": "7.0.3"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": true,
+          "version": "11.1.1"
+        },
+        "title": "uuid: Missing buffer bounds check in v3/v5/v6 when buf is provided"
+      },
+      {
+        "id": "GHSA-fx2h-pf6j-xcff@vite-7.3.2",
+        "package": {
+          "ecosystem": "npm",
+          "name": "vite",
+          "purl": "pkg:npm/vite",
+          "version": "7.3.2"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "7.3.5"
+        },
+        "title": "vite: `server.fs.deny` bypass on Windows alternate paths"
+      },
+      {
+        "id": "GHSA-v6wh-96g9-6wx3@vite-7.3.2",
+        "package": {
+          "ecosystem": "npm",
+          "name": "vite",
+          "purl": "pkg:npm/vite",
+          "version": "7.3.2"
+        },
+        "severity": "moderate",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "7.3.5"
+        },
+        "title": "launch-editor: NTLMv2 hash disclosure via UNC path handling on Windows"
+      },
+      {
+        "id": "GHSA-96hv-2xvq-fx4p@ws-6.2.3",
+        "package": {
+          "ecosystem": "npm",
+          "name": "ws",
+          "purl": "pkg:npm/ws",
+          "version": "6.2.3"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "6.2.4"
+        },
+        "title": "ws: Memory exhaustion DoS from tiny fragments and data chunks"
+      },
+      {
+        "id": "GHSA-96hv-2xvq-fx4p@ws-7.5.10",
+        "package": {
+          "ecosystem": "npm",
+          "name": "ws",
+          "purl": "pkg:npm/ws",
+          "version": "7.5.10"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "7.5.11"
+        },
+        "title": "ws: Memory exhaustion DoS from tiny fragments and data chunks"
+      },
+      {
+        "id": "GHSA-58qx-3vcg-4xpx@ws-8.20.0",
+        "package": {
+          "ecosystem": "npm",
+          "name": "ws",
+          "purl": "pkg:npm/ws",
+          "version": "8.20.0"
+        },
+        "severity": "moderate",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "8.20.1"
+        },
+        "title": "ws: Uninitialized memory disclosure"
+      },
+      {
+        "id": "GHSA-96hv-2xvq-fx4p@ws-8.20.0",
+        "package": {
+          "ecosystem": "npm",
+          "name": "ws",
+          "purl": "pkg:npm/ws",
+          "version": "8.20.0"
+        },
+        "severity": "high",
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "8.21.0"
+        },
+        "title": "ws: Memory exhaustion DoS from tiny fragments and data chunks"
+      }
+    ]
+  },
+  {
+    "scanner": "sast",
+    "status": "fulfilled",
+    "incomplete": false,
+    "findings": [
+      {
+        "checkId": "javascript.express.file.fs-express.fs-express",
+        "fingerprint": "009e7fde252c385cf3595132d60c0ac9acd583c97c3cba62d3aed95786946711",
+        "location": {
+          "end": {
+            "col": 48,
+            "line": 59
+          },
+          "lines": "",
+          "path": "/home/runner/workspace/artifacts/mobile/server/serve.js",
+          "start": {
+            "col": 36,
+            "line": 59
+          }
+        },
+        "message": "The application builds a file path from potentially untrusted data, which can lead to a path traversal vulnerability. An attacker can manipulate the path which the application uses to access files. If the application does not validate user input and sanitize file paths, sensitive files such as configuration or user data can be accessed, potentially creating or overwriting files. To prevent this vulnerability, validate and sanitize any input that is used to create references to file paths. Also, enforce strict file access controls. For example, choose privileges allowing public-facing applications to access only the required files.",
+        "severity": "HIGH"
+      },
+      {
+        "checkId": "javascript.express.file.fs-express.fs-express",
+        "fingerprint": "f7a4da6ae83744428614cf95644866dbca555e3334765202129ff915c31a1c3b",
+        "location": {
+          "end": {
+            "col": 43,
+            "line": 102
+          },
+          "lines": "",
+          "path": "/home/runner/workspace/artifacts/mobile/server/serve.js",
+          "start": {
+            "col": 35,
+            "line": 102
+          }
+        },
+        "message": "The application builds a file path from potentially untrusted data, which can lead to a path traversal vulnerability. An attacker can manipulate the path which the application uses to access files. If the application does not validate user input and sanitize file paths, sensitive files such as configuration or user data can be accessed, potentially creating or overwriting files. To prevent this vulnerability, validate and sanitize any input that is used to create references to file paths. Also, enforce strict file access controls. For example, choose privileges allowing public-facing applications to access only the required files.",
+        "severity": "HIGH"
+      }
+    ]
+  },
+  {
+    "scanner": "privacy",
+    "status": "fulfilled",
+    "findings": []
+  }
+]

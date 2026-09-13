@@ -80,17 +80,18 @@ function minutes(value: string): number {
   return hours * 60 + mins;
 }
 
-function utcParts(date: Date): { dayOfWeek: number; minute: number } {
-  return {
-    dayOfWeek: date.getUTCDay(),
-    minute: date.getUTCHours() * 60 + date.getUTCMinutes(),
-  };
+const DAY_MS = 24 * 60 * 60 * 1_000;
+
+function utcDayStart(date: Date): number {
+  return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
 }
 
 /**
  * Returns true when the complete interval fits inside one configured window.
- * Overnight windows (for example 22:00–02:00) are supported. An empty weekly
- * list is the backwards-compatible unrestricted configuration.
+ * Overnight windows (for example 22:00–02:00) are supported, including an
+ * interval that starts on the following day while the previous day's window is
+ * still open. An empty weekly list is the backwards-compatible unrestricted
+ * configuration.
  */
 export function isBayIntervalAvailable(
   value: unknown,
@@ -102,30 +103,28 @@ export function isBayIntervalAvailable(
   if (normalized.config.weekly.length === 0) return true;
   if (endsAt.getTime() <= startsAt.getTime()) return false;
 
-  const start = utcParts(startsAt);
-  const end = utcParts(endsAt);
-  const durationMinutes = (endsAt.getTime() - startsAt.getTime()) / 60_000;
-
   return normalized.config.weekly.some((window) => {
-    if (window.dayOfWeek !== start.dayOfWeek) return false;
-    const open = minutes(window.open);
-    const close = minutes(window.close);
-    let windowDuration = close - open;
-    if (windowDuration <= 0) windowDuration += 24 * 60;
-    // A window cannot cover an interval spanning more than one calendar day
-    // unless it is an overnight window.
-    if (durationMinutes > windowDuration) return false;
-    const startOffset = start.minute - open;
-    if (startOffset < 0 || startOffset >= windowDuration) return false;
-    if (open < close) {
-      return end.dayOfWeek === start.dayOfWeek
-        && end.minute <= close;
+    const openingDay = utcDayStart(startsAt);
+    const openMinutes = minutes(window.open);
+    const closeMinutes = minutes(window.close);
+    const isOvernight = closeMinutes < openMinutes;
+
+    // A window is keyed by the day on which it opens. Check both the current
+    // day (normal windows and the evening side of overnight windows) and the
+    // prior day (the morning continuation of an overnight window).
+    for (const dayOffset of [0, 1]) {
+      if (dayOffset === 1 && !isOvernight) continue;
+      const windowDay = openingDay - dayOffset * DAY_MS;
+      if (new Date(windowDay).getUTCDay() !== window.dayOfWeek) continue;
+
+      const windowOpen = windowDay + openMinutes * 60_000;
+      let windowClose = windowDay + closeMinutes * 60_000;
+      if (isOvernight) windowClose += DAY_MS;
+      if (startsAt.getTime() >= windowOpen && endsAt.getTime() <= windowClose) {
+        return true;
+      }
     }
-    // Overnight window: the end can be on the following UTC day.
-    const endOffset = (end.dayOfWeek === start.dayOfWeek
-      ? end.minute
-      : end.minute + 24 * 60) - open;
-    return endOffset <= windowDuration;
+    return false;
   });
 }
 

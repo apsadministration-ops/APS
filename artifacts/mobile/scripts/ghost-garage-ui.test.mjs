@@ -54,6 +54,9 @@ const shopDetail = read("app/shop/[id].tsx");
 assert.match(shopDetail, /availabilityConfig/);
 assert.match(shopDetail, /weekly:/);
 assert.match(shopDetail, /WEEKLY AVAILABILITY \(UTC\)/);
+assert.match(shopDetail, /validateAvailability/);
+assert.match(shopDetail, /TIME_PATTERN/);
+assert.match(shopDetail, /Overnight windows are supported/);
 
 const worklog = read("app/worklog/[jobId].tsx");
 assert.match(worklog, /WORKLOG_BOOKING_STATUSES/);

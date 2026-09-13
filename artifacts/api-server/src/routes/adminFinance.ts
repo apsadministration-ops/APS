@@ -30,6 +30,7 @@ router.get("/admin/finance/global", async (req: AuthRequest, res): Promise<void>
       taxCents: sql<number>`coalesce(sum(${paymentsTable.taxCents}), 0)::int`,
       partsCents: sql<number>`coalesce(sum(${paymentsTable.partsCostAppliedCents}), 0)::int`,
       laborCents: sql<number>`coalesce(sum(${paymentsTable.laborRevenueCents}), 0)::int`,
+      netProfitCents: sql<number>`coalesce(sum(${paymentsTable.netProfitCents}), 0)::int`,
       apsCommissionCents: sql<number>`coalesce(sum(${paymentsTable.platformFeeCents}), 0)::int`,
       mechanicPayoutCents: sql<number>`coalesce(sum(${paymentsTable.mechanicPayoutCents}), 0)::int`,
       stripeFeeCents: sql<number>`coalesce(sum(${paymentsTable.stripeFeeCents}), 0)::int`,
@@ -44,7 +45,9 @@ router.get("/admin/finance/global", async (req: AuthRequest, res): Promise<void>
     windowDays,
     since,
     ...agg,
-    avgProfitPerJobCents: agg && agg.jobs > 0 ? Math.round((agg.laborCents - agg.partsCents) / agg.jobs) : 0,
+    // laborRevenueCents is already revenue after parts reimbursement. Do not
+    // subtract parts a second time when reporting net profit.
+    avgProfitPerJobCents: agg && agg.jobs > 0 ? Math.round(agg.netProfitCents / agg.jobs) : 0,
     avgApsMarginPct: agg && agg.laborCents > 0 ? +(agg.apsCommissionCents / agg.laborCents).toFixed(4) : 0,
   });
 });

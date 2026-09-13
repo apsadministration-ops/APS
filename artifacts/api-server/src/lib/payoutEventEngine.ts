@@ -75,6 +75,11 @@ export async function recordPayoutEvent(input: RecordInput): Promise<void> {
     }).onConflictDoNothing({ target: payoutEventsTable.providerEventId });
   } catch (err) {
     logger.error({ err, kind: input.kind }, "payout event insert failed");
+    // The webhook's outer transaction cannot roll back this insert because
+    // provider work is not wrapped in the same database transaction. Surface
+    // the failure so the webhook returns 500 and Stripe retries instead of
+    // acknowledging an event that is missing from the payout ledger.
+    throw err;
   }
 }
 

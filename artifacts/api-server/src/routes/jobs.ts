@@ -20,6 +20,7 @@ import {
 } from "@workspace/tier-catalog";
 import { parsePositiveSafeInteger } from "../lib/validation";
 import { isPartnerJobOwner } from "../lib/commercialJobAccess";
+import { canCancelJob } from "../lib/authorization";
 
 /**
  * If the job has an uncaptured Stripe authorization, void it so the
@@ -461,19 +462,26 @@ router.post("/jobs/:jobId/cancel", authenticate, async (req: AuthRequest, res): 
   const jobId = parseInt(String(req.params.jobId), 10);
   const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, jobId));
   if (!job) { res.status(404).json({ error: "Job not found" }); return; }
-  if (req.userRole === "customer" && job.customerId !== req.userId) { res.status(403).json({ error: "Forbidden" }); return; }
-  if (req.userRole === "mechanic" && job.mechanicId !== req.userId) { res.status(403).json({ error: "Forbidden" }); return; }
-
-  // Customers can only cancel before the job is accepted.
-  // Mechanics may cancel an assigned job up through EN_ROUTE (before work has started).
-  // Admins can cancel at any time.
-  const customerCancellable = ["REQUESTED", "OFFERED"];
-  const mechanicCancellable = ["ACCEPTED", "EN_ROUTE"];
-  const allowed =
-    req.userRole === "admin" ||
-    (req.userRole === "customer" && customerCancellable.includes(job.status)) ||
-    (req.userRole === "mechanic" && mechanicCancellable.includes(job.status));
-  if (!allowed) {
+  // Customers can cancel before acceptance. Mechanics may cancel an assigned
+  // job only while active and before work starts; this reopens dispatch and
+  // may void a payment authorization, so pending mechanics are not allowed.
+  if (req.userRole === "mechanic" && req.user?.status !== "active") {
+    res.status(403).json({ error: "Your mechanic account is not active." });
+    return;
+  }
+  if (!canCancelJob({
+    role: req.userRole,
+    status: req.user?.status,
+    userId: req.userId,
+    customerId: job.customerId,
+    mechanicId: job.mechanicId,
+    jobStatus: job.status,
+  })) {
+    if (req.userRole !== "admin"
+      && !((req.userRole === "customer" && job.customerId === req.userId)
+        || (req.userRole === "mechanic" && job.mechanicId === req.userId))) {
+      res.status(403).json({ error: "Forbidden" }); return;
+    }
     const msg = req.userRole === "mechanic"
       ? "You can only cancel a job before work has started (up through En Route)."
       : "Job cannot be cancelled after it has been accepted.";
@@ -585,6 +593,7 @@ router.post("/jobs/:jobId/rate", authenticate, async (req: AuthRequest, res): Pr
 
 router.post("/jobs/:jobId/rate-customer", authenticate, async (req: AuthRequest, res): Promise<void> => {
   if (req.userRole !== "mechanic") { res.status(403).json({ error: "Only mechanics can rate customers" }); return; }
+  if (req.user?.status !== "active") { res.status(403).json({ error: "Your mechanic account is not active." }); return; }
   const jobId = parseInt(String(req.params.jobId), 10);
   const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, jobId));
   if (!job) { res.status(404).json({ error: "Job not found" }); return; }

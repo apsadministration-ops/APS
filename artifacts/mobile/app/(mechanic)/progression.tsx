@@ -88,9 +88,9 @@ export default function ProgressionScreen() {
     setLoading(true);
     try {
       const [p, c, h] = await Promise.all([
-        customFetch<Progression>("/mechanic/me/progression"),
-        customFetch<Cert[]>("/mechanic/me/certifications"),
-        customFetch<Promotion[]>("/mechanic/me/promotion-history"),
+        customFetch<Progression>("/api/mechanic/me/progression"),
+        customFetch<Cert[]>("/api/mechanic/me/certifications"),
+        customFetch<Promotion[]>("/api/mechanic/me/promotion-history"),
       ]);
       setData(p); setCerts(c); setHistory(h);
     } catch (e) {
@@ -102,7 +102,7 @@ export default function ProgressionScreen() {
 
   const handleDeleteCert = async (id: number) => {
     try {
-      await customFetch(`/mechanic/me/certifications/${id}`, { method: "DELETE" });
+      await customFetch(`/api/mechanic/me/certifications/${id}`, { method: "DELETE" });
       await fetchAll();
     } catch (e) {
       alertMessage("Cannot remove", e instanceof Error ? e.message : "Failed");
@@ -318,7 +318,7 @@ function CertUploadModal({ onClose, onSaved }: { onClose: () => void; onSaved: (
     }
     setSaving(true);
     try {
-      await customFetch("/mechanic/me/certifications", {
+      await customFetch("/api/mechanic/me/certifications", {
         method: "POST",
         body: JSON.stringify({
           certificationType: certificationType.trim(),

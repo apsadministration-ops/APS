@@ -153,6 +153,11 @@ export default function JobDetailScreen() {
 
   const isCustomer = user?.role === "customer";
   const isMechanic = user?.role === "mechanic";
+  // Commercial principals use the shop-owner role but are the customer of
+  // record for their organization jobs. The API accepts them for checkout,
+  // so keep the payment action visible for the same server-authorized actor.
+  const canAuthorizePayment =
+    (isCustomer && job.customerId === user?.id) || isCommercialPrincipal;
   const canApproveTransport = isCustomer || isCommercialPrincipal;
   const liftRequired = liftRequirement?.requiresGhostGarage ?? job.requiresGhostGarage;
   const canCancel =
@@ -377,7 +382,7 @@ export default function JobDetailScreen() {
           )}
 
           {/* Customer payment authorization */}
-          {isCustomer && job.status === "ACCEPTED" && job.estimatedPrice != null && (
+          {canAuthorizePayment && job.status === "ACCEPTED" && job.estimatedPrice != null && (
             <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <Text style={[styles.cardTitle, { color: colors.foreground }]}>Authorize Payment</Text>
               <Text style={{ color: colors.mutedForeground, fontSize: 13, lineHeight: 18, marginBottom: 12 }}>

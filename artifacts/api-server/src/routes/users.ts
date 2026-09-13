@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { eq, or, avg, count, sum } from "drizzle-orm";
 import { db, usersTable, jobsTable, workLogsTable, ownershipTable, loyaltyPointsTable, referralsTable, messagesTable } from "@workspace/db";
 import { authenticate, requireRole, type AuthRequest } from "../middlewares/authenticate";
+import { formatPublicMechanicProfile } from "../lib/userProfile";
 
 const router: IRouter = Router();
 
@@ -88,12 +89,16 @@ router.get("/users/:userId/mechanic-profile", authenticate, async (req: AuthRequ
   const [jobStats] = await db.select({ totalJobs: count(jobsTable.id) }).from(jobsTable).where(eq(jobsTable.mechanicId, userId));
   const [ratingStats] = await db.select({ averageRating: avg(jobsTable.rating) }).from(jobsTable).where(eq(jobsTable.mechanicId, userId));
   const [earningsStats] = await db.select({ totalEarnings: sum(workLogsTable.totalCost) }).from(workLogsTable).where(eq(workLogsTable.mechanicId, userId));
+  const canViewPrivateFields = req.userRole === "admin" || req.userId === userId;
   res.json({
-    user: formatUser(user),
+    // A mechanic profile is useful for reputation and service selection, but
+    // it is not a directory of contact details or loyalty/referral balances.
+    // Keep the full user formatter limited to the mechanic and admins.
+    user: canViewPrivateFields ? formatUser(user) : formatPublicMechanicProfile(user),
     totalJobs: Number(jobStats?.totalJobs ?? 0),
     completedJobs: Number(jobStats?.totalJobs ?? 0),
     averageRating: ratingStats?.averageRating ? Number(ratingStats.averageRating) : null,
-    totalEarnings: Number(earningsStats?.totalEarnings ?? 0),
+    totalEarnings: canViewPrivateFields ? Number(earningsStats?.totalEarnings ?? 0) : null,
   });
 });
 

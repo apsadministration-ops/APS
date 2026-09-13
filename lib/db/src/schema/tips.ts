@@ -10,7 +10,7 @@ import { usersTable } from "./users";
  * Status flow:
  *   pending  → checkout session created, awaiting customer payment
  *   captured → tip captured + transferred to mechanic Connect account
- *   failed   → checkout failed
+ *   failed   → one payment attempt failed (same PaymentIntent may retry)
  *   refunded → tip refunded
  */
 export const tipsTable = pgTable("tips", {

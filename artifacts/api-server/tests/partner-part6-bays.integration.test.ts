@@ -466,3 +466,80 @@ test("Part 6 assigned mechanic lift action resets transport approval only when n
   );
   assert.equal(unchanged.body.customerTransportApproved, true);
 });
+
+test("Part 7 bay availability gates manual and auto-approved requests", {
+  skip: !enabled,
+}, async () => {
+  assert.ok(fixture.bayId);
+  assert.ok(fixture.autoBayId);
+
+  const overnightConfig = {
+    timezone: "UTC",
+    weekly: [{ dayOfWeek: 1, open: "19:00", close: "08:00" }],
+  };
+  const manualConfig = await api<{ availabilityConfig: typeof overnightConfig }>(
+    `/api/bays/${fixture.bayId}`,
+    {
+      method: "PATCH",
+      token: fixture.owner!.token,
+      body: { availabilityConfig: overnightConfig, autoApprove: false },
+    },
+  );
+  assert.equal(manualConfig.response.status, 200);
+  assert.deepEqual(manualConfig.body.availabilityConfig, overnightConfig);
+
+  const autoConfig = await api<{ availabilityConfig: typeof overnightConfig }>(
+    `/api/bays/${fixture.autoBayId}`,
+    {
+      method: "PATCH",
+      token: fixture.owner!.token,
+      body: { availabilityConfig: overnightConfig, autoApprove: true },
+    },
+  );
+  assert.equal(autoConfig.response.status, 200);
+  assert.deepEqual(autoConfig.body.availabilityConfig, overnightConfig);
+
+  const manualJob = await createJob("Part 7 overnight manual request");
+  const manualRequest = await api<{ id: number; status: string }>(
+    `/api/bays/${fixture.bayId}/bookings`,
+    {
+      method: "POST",
+      token: fixture.mechanic!.token,
+      body: { jobId: manualJob.id, startTime: "2099-12-07T20:00:00.000Z", estimatedHours: 2 },
+    },
+  );
+  assert.equal(manualRequest.response.status, 201);
+  assert.equal(manualRequest.body.status, "pending");
+  fixture.bookingIds.push(manualRequest.body.id);
+
+  const outsideJob = await createJob("Part 7 outside availability");
+  const outsideRequest = await api(
+    `/api/bays/${fixture.bayId}/bookings`,
+    {
+      method: "POST",
+      token: fixture.mechanic!.token,
+      body: { jobId: outsideJob.id, startTime: "2099-12-08T10:00:00.000Z", estimatedHours: 1 },
+    },
+  );
+  assert.equal(outsideRequest.response.status, 400);
+
+  const autoJob = await createJob("Part 7 overnight auto request");
+  const autoRequest = await api<{ id: number; status: string }>(
+    `/api/bays/${fixture.autoBayId}/bookings`,
+    {
+      method: "POST",
+      token: fixture.mechanic!.token,
+      body: { jobId: autoJob.id, startTime: "2099-12-08T01:00:00.000Z", estimatedHours: 2 },
+    },
+  );
+  assert.equal(autoRequest.response.status, 201);
+  assert.equal(autoRequest.body.status, "reserved");
+  fixture.bookingIds.push(autoRequest.body.id);
+
+  const approved = await api<{ status: string }>(
+    `/api/bookings/${manualRequest.body.id}/approve`,
+    { method: "PATCH", token: fixture.owner!.token },
+  );
+  assert.equal(approved.response.status, 200);
+  assert.equal(approved.body.status, "reserved");
+});

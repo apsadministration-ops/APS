@@ -21,7 +21,7 @@ interface AppUser {
 
 type TabKey = "mechanic" | "customer";
 
-const TIER_ORDER = ["detailer", "technician", "senior", "master"];
+const TIER_ORDER = ["detailer", "technician", "senior", "advanced", "master"];
 const TIER_COLOR: Record<string, string> = {
   detailer: "#60A5FA",
   technician: "#34D399",

@@ -46,8 +46,8 @@ export default function AdminCertificationsScreen() {
     setLoading(true);
     try {
       const [c, p] = await Promise.all([
-        customFetch<Cert[]>("/admin/certifications?status=pending"),
-        customFetch<MasterCandidate[]>("/admin/promotions/pending"),
+        customFetch<Cert[]>("/api/admin/certifications?status=pending"),
+        customFetch<MasterCandidate[]>("/api/admin/promotions/pending"),
       ]);
       setCerts(c); setCandidates(p);
     } catch (e) {
@@ -59,7 +59,7 @@ export default function AdminCertificationsScreen() {
 
   const promote = async (mechanicId: number) => {
     try {
-      await customFetch(`/admin/mechanics/${mechanicId}/promote`, {
+      await customFetch(`/api/admin/mechanics/${mechanicId}/promote`, {
         method: "POST",
         body: JSON.stringify({}),
       });
@@ -184,7 +184,7 @@ function ReviewModal({ cert, onClose, onDone }: { cert: Cert; onClose: () => voi
   const submit = async (status: "verified" | "rejected") => {
     setBusy(true);
     try {
-      await customFetch(`/admin/certifications/${cert.id}`, {
+      await customFetch(`/api/admin/certifications/${cert.id}`, {
         method: "PATCH",
         body: JSON.stringify({ status, reviewNote: note.trim() || null }),
       });

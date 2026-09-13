@@ -41,7 +41,9 @@ async function getResendCreds(): Promise<ResendCreds | null> {
 
   try {
     const url = `https://${hostname}/api/v2/connection?include_secrets=true&connector_names=resend`;
-    const r = await fetch(url, { headers: { Accept: "application/json", X_REPLIT_TOKEN: xReplitToken } });
+    const r = await fetch(url, {
+      headers: { Accept: "application/json", "X-Replit-Token": xReplitToken },
+    });
     if (!r.ok) return null;
     const data = await r.json() as { items?: { settings?: Record<string, unknown> }[] };
     const settings = data.items?.[0]?.settings ?? {};

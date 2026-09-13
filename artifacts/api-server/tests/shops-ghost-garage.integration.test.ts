@@ -568,11 +568,11 @@ test(
     assert.equal(overlap.response.status, 201);
     assert.equal(overlap.body.status, "pending");
     fixture.bookingIds.push(overlap.body.id);
-    const overlapApproval = await api(`/api/bookings/${overlap.body.id}/approve`, {
+    const overlapBookingApproval = await api(`/api/bookings/${overlap.body.id}/approve`, {
       method: "PATCH",
       token: ownerA.token,
     });
-    assert.equal(overlapApproval.response.status, 409);
+    assert.equal(overlapBookingApproval.response.status, 409);
 
     // Preserve existing booking lifecycle rules: reserved -> active ->
     // completed, with no owner permission to start/complete a booking.

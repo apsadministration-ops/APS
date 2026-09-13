@@ -183,7 +183,7 @@ export default function AdminPaymentsScreen() {
                       <Text style={[styles.amountValue, { color: colors.foreground }]}>${payment.amount.toFixed(2)}</Text>
                     </View>
                     <View style={styles.amountCol}>
-                      <Text style={[styles.amountLabel, { color: colors.mutedForeground }]}>Platform (10%)</Text>
+                      <Text style={[styles.amountLabel, { color: colors.mutedForeground }]}>Platform fee</Text>
                       <Text style={[styles.amountValue, { color: colors.primary }]}>${payment.platformFee.toFixed(2)}</Text>
                     </View>
                     <View style={styles.amountCol}>

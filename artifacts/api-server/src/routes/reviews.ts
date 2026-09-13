@@ -43,6 +43,10 @@ const submitSchema = z.object({
 router.post("/reviews", authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
   const parsed = submitSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  if (req.userRole === "mechanic" && req.user?.status !== "active") {
+    res.status(403).json({ error: "Your mechanic account is not active." });
+    return;
+  }
   const { jobId, overallRating, text, photos } = parsed.data;
 
   const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, jobId));
@@ -174,6 +178,10 @@ const editSchema = z.object({
 router.patch("/reviews/:id", authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) { res.status(400).json({ error: "Bad id" }); return; }
+  if (req.userRole === "mechanic" && req.user?.status !== "active") {
+    res.status(403).json({ error: "Your mechanic account is not active." });
+    return;
+  }
   const parsed = editSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const [existing] = await db.select().from(reviewsTable).where(eq(reviewsTable.id, id));

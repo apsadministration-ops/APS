@@ -498,7 +498,12 @@ router.post("/payments/:jobId/refund", authenticate, requireRole("admin"), async
         payment_intent: paymentIntentId,
         reverse_transfer: true,
         refund_application_fee: true,
-      });
+        }, {
+          // A timed-out admin request may be retried while the first refund is
+          // still in flight. Reuse one key for this payment so Stripe returns
+          // the original refund instead of creating a second one.
+          idempotencyKey: `refund:payment:${payment.id}:intent:${paymentIntentId}`,
+        });
     }
     res.json({ ok: true });
   } catch (err) {

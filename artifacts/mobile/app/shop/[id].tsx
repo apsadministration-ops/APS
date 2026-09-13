@@ -28,6 +28,8 @@ type AvailabilityWindow = {
   enabled: boolean;
 };
 
+const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
+
 function defaultAvailability(): AvailabilityWindow[] {
   return WEEKDAYS.map((_, dayOfWeek) => ({
     dayOfWeek,
@@ -48,6 +50,19 @@ function readAvailability(value: BayAvailabilityConfig): AvailabilityWindow[] {
     };
   }
   return next;
+}
+
+function validateAvailability(windows: AvailabilityWindow[]): string | null {
+  for (const day of windows) {
+    if (!day.enabled) continue;
+    if (!TIME_PATTERN.test(day.open) || !TIME_PATTERN.test(day.close)) {
+      return `${WEEKDAYS[day.dayOfWeek]} availability must use HH:mm times.`;
+    }
+    if (day.open === day.close) {
+      return `${WEEKDAYS[day.dayOfWeek]} availability must span a non-zero interval.`;
+    }
+  }
+  return null;
 }
 
 export default function ShopDetailScreen() {
@@ -178,6 +193,8 @@ export default function ShopDetailScreen() {
     if (!name.trim()) { setError("Bay name is required."); return; }
     if (!Number.isFinite(rateNum) || rateNum < 0) { setError("Hourly rate must be a non-negative number."); return; }
     if (allowedCats.length === 0) { setError("Select at least one allowed job category."); return; }
+    const availabilityError = validateAvailability(availability);
+    if (availabilityError) { setError(availabilityError); return; }
     if (editingBayId == null) return;
     const availabilityConfig: BayAvailabilityConfig = {
       timezone: "UTC",
@@ -214,6 +231,8 @@ export default function ShopDetailScreen() {
     if (!name.trim()) { setError("Bay name is required."); return; }
     if (!Number.isFinite(rateNum) || rateNum < 0) { setError("Hourly rate must be a non-negative number."); return; }
     if (allowedCats.length === 0) { setError("Select at least one allowed job category."); return; }
+    const availabilityError = validateAvailability(availability);
+    if (availabilityError) { setError(availabilityError); return; }
     const equipList = equipment.split(",").map((s) => s.trim()).filter(Boolean);
     const availabilityConfig: BayAvailabilityConfig = {
       timezone: "UTC",
@@ -600,6 +619,9 @@ export default function ShopDetailScreen() {
                <Text style={[styles.formHint, { color: colors.mutedForeground }]}>
                  Leave every day off for the existing always-available behavior. Enabled windows must contain the full scheduled lift interval.
                </Text>
+                <Text style={[styles.formHint, { color: colors.mutedForeground }]}>
+                  Overnight windows are supported; for example, 19:00–08:00 continues into the following UTC day.
+                </Text>
                <View style={styles.availabilityList}>
                  {availability.map((day) => (
                    <View key={day.dayOfWeek} style={[styles.availabilityRow, { borderColor: colors.border }]}>

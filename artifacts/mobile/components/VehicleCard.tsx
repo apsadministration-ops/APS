@@ -10,7 +10,12 @@ export function VehicleCard({ vehicle }: { vehicle: VehicleWithOwnership }) {
 
   return (
     <Link href={`/vehicle/${vehicle.id}`} asChild>
-      <Pressable style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <Pressable
+        style={StyleSheet.flatten([
+          styles.card,
+          { backgroundColor: colors.card, borderColor: colors.border },
+        ])}
+      >
         <View style={styles.iconContainer}>
           <View style={[styles.iconBox, { backgroundColor: colors.secondary }]}>
             <Feather name="truck" size={24} color={colors.foreground} />

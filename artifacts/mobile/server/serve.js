@@ -16,6 +16,7 @@ const path = require("path");
 const STATIC_ROOT = path.resolve(__dirname, "..", "static-build");
 const TEMPLATE_PATH = path.resolve(__dirname, "templates", "landing-page.html");
 const basePath = (process.env.BASE_PATH || "/").replace(/\/+$/, "");
+const SUPPORTED_PLATFORMS = new Set(["ios", "android"]);
 
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -45,8 +46,22 @@ function getAppName() {
   }
 }
 
-function serveManifest(platform, res) {
-  const manifestPath = path.join(STATIC_ROOT, platform, "manifest.json");
+function serveManifest(platform, res, staticRoot = STATIC_ROOT) {
+  // Keep the allow-list here as well as in the request handler so this helper
+  // remains safe if another caller is added later.
+  if (!SUPPORTED_PLATFORMS.has(platform)) {
+    res.writeHead(403, { "content-type": "application/json" });
+    res.end(JSON.stringify({ error: "Unsupported platform" }));
+    return;
+  }
+
+  const manifestPath = resolveStaticPath(`${platform}/manifest.json`, staticRoot);
+
+  if (!manifestPath) {
+    res.writeHead(403, { "content-type": "application/json" });
+    res.end(JSON.stringify({ error: "Forbidden" }));
+    return;
+  }
 
   if (!fs.existsSync(manifestPath)) {
     res.writeHead(404, { "content-type": "application/json" });
@@ -81,11 +96,50 @@ function serveLandingPage(req, res, landingPageTemplate, appName) {
   res.end(html);
 }
 
-function serveStaticFile(urlPath, res) {
-  const safePath = path.normalize(urlPath).replace(/^(\.\.(\/|\\|$))+/, "");
-  const filePath = path.join(STATIC_ROOT, safePath);
+/**
+ * Resolve one URL path beneath STATIC_ROOT.
+ *
+ * URL.pathname is not decoded by WHATWG URL, so traversal payloads such as
+ * `/%2e%2e/%2e%2e/secret` must be decoded before checking the filesystem
+ * boundary. `path.resolve` + `path.relative` is used instead of a string
+ * prefix check; the latter can incorrectly accept a sibling such as
+ * `/static-build-backup`.
+ *
+ * Returns null for malformed encoding, NUL bytes, or paths outside the static
+ * root. The root itself is returned for `/` and is subsequently rejected as a
+ * directory by serveStaticFile.
+ */
+function resolveStaticPath(urlPath, staticRoot = STATIC_ROOT) {
+  let decodedPath;
+  try {
+    decodedPath = decodeURIComponent(urlPath);
+  } catch {
+    return null;
+  }
 
-  if (!filePath.startsWith(STATIC_ROOT)) {
+  if (decodedPath.includes("\0")) return null;
+
+  // URL paths are rooted at `/`; remove only that URL-root marker before
+  // resolving. Backslashes are included for Windows path separators.
+  const relativePath = decodedPath.replace(/^[/\\]+/, "");
+  const filePath = path.resolve(staticRoot, relativePath);
+  const relative = path.relative(staticRoot, filePath);
+
+  if (
+    path.isAbsolute(relative)
+    || relative === ".."
+    || relative.startsWith(`..${path.sep}`)
+  ) {
+    return null;
+  }
+
+  return filePath;
+}
+
+function serveStaticFile(urlPath, res, staticRoot = STATIC_ROOT) {
+  const filePath = resolveStaticPath(urlPath, staticRoot);
+
+  if (!filePath) {
     res.writeHead(403);
     res.end("Forbidden");
     return;
@@ -104,32 +158,42 @@ function serveStaticFile(urlPath, res) {
   res.end(content);
 }
 
-const landingPageTemplate = fs.readFileSync(TEMPLATE_PATH, "utf-8");
-const appName = getAppName();
+function createServer({ staticRoot = STATIC_ROOT } = {}) {
+  const landingPageTemplate = fs.readFileSync(TEMPLATE_PATH, "utf-8");
+  const appName = getAppName();
 
-const server = http.createServer((req, res) => {
-  const url = new URL(req.url || "/", `http://${req.headers.host}`);
-  let pathname = url.pathname;
+  return http.createServer((req, res) => {
+    const url = new URL(req.url || "/", `http://${req.headers.host}`);
+    let pathname = url.pathname;
 
-  if (basePath && pathname.startsWith(basePath)) {
-    pathname = pathname.slice(basePath.length) || "/";
-  }
+    if (basePath && pathname.startsWith(basePath)) {
+      pathname = pathname.slice(basePath.length) || "/";
+    }
 
-  if (pathname === "/" || pathname === "/manifest") {
-    const platform = req.headers["expo-platform"];
-    if (platform === "ios" || platform === "android") {
-      return serveManifest(platform, res);
+    if (pathname === "/manifest") {
+      const platform = req.headers["expo-platform"];
+      return serveManifest(platform, res, staticRoot);
     }
 
     if (pathname === "/") {
+      const platform = req.headers["expo-platform"];
+      if (SUPPORTED_PLATFORMS.has(platform)) {
+        return serveManifest(platform, res, staticRoot);
+      }
+
       return serveLandingPage(req, res, landingPageTemplate, appName);
     }
-  }
 
-  serveStaticFile(pathname, res);
-});
+    serveStaticFile(pathname, res, staticRoot);
+  });
+}
 
-const port = parseInt(process.env.PORT || "3000", 10);
-server.listen(port, "0.0.0.0", () => {
-  console.log(`Serving static Expo build on port ${port}`);
-});
+if (require.main === module) {
+  const port = parseInt(process.env.PORT || "3000", 10);
+  const server = createServer();
+  server.listen(port, "0.0.0.0", () => {
+    console.log(`Serving static Expo build on port ${port}`);
+  });
+}
+
+module.exports = { createServer, resolveStaticPath };

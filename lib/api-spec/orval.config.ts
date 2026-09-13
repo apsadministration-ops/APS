@@ -1,5 +1,6 @@
 import { defineConfig } from "orval";
 import type { InputTransformerFn } from "orval";
+import { readFileSync, writeFileSync } from "fs";
 import path from "path";
 
 const root = path.resolve(__dirname, "..", "..");
@@ -39,6 +40,23 @@ export default defineConfig({
           path: path.resolve(apiClientReactSrc, "custom-fetch.ts"),
           name: "customFetch",
         },
+      },
+    },
+    hooks: {
+      afterAllFilesWrite: () => {
+        // Orval 8.22 appends generated exports to the existing package barrel.
+        // Keep the checked-in barrel's compatibility surface without duplicate
+        // exports on repeated codegen runs.
+        const indexPath = path.resolve(apiClientReactSrc, "index.ts");
+        const lines = readFileSync(indexPath, "utf8").split("\n");
+        const seen = new Set<string>();
+        const uniqueLines = lines.filter((line) => {
+          const key = line.replaceAll("'", '"');
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+        writeFileSync(indexPath, uniqueLines.join("\n"));
       },
     },
   },

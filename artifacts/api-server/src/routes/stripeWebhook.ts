@@ -1,7 +1,7 @@
 // Stripe webhook handler. Exported as a plain Express handler so it can be
 // mounted with `express.raw()` ONLY on its own path — never on the whole /api.
 import type { Request, Response } from "express";
-import { eq, and, ne, isNull } from "drizzle-orm";
+import { eq, and, inArray, isNull, ne, or } from "drizzle-orm";
 import type Stripe from "stripe";
 import { db, paymentsTable, usersTable, jobsTable, tipsTable, processedStripeEventsTable } from "@workspace/db";
 import { tryConvertReferral, revertReferralForJob } from "../lib/referralEngine";
@@ -25,9 +25,45 @@ import {
   handlePayoutEvent,
 } from "../lib/payoutEventEngine";
 import { notifyMechanicTipReceived } from "../lib/notifications";
+import { tipIdFromProviderMetadata, tipRefundableWhere } from "../lib/tipState";
 
 function errorName(err: unknown): string {
   return err instanceof Error ? err.name : "UnknownError";
+}
+
+/**
+ * Resolve a tip by intent ID, falling back to the signed tip metadata. Stripe
+ * can deliver an intent event before checkout.session.completed, and a
+ * replacement intent can carry the same metadata. Terminal tips are returned
+ * too: their events must not fall through into the job-payment handler.
+ */
+async function findTipForIntent(
+  intent: Pick<Stripe.PaymentIntent, "id" | "metadata">,
+): Promise<typeof tipsTable.$inferSelect | null> {
+  let [tip] = await db.select().from(tipsTable)
+    .where(eq(tipsTable.providerPaymentIntentId, intent.id));
+  if (!tip) {
+    const tipId = tipIdFromProviderMetadata(intent.metadata);
+    if (tipId === null) return null;
+    [tip] = await db.select().from(tipsTable).where(eq(tipsTable.id, tipId));
+  }
+  if (!tip) return null;
+
+  // A recoverable replacement intent becomes the tip's active provider
+  // reference. Terminal rows retain their original reference while still
+  // being returned above, preventing late events from touching job payment.
+  if (
+    tip.providerPaymentIntentId !== intent.id
+    && (tip.status === "pending" || tip.status === "failed")
+  ) {
+    await db.update(tipsTable)
+      .set({ providerPaymentIntentId: intent.id })
+      .where(and(
+        eq(tipsTable.id, tip.id),
+        inArray(tipsTable.status, ["pending", "failed"]),
+      ));
+  }
+  return tip;
 }
 
 export async function stripeWebhookHandler(req: Request, res: Response): Promise<void> {
@@ -71,9 +107,12 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
       .returning({ eventId: processedStripeEventsTable.eventId });
     firstDelivery = inserted.length > 0;
   } catch (err) {
-    // Dedup-table failure should not block payment processing — log and
-    // proceed (the per-handler idempotency guards still apply).
-    logger.warn({ errorName: errorName(err), id: event.id }, "Stripe webhook dedup insert failed — proceeding");
+    // Without a durable claim, two deliveries can both run the handler and
+    // the event cannot be safely acknowledged. Return 503 so Stripe retries
+    // after the database is available instead of processing without dedup.
+    logger.error({ errorName: errorName(err), id: event.id }, "Stripe webhook dedup insert failed — retrying");
+    res.status(503).json({ error: "Webhook deduplication unavailable" });
+    return;
   }
   if (!firstDelivery) {
     logger.info({ id: event.id, type: event.type }, "Stripe webhook duplicate delivery — skipping handler");
@@ -162,7 +201,7 @@ async function handleEvent(event: Stripe.Event): Promise<void> {
         .set({ status: "authorized", providerPaymentIntentId: intent.id })
         .where(and(
           eq(paymentsTable.providerPaymentIntentId, intent.id),
-          ne(paymentsTable.status, "captured"),
+          inArray(paymentsTable.status, ["pending", "authorized"]),
         ));
       break;
     }
@@ -178,28 +217,33 @@ async function handleEvent(event: Stripe.Event): Promise<void> {
       // breadcrumbs we set at tip-checkout creation (`kind=tip`, `tipId`)
       // and stamp the intent id ourselves so the next retry / status flip
       // is consistent.
-      if (intent.metadata?.["kind"] === "tip" && intent.metadata?.["tipId"]) {
-        const tipId = Number(intent.metadata["tipId"]);
-        if (Number.isInteger(tipId)) {
-          await db.update(tipsTable)
-            .set({ providerPaymentIntentId: intent.id })
-            .where(and(eq(tipsTable.id, tipId), isNull(tipsTable.providerPaymentIntentId)));
+      const tip = await findTipForIntent(intent);
+      if (tip) {
+        // A failed card attempt is recoverable when the customer retries on
+        // the same PaymentIntent. A canceled or refunded tip is terminal.
+        const tipUpdated = await db.update(tipsTable)
+          .set({ status: "captured", capturedAt: new Date(), failureReason: null })
+          .where(and(
+            eq(tipsTable.id, tip.id),
+            or(
+              eq(tipsTable.status, "pending"),
+              and(
+                eq(tipsTable.status, "failed"),
+                or(isNull(tipsTable.failureReason), ne(tipsTable.failureReason, "Payment canceled")),
+              ),
+            ),
+          ))
+          .returning();
+        if (tipUpdated.length > 0) {
+          const capturedTip = tipUpdated[0]!;
+          const [mech] = await db.select().from(usersTable).where(eq(usersTable.id, capturedTip.mechanicId));
+          if (mech?.pushToken) {
+            void notifyMechanicTipReceived(mech.pushToken, capturedTip.jobId, capturedTip.mechanicAmountCents / 100);
+          }
+          logger.info({ tipId: capturedTip.id, intentId: intent.id }, "Tip captured");
         }
-      }
-      const tipUpdated = await db.update(tipsTable)
-        .set({ status: "captured", capturedAt: new Date() })
-        .where(and(
-          eq(tipsTable.providerPaymentIntentId, intent.id),
-          ne(tipsTable.status, "captured"),
-        ))
-        .returning();
-      if (tipUpdated.length > 0) {
-        const tip = tipUpdated[0]!;
-        const [mech] = await db.select().from(usersTable).where(eq(usersTable.id, tip.mechanicId));
-        if (mech?.pushToken) {
-          void notifyMechanicTipReceived(mech.pushToken, tip.jobId, tip.mechanicAmountCents / 100);
-        }
-        logger.info({ tipId: tip.id, intentId: intent.id }, "Tip captured");
+        // Do not fall through to the job-payment handler for a tip, even for
+        // a repeated event or a late success after a terminal transition.
         return;
       }
       // Atomic, idempotent transition: only the FIRST update with status != 'captured'
@@ -208,7 +252,7 @@ async function handleEvent(event: Stripe.Event): Promise<void> {
         .set({ status: "captured", releasedAt: new Date() })
         .where(and(
           eq(paymentsTable.providerPaymentIntentId, intent.id),
-          ne(paymentsTable.status, "captured"),
+          inArray(paymentsTable.status, ["authorized", "capture_pending", "payout_failed"]),
         ))
         .returning();
       if (updated.length === 0) {
@@ -284,22 +328,50 @@ async function handleEvent(event: Stripe.Event): Promise<void> {
 
     case "payment_intent.payment_failed": {
       const intent = event.data.object as Stripe.PaymentIntent;
+      const tip = await findTipForIntent(intent);
+      if (tip) {
+        // Payment failure is retryable on the same PaymentIntent. Keep the
+        // row recoverable rather than treating this as a terminal tip.
+        await db.update(tipsTable)
+          .set({ status: "failed", failureReason: "Payment failed" })
+          .where(and(
+            eq(tipsTable.id, tip.id),
+            eq(tipsTable.status, "pending"),
+          ));
+        break;
+      }
       await db.update(paymentsTable)
         .set({ status: "failed", failureReason: "Payment failed" })
         .where(and(
           eq(paymentsTable.providerPaymentIntentId, intent.id),
-          ne(paymentsTable.status, "captured"),
+          inArray(paymentsTable.status, ["pending"]),
         ));
       break;
     }
 
     case "payment_intent.canceled": {
       const intent = event.data.object as Stripe.PaymentIntent;
+      const tip = await findTipForIntent(intent);
+      if (tip) {
+        await db.update(tipsTable)
+          .set({ status: "failed", failureReason: "Payment canceled" })
+          .where(and(
+            eq(tipsTable.id, tip.id),
+            or(
+              eq(tipsTable.status, "pending"),
+              and(
+                eq(tipsTable.status, "failed"),
+                eq(tipsTable.failureReason, "Payment failed"),
+              ),
+            ),
+          ));
+        break;
+      }
       await db.update(paymentsTable)
         .set({ status: "canceled" })
         .where(and(
           eq(paymentsTable.providerPaymentIntentId, intent.id),
-          ne(paymentsTable.status, "captured"),
+          inArray(paymentsTable.status, ["pending", "authorized", "capture_pending", "payout_failed"]),
         ));
       break;
     }
@@ -308,13 +380,34 @@ async function handleEvent(event: Stripe.Event): Promise<void> {
       const charge = event.data.object as Stripe.Charge;
       const intentId = typeof charge.payment_intent === "string" ? charge.payment_intent : charge.payment_intent?.id;
       if (!intentId) return;
+      const tip = await findTipForIntent({ id: intentId, metadata: charge.metadata });
+      if (tip) {
+        const tipUpdated = await db.update(tipsTable)
+          .set({ status: "refunded" })
+          .where(and(
+            eq(tipsTable.id, tip.id),
+            tipRefundableWhere(tipsTable),
+          ))
+          .returning();
+        if (tipUpdated.length > 0) logger.info({ tipId: tip.id, intentId }, "Tip refunded");
+        // A duplicate refund is still a tip event and must not fall through
+        // into the job-payment handler.
+        break;
+      }
       // Atomic: only the FIRST transition to "refunded" returns a row,
       // so retried webhooks don't double-reverse loyalty/job state.
       const updated = await db.update(paymentsTable)
         .set({ status: "refunded" })
         .where(and(
           eq(paymentsTable.providerPaymentIntentId, intentId),
-          ne(paymentsTable.status, "refunded"),
+          inArray(paymentsTable.status, [
+            "pending",
+            "authorized",
+            "capture_pending",
+            "captured",
+            "payout_failed",
+            "disputed",
+          ]),
         ))
         .returning();
       if (updated.length === 0) {

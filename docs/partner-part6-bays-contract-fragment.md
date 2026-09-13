@@ -68,7 +68,9 @@ availabilityConfig?: BayAvailabilityConfig;
 
 `CreateBayBody` and `UpdateBayBody` must validate `dayOfWeek` (`0..6`),
 `open`/`close` (`HH:mm`), and `timezone: "UTC"`. `hourlyRate` remains a
-non-negative number. The server rejects malformed time intervals.
+non-negative number. A window with `open` later than `close` is an overnight
+window that continues into the following UTC day; equal times are rejected as
+zero-length intervals. The server rejects malformed time intervals.
 
 ### `CreateBayBookingBody`
 

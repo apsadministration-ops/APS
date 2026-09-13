@@ -17,7 +17,12 @@ export function JobCard({ job, showCustomer = false }: JobCardProps) {
 
   return (
     <Link href={`/job/${job.id}`} asChild>
-      <Pressable style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <Pressable
+        style={StyleSheet.flatten([
+          styles.card,
+          { backgroundColor: colors.card, borderColor: colors.border },
+        ])}
+      >
         <View style={styles.header}>
           <View style={styles.titleRow}>
             <Text style={[styles.title, { color: colors.foreground }]} numberOfLines={1}>

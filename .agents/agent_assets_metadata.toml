@@ -104,3 +104,17 @@ mtime_ms = 1789165724760
 storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:098396b5-f3fa-4e71-ae39-a5d9b7f5042e/7a72d1de-80d3-48b9-8ae6-2ca6b103dbda/38b38eb1-f61d-4543-a2d2-30071e3ab2ba"
 storage_version_token = "1789165731935169"
 content_type = "text/markdown"
+
+[[outputs]]
+id = "XRj0053TlwIscLds1sNWh"
+uri = "file://docs/partner-layer-part7-audit.md"
+type = "text"
+title = "Part 7 — Application-wide audit report"
+description = "Full findings, fixes, test evidence, database and security review, remaining limitations, and NOT READY beta classification."
+logical_id = "2a97311d-e39a-4d8a-96ca-a18bcd12c8a2"
+content_hash = "sha256:7256d557e66012e5eabb37a28580199e040dabfe984ae01fe000977ee90ab09b"
+size = 58471
+mtime_ms = 1789265673269
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:098396b5-f3fa-4e71-ae39-a5d9b7f5042e/2a97311d-e39a-4d8a-96ca-a18bcd12c8a2/fb7a458b-e116-4872-881c-e882c13ac698"
+storage_version_token = "1789265679126465"
+content_type = "text/markdown"
