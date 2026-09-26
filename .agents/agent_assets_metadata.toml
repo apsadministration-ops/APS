@@ -52,7 +52,7 @@ logical_id = "a1b7bdc6-3df4-474d-8d3a-02342c730e1b"
 [[outputs]]
 id = "rdBekZiOkKToFB-kB3kPs"
 uri = "file://reports/aps-audit-inventory.html"
-type = "text"
+type = "html"
 title = "APS technical inventory and dependency findings"
 description = "Searchable appendix: endpoint declarations, mobile screens/components, database models, packages, environment names, and dependency advisories. No secret values."
 logical_id = "42e8845d-41aa-4b98-b16d-89aa3492f0c1"
@@ -131,4 +131,18 @@ size = 10796
 mtime_ms = 1789268889383
 storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:098396b5-f3fa-4e71-ae39-a5d9b7f5042e/5d236e7e-dffc-488b-b52f-55571320a696/4aa243eb-3540-44a6-a1d7-11a02ee13d04"
 storage_version_token = "1789268920490078"
+content_type = "text/markdown"
+
+[[outputs]]
+id = "XOXyj9FwhXAdhN6HfzRAQ"
+uri = "file://APS_CTO_HANDOFF.md"
+type = "text"
+title = "APS CTO Handoff"
+description = "Comprehensive Markdown takeover guide: current architecture, functionality, APIs, schema, configuration, security, audit reconciliation, deployment, testing, and development priorities."
+logical_id = "1fa6c455-4d3c-4a9b-9d01-2fe50b897ad4"
+content_hash = "sha256:83e889f4131d09897b434b350781b03f326ee787ea130748a708d2044cd20ab0"
+size = 77619
+mtime_ms = 1790428823872
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:098396b5-f3fa-4e71-ae39-a5d9b7f5042e/1fa6c455-4d3c-4a9b-9d01-2fe50b897ad4/d3787ec9-bd6f-40d2-b4e4-eb92bc802789"
+storage_version_token = "1790428842130875"
 content_type = "text/markdown"
